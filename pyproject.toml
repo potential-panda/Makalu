@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "makalu"
+version = "0.1.0"
+description = "Data pipeline for market microstructure feature engineering and ML model training"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "potential-panda"},
+]
+
+dependencies = [
+    "potential-panda-core @ git+ssh://git@github.com/potential-panda/potential-panda-core.git@main",
+    "matplotlib==3.9.2",
+    "numpy==2.3.3",
+    "pandas==2.3.3",
+    "seaborn==0.13.2",
+    "influxdb-client==1.49.0",
+    "pyarrow>=18.0.0",  # for parquet file support
+    "lightgbm>=4.0.0",  # for ML model training
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+]
+
+[project.scripts]
+makalu-pipeline = "pipeline:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["pipeline*"]
+
+[tool.black]
+line-length = 120
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
