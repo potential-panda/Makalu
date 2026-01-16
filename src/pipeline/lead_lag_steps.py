@@ -235,85 +235,64 @@ class LeadLagStep(Step):
             LOG.warning("LeadLagStep: No significant correlation found")
             return
 
-        lag_seconds = best_lag * self.interval_ms / 1000.0
+        # Convert best_lag from steps to milliseconds
+        best_lag_ms = best_lag * self.interval_ms
 
-        # Determine leader and follower
-        if best_lag < 0:
-            leader_market = market_a.id
-            follower_market = market_b.id
-        elif best_lag > 0:
-            leader_market = market_b.id
-            follower_market = market_a.id
-        else:
-            leader_market = None
-            follower_market = None
+        LOG.info(f"LeadLagStep: Best lag={best_lag_ms}ms, correlation={best_corr:.4f}")
 
-        result = LeadLagResult(
+        # Create combined point with best_lag and correlations at specific lags
+        point = self._create_lead_lag_point(market_a, market_b, best_lag_ms, corr_by_lag, dt_range)
+        influx_writer.add(point)
+
+        # Store result in context for potential downstream use
+        context.lead_lag_result = LeadLagResult(
             best_lag=best_lag,
             best_corr=best_corr,
             corr_by_lag=corr_by_lag,
-            lag_seconds=lag_seconds,
-            leader_market=leader_market,
-            follower_market=follower_market,
+            lag_seconds=best_lag_ms / 1000.0,
+            leader_market=market_a.id if best_lag < 0 else (market_b.id if best_lag > 0 else None),
+            follower_market=market_b.id if best_lag < 0 else (market_a.id if best_lag > 0 else None),
             aligned_length=len(aligned_a),
             interval_ms=self.interval_ms,
         )
 
-        LOG.info(f"LeadLagStep: Best lag={best_lag} ({lag_seconds:.2f}s), correlation={best_corr:.4f}")
-        if leader_market:
-            LOG.info(f"LeadLagStep: {leader_market} LEADS {follower_market} by {abs(lag_seconds):.2f}s")
+        LOG.info("LeadLagStep: Wrote 1 point to InfluxDB")
 
-        # Write summary point to InfluxDB
-        summary_point = self._create_summary_point(market_a, market_b, result, dt_range)
-        influx_writer.add(summary_point)
-
-        # Write correlation curve points
-        for lag, corr in corr_by_lag.items():
-            point = self._create_correlation_point(market_a, market_b, lag, corr, dt_range)
-            influx_writer.add(point)
-
-        # Store result in context for potential downstream use
-        context.lead_lag_result = result
-
-        LOG.info(f"LeadLagStep: Wrote {1 + len(corr_by_lag)} points to InfluxDB")
-
-    def _create_summary_point(
-        self, market_a: Market, market_b: Market, result: LeadLagResult, dt_range
+    def _create_lead_lag_point(
+        self,
+        market_a: Market,
+        market_b: Market,
+        best_lag_ms: int,
+        corr_by_lag: Dict[int, float],
+        dt_range,
     ) -> Point:
-        """Create an InfluxDB point for the lead-lag summary."""
+        """
+        Create a combined InfluxDB point for lead-lag metrics.
+
+        Args:
+            market_a: First market
+            market_b: Second market
+            best_lag_ms: Best lag in milliseconds
+            corr_by_lag: Dict mapping lag steps to correlation values
+            dt_range: Date range for timestamp
+
+        Returns:
+            InfluxDB Point with tags (market_a, market_b) and fields (best_lag, lag_0, lag_500, lag_1000)
+        """
         point = (
-            Point("LEAD_LAG_SUMMARY")
+            Point("LEAD_LAG")
             .tag("market_a", market_a.id)
             .tag("market_b", market_b.id)
-            .tag("exchange_a", market_a.exchange_name.name)
-            .tag("exchange_b", market_b.exchange_name.name)
-            .tag("symbol_a", market_a.symbol.name)
-            .tag("symbol_b", market_b.symbol.name)
-            .field("best_lag", result.best_lag if result.best_lag is not None else 0)
-            .field("best_corr", result.best_corr)
-            .field("lag_seconds", result.lag_seconds)
-            .field("aligned_length", result.aligned_length)
-            .field("interval_ms", result.interval_ms)
+            .field("best_lag", best_lag_ms)
             .time(dt_range.end_dt, WritePrecision.S)
         )
 
-        if result.leader_market:
-            point = point.field("leader_market", result.leader_market)
-            point = point.field("follower_market", result.follower_market)
+        # Add correlations at specific lag values (0ms, 500ms, 1000ms)
+        target_lags_ms = [0, 500, 1000]
+        for lag_ms in target_lags_ms:
+            # Convert lag_ms to step
+            step = lag_ms // self.interval_ms
+            if step in corr_by_lag:
+                point = point.field(f"lag_{lag_ms}", corr_by_lag[step])
 
         return point
-
-    def _create_correlation_point(
-        self, market_a: Market, market_b: Market, lag: int, corr: float, dt_range
-    ) -> Point:
-        """Create an InfluxDB point for a single correlation value."""
-        return (
-            Point("LEAD_LAG_CORRELATION")
-            .tag("market_a", market_a.id)
-            .tag("market_b", market_b.id)
-            .tag("exchange_a", market_a.exchange_name.name)
-            .tag("exchange_b", market_b.exchange_name.name)
-            .field("lag", lag)
-            .field("correlation", corr)
-            .time(dt_range.end_dt, WritePrecision.S)
-        )
