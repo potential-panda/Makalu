@@ -309,15 +309,15 @@ class QueryTradeAggressionStep(Step):
         ta_df_reset = ta_df.reset_index()
 
         # Check if window_sec column exists
-        if 'window_sec' in ta_df_reset.columns:
+        if "window_sec" in ta_df_reset.columns:
             # Get list of field columns (exclude time, window_sec, and any other tags)
-            exclude_cols = {'time', 'window_sec'}
+            exclude_cols = {"time", "window_sec"}
             field_cols = [col for col in ta_df_reset.columns if col not in exclude_cols]
 
             # Create separate dataframes for each field, pivoted by window_sec
             pivoted_dfs = []
             for field in field_cols:
-                pivoted = ta_df_reset.pivot(index='time', columns='window_sec', values=field)
+                pivoted = ta_df_reset.pivot(index="time", columns="window_sec", values=field)
                 # Rename columns to include window suffix (e.g., imbalance_qty_1, imbalance_qty_3)
                 pivoted.columns = [f"{field}_{int(col)}s" for col in pivoted.columns]
                 pivoted_dfs.append(pivoted)
@@ -331,7 +331,7 @@ class QueryTradeAggressionStep(Step):
                 context.trade_aggression_df = ta_df
         else:
             # No window_sec tag, use as is
-            context.trade_aggression_df = ta_df.set_index('time') if 'time' in ta_df_reset.columns else ta_df
+            context.trade_aggression_df = ta_df.set_index("time") if "time" in ta_df_reset.columns else ta_df
 
         LOG.info(f"QueryTradeAggressionStep: Queried {len(context.trade_aggression_df)} trade aggression records.")
 
@@ -375,7 +375,7 @@ class QueryOrderBookStateStep(Step):
         if dfs:
             context.order_book_state_df = dfs[0]
             for df in dfs[1:]:
-                context.order_book_state_df = context.order_book_state_df.join(df, how='outer')
+                context.order_book_state_df = context.order_book_state_df.join(df, how="outer")
         else:
             context.order_book_state_df = pd.DataFrame()
 
@@ -390,7 +390,7 @@ class QueryOrderBookStateStep(Step):
         df_reset = df.reset_index()
 
         # Pivot: index=time, columns=tag_col, values='value'
-        pivoted = df_reset.pivot(index='time', columns=tag_col, values='value')
+        pivoted = df_reset.pivot(index="time", columns=tag_col, values="value")
 
         # Rename columns with prefix
         pivoted.columns = [f"{prefix}{col}" for col in pivoted.columns]
@@ -401,9 +401,7 @@ class QueryOrderBookStateStep(Step):
 class QueryBookChangeStep(Step):
     def populate(self, influx_writer: InfluxWriter, context: Context, args: Dict[str, Any]):
         """Queries book change data from InfluxDB and stores it in context."""
-        bc_df = context.influx_reader.query_book_change(
-            MARKET_DATA_BUCKET, context.compute_dt_range, context.market
-        )
+        bc_df = context.influx_reader.query_book_change(MARKET_DATA_BUCKET, context.compute_dt_range, context.market)
 
         if bc_df.empty:
             context.book_change_df = bc_df
@@ -415,15 +413,15 @@ class QueryBookChangeStep(Step):
         bc_df_reset = bc_df.reset_index()
 
         # Check if k column exists
-        if 'k' in bc_df_reset.columns:
+        if "k" in bc_df_reset.columns:
             # Get list of field columns (exclude time, k, and any other tags)
-            exclude_cols = {'time', 'k'}
+            exclude_cols = {"time", "k"}
             field_cols = [col for col in bc_df_reset.columns if col not in exclude_cols]
 
             # Create separate dataframes for each field, pivoted by k
             pivoted_dfs = []
             for field in field_cols:
-                pivoted = bc_df_reset.pivot(index='time', columns='k', values=field)
+                pivoted = bc_df_reset.pivot(index="time", columns="k", values=field)
                 # Rename columns to include k suffix (e.g., net_depth_bid_k3, net_depth_bid_k5)
                 pivoted.columns = [f"{field}_k{int(col)}" for col in pivoted.columns]
                 pivoted_dfs.append(pivoted)
@@ -437,7 +435,7 @@ class QueryBookChangeStep(Step):
                 context.book_change_df = bc_df
         else:
             # No k tag, use as is
-            context.book_change_df = bc_df.set_index('time') if 'time' in bc_df_reset.columns else bc_df
+            context.book_change_df = bc_df.set_index("time") if "time" in bc_df_reset.columns else bc_df
 
         LOG.info(f"QueryBookChangeStep: Queried {len(context.book_change_df)} book change records.")
 
@@ -474,9 +472,9 @@ class AlignAndBuildFeaturesStep(Step):
 
         # Merge the remaining DataFrames using join (since they're already time-indexed)
         for df in dfs[1:]:
-            feature_df = feature_df.join(df, how='outer', rsuffix='_dup')
+            feature_df = feature_df.join(df, how="outer", rsuffix="_dup")
             # Drop duplicate columns if any
-            feature_df = feature_df.loc[:, ~feature_df.columns.str.endswith('_dup')]
+            feature_df = feature_df.loc[:, ~feature_df.columns.str.endswith("_dup")]
 
         # Sort by index after merging
         feature_df.sort_index(inplace=True)
@@ -507,7 +505,7 @@ class AlignAndBuildFeaturesStep(Step):
         feature_df = feature_df.dropna(thresh=threshold)
 
         # Save to parquet
-        output_dir = args.get('feature_output_dir', '/tmp')
+        output_dir = args.get("feature_output_dir", "/tmp")
         file_path = f"{output_dir}/{context.market.id}_features.parquet"
         DataPointConverter.convert_dataframe_to_parquet(feature_df, file_path)
         LOG.info(
@@ -520,14 +518,14 @@ class AlignAndBuildFeaturesStep(Step):
         Computes microprice_offset_bps = (microprice - mid) / mid * 1e4
         for each microprice_k column.
         """
-        if 'mid' not in df.columns:
+        if "mid" not in df.columns:
             LOG.warning("'mid' column not found, skipping microprice_offset_bps computation.")
             return df
 
-        microprice_cols = [col for col in df.columns if col.startswith('microprice_k')]
+        microprice_cols = [col for col in df.columns if col.startswith("microprice_k")]
         for col in microprice_cols:
-            offset_col = col.replace('microprice_k', 'microprice_offset_bps_k')
-            df[offset_col] = ((df[col] - df['mid']) / df['mid'] * 1e4)
+            offset_col = col.replace("microprice_k", "microprice_offset_bps_k")
+            df[offset_col] = (df[col] - df["mid"]) / df["mid"] * 1e4
 
         return df
 
@@ -536,19 +534,19 @@ class AlignAndBuildFeaturesStep(Step):
         Computes ta_vwap_offset_bps = (vwap - mid) / mid * 1e4
         for each trade aggression window.
         """
-        if 'mid' not in df.columns:
+        if "mid" not in df.columns:
             LOG.warning("'mid' column not found, skipping vwap_offset_bps computation.")
             return df
 
-        vwap_cols = [col for col in df.columns if col == 'vwap' or '_vwap' in col]
+        vwap_cols = [col for col in df.columns if col == "vwap" or "_vwap" in col]
         for col in vwap_cols:
             # Create offset column name
-            if col == 'vwap':
-                offset_col = 'vwap_offset_bps'
+            if col == "vwap":
+                offset_col = "vwap_offset_bps"
             else:
-                offset_col = col.replace('vwap', 'vwap_offset_bps')
+                offset_col = col.replace("vwap", "vwap_offset_bps")
 
-            df[offset_col] = ((df[col] - df['mid']) / df['mid'] * 1e4)
+            df[offset_col] = (df[col] - df["mid"]) / df["mid"] * 1e4
 
         return df
 
@@ -556,16 +554,16 @@ class AlignAndBuildFeaturesStep(Step):
         """
         Computes rolling mean and std for orderbook features over 1s, 3s, 5s windows.
         """
-        windows = {'1s': '1S', '3s': '3S', '5s': '5S'}
+        windows = {"1s": "1S", "3s": "3S", "5s": "5S"}
 
         # Select orderbook features to aggregate
         # Include: spread_bps, volume imbalance, weighted imbalance, microprice_offset_bps
         feature_patterns = [
-            'spread_bps',
-            'vol_imb_k',
-            'weighted_imb_k',
-            'microprice_offset_bps_k',
-            'depth_imb_bps',
+            "spread_bps",
+            "vol_imb_k",
+            "weighted_imb_k",
+            "microprice_offset_bps_k",
+            "depth_imb_bps",
         ]
 
         features_to_aggregate = []
@@ -591,13 +589,13 @@ class AlignAndBuildFeaturesStep(Step):
         """
         # Define window pairs for comparison
         window_pairs = [
-            ('1s', '3s'),
-            ('1s', '5s'),
-            ('3s', '5s'),
+            ("1s", "3s"),
+            ("1s", "5s"),
+            ("3s", "5s"),
         ]
 
         # Features to compute cross-window comparisons for
-        features = ['imbalance_qty', 'imbalance_count', 'qty_per_sec', 'trades_per_sec']
+        features = ["imbalance_qty", "imbalance_count", "qty_per_sec", "trades_per_sec"]
 
         for feature in features:
             for w1, w2 in window_pairs:
@@ -609,9 +607,7 @@ class AlignAndBuildFeaturesStep(Step):
                     df[f"{feature}_diff_{w1}_{w2}"] = df[col1] - df[col2]
 
                     # Sign agreement (both positive or both negative)
-                    df[f"{feature}_sign_agree_{w1}_{w2}"] = (
-                        ((df[col1] > 0) == (df[col2] > 0))
-                    ).astype(int)
+                    df[f"{feature}_sign_agree_{w1}_{w2}"] = (((df[col1] > 0) == (df[col2] > 0))).astype(int)
 
         return df
 
@@ -624,35 +620,35 @@ class AlignAndBuildFeaturesStep(Step):
         """
         # 1. Sign agreement: sign(ta_imbalance_qty) == sign(microprice_offset_bps_k1)
         #    Compute for each trade aggression window
-        windows = ['1s', '3s', '5s']
+        windows = ["1s", "3s", "5s"]
         for window in windows:
-            imb_col = f'imbalance_qty_{window}'
-            if imb_col in df.columns and 'microprice_offset_bps_k1' in df.columns:
-                df[f'sign_agreement_trade_book_{window}'] = (
-                    (df[imb_col] > 0) == (df['microprice_offset_bps_k1'] > 0)
+            imb_col = f"imbalance_qty_{window}"
+            if imb_col in df.columns and "microprice_offset_bps_k1" in df.columns:
+                df[f"sign_agreement_trade_book_{window}"] = (
+                    (df[imb_col] > 0) == (df["microprice_offset_bps_k1"] > 0)
                 ).astype(int)
 
         # 2. Strong book but weak trades: large book imbalance + low trades_per_sec
         for window in windows:
-            trades_col = f'trades_per_sec_{window}'
-            if 'vol_imb_k1' in df.columns and trades_col in df.columns:
+            trades_col = f"trades_per_sec_{window}"
+            if "vol_imb_k1" in df.columns and trades_col in df.columns:
                 # Define thresholds
                 strong_book_threshold = 0.3  # absolute imbalance > 0.3
                 weak_trades_threshold = 10  # trades_per_sec < 10
 
-                df[f'strong_book_weak_trades_{window}'] = (
-                    (df['vol_imb_k1'].abs() > strong_book_threshold) & (df[trades_col] < weak_trades_threshold)
+                df[f"strong_book_weak_trades_{window}"] = (
+                    (df["vol_imb_k1"].abs() > strong_book_threshold) & (df[trades_col] < weak_trades_threshold)
                 ).astype(int)
 
         # 3. Spread-conditioned strength: only consider signals when spread is reasonable
-        if 'spread_bps' in df.columns:
+        if "spread_bps" in df.columns:
             spread_threshold = 5  # 5 bps
-            df['tight_spread'] = (df['spread_bps'] < spread_threshold).astype(int)
+            df["tight_spread"] = (df["spread_bps"] < spread_threshold).astype(int)
 
             # Create spread-conditioned imbalance signals
             for window in windows:
-                imb_col = f'imbalance_qty_{window}'
+                imb_col = f"imbalance_qty_{window}"
                 if imb_col in df.columns:
-                    df[f'imbalance_qty_tight_spread_{window}'] = df[imb_col] * df['tight_spread']
+                    df[f"imbalance_qty_tight_spread_{window}"] = df[imb_col] * df["tight_spread"]
 
         return df

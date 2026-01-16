@@ -41,10 +41,10 @@ package-dir = {"" = "src"}
 where = ["src"]
 include = ["pipeline*"]
 
-[tool.black]
-line-length = 120
-target-version = ["py311"]
+# [tool.black]
+# line-length = 120
+# target-version = ["py311"]
 
-[tool.ruff]
-line-length = 120
-target-version = "py311"
+# [tool.ruff]
+# line-length = 120
+# target-version = "py311"
