@@ -3,6 +3,7 @@ import logging
 
 from qate.core.model import Market
 from qate.env import sys_env
+from qate.env.env import Env, EnvName
 from qate.util.dt_range import DtRange
 
 from pipeline.framework import Pipeline
@@ -44,8 +45,33 @@ def create_label_stage(market: Market, pnl_bucket: str) -> LabelStage:
     )
 
 
+def run_pipeline(args):
+    env_name = EnvName[args.env]
+    env = Env.load_env(sys_env.ENV_DIR, env_name)
+
+    market = Market.from_str(args.market)
+    dt_range = DtRange.from_strings(args.from_dt, args.to_dt)
+
+    try:
+        env.enter()
+
+        pipeline = Pipeline()
+        pipeline.add_stage(create_feature_stage(market))
+
+        # Add LabelStage only if pnl_bucket is specified
+        if args.pnl_bucket:
+            pipeline.add_stage(create_label_stage(market, args.pnl_bucket))
+
+        logging.info(f"Starting ML pipeline for {market.id} from {args.from_dt} to {args.to_dt}")
+        pipeline.process(dt_range, args={"feature_output_dir": args.feature_output_dir})
+        logging.info("ML pipeline finished.")
+    finally:
+        env.leave()
+
+
 def main():
     parser = argparse.ArgumentParser(description="ML pipeline CLI for building features and labels from market data.")
+    parser.add_argument("--env", required=True, choices=EnvName._member_names_, help="Environment name")
     parser.add_argument("--market", required=True, help="Market in format EXCHANGE:SYMBOL (e.g., BINANCE:BTC_USDT)")
     parser.add_argument("--from-dt", required=True, help="Start date in YYYYMMDD format")
     parser.add_argument("--to-dt", required=True, help="End date in YYYYMMDD format")
@@ -57,20 +83,7 @@ def main():
     )
     args = parser.parse_args()
 
-    market = Market.from_str(args.market)
-    dt_range = DtRange.from_strings(args.from_dt, args.to_dt)
-
-    pipeline = Pipeline()
-    pipeline.add_stage(create_feature_stage(market))
-
-    # Add LabelStage only if pnl_bucket is specified
-    if args.pnl_bucket:
-        pipeline.add_stage(create_label_stage(market, args.pnl_bucket))
-
-    # --- Execution ---
-    logging.info(f"Starting ML pipeline for {market.id} from {args.from_dt} to {args.to_dt}")
-    pipeline.process(dt_range, args={"feature_output_dir": args.feature_output_dir})
-    logging.info("ML pipeline finished.")
+    run_pipeline(args)
 
 
 if __name__ == "__main__":
