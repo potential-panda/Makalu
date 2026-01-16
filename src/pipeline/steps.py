@@ -30,7 +30,7 @@ from .trade_derived_steps import (
 
 # Feature stage steps
 from .feature_steps import (
-    FEATURE_BUCKET,
+    FEATURE_DATA_BUCKET,
     AlignAndBuildFeaturesStep,
     QueryBookChangeStep,
     QueryOrderBookStateStep,
@@ -46,7 +46,7 @@ __all__ = [
     # Constants
     "MARKET_DATA_BUCKET",
     "TRADE_DERIVED_BUCKET",
-    "FEATURE_BUCKET",
+    "FEATURE_DATA_BUCKET",
     # MarketData stage steps
     "PopulateTradeStep",
     "PopulateMarketPriceStep",

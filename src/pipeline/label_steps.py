@@ -124,10 +124,26 @@ class PnlLabelStep(Step):
         ]
 
         context.label_df = label_df
+
+        # Save to parquet
+        output_dir = args.get("feature_output_dir", "/tmp")
+        file_path = f"{output_dir}/{context.market.id}_labels.parquet"
+        DataPointConverter.convert_dataframe_to_parquet(label_df, file_path)
         LOG.info(
             f"PnlLabelStep: Computed {len(label_df)} label records with {len(label_df.columns)} columns "
-            f"from bucket '{pnl_bucket}'."
+            f"from bucket '{pnl_bucket}'. Saved to {file_path}."
         )
+
+        # Write to InfluxDB for Grafana visualization
+        points = DataPointConverter.convert_dataframe_to_influx_points(
+            label_df,
+            measurement="LABEL",
+            exchange_name=context.market.exchange_name.name,
+            symbol=context.market.symbol.name,
+        )
+        for point in points:
+            influx_writer.add(point)
+        LOG.info(f"PnlLabelStep: Wrote {len(points)} points to InfluxDB.")
 
     def _aggregate_by_time(self, df: pd.DataFrame) -> pd.DataFrame:
         """

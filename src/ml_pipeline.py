@@ -9,7 +9,7 @@ from qate.util.dt_range import DtRange
 from pipeline.framework import Pipeline
 from pipeline.stages import FeatureStage, LabelStage
 from pipeline.steps import (
-    FEATURE_BUCKET,
+    FEATURE_DATA_BUCKET,
     AlignAndBuildFeaturesStep,
     PnlLabelStep,
     QueryBookChangeStep,
@@ -22,7 +22,7 @@ logging.basicConfig(level=logging.INFO, format="{asctime} {levelname:8s} {name} 
 
 def create_feature_stage(market: Market) -> FeatureStage:
     influx_reader = sys_env.get_influxdb_reader()
-    influx_writer = sys_env.get_influxdb_writer(bucket_name=FEATURE_BUCKET, no_retention=True)
+    influx_writer = sys_env.get_influxdb_writer(bucket_name=FEATURE_DATA_BUCKET, no_retention=True)
     return (
         FeatureStage(influx_writer, market, influx_reader)
         .step(QueryTradeAggressionStep())
@@ -34,9 +34,9 @@ def create_feature_stage(market: Market) -> FeatureStage:
 
 def create_label_stage(market: Market, pnl_bucket: str) -> LabelStage:
     influx_reader = sys_env.get_influxdb_reader()
-    # LabelStage doesn't write to InfluxDB, but framework requires a writer
-    # Use a dummy writer or the feature bucket
-    influx_writer = sys_env.get_influxdb_writer(bucket_name=FEATURE_BUCKET, no_retention=True)
+    # Write label data to ${pnl_bucket}_LabelStage bucket
+    label_output_bucket = f"{pnl_bucket}_LabelStage"
+    influx_writer = sys_env.get_influxdb_writer(bucket_name=label_output_bucket, no_retention=True)
     return LabelStage(influx_writer, market, influx_reader, pnl_bucket).step(
         PnlLabelStep(
             ema_windows=[5, 10, 20],

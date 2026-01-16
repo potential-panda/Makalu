@@ -12,7 +12,7 @@ from .trade_derived_steps import TRADE_DERIVED_BUCKET
 LOG = logging.getLogger(__name__)
 
 # Bucket name constant
-FEATURE_BUCKET = "feature"
+FEATURE_DATA_BUCKET = "feature_data"
 
 
 class QueryTradeAggressionStep(Step):
@@ -235,6 +235,17 @@ class AlignAndBuildFeaturesStep(Step):
             f"AlignAndBuildFeaturesStep: Built and saved {len(feature_df)} features "
             f"with {len(feature_df.columns)} columns to {file_path}."
         )
+
+        # Write to InfluxDB for Grafana visualization
+        points = DataPointConverter.convert_dataframe_to_influx_points(
+            feature_df,
+            measurement="FEATURE",
+            exchange_name=context.market.exchange_name.name,
+            symbol=context.market.symbol.name,
+        )
+        for point in points:
+            influx_writer.add(point)
+        LOG.info(f"AlignAndBuildFeaturesStep: Wrote {len(points)} points to InfluxDB.")
 
     def _compute_microprice_offset_bps(self, df: pd.DataFrame) -> pd.DataFrame:
         """
