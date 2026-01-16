@@ -7,7 +7,7 @@ price movements on different exchanges/markets.
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -239,7 +239,10 @@ class LeadLagStep(Step):
         df_a_resampled = df_a.resample(self.resample_interval).ffill().dropna()
         df_b_resampled = df_b.resample(self.resample_interval).ffill().dropna()
 
-        LOG.info(f"LeadLagStep: After resampling: {len(df_a_resampled)} for {market_a.id}, {len(df_b_resampled)} for {market_b.id}")
+        LOG.info(
+            f"LeadLagStep: After resampling: {len(df_a_resampled)} for {market_a.id},"
+            f" {len(df_b_resampled)} for {market_b.id}"
+        )
 
         # Align series with forward-fill (like Study/lead_lag.py)
         timestamps, aligned_a, aligned_b = align_series(df_a_resampled, df_b_resampled)
@@ -266,18 +269,14 @@ class LeadLagStep(Step):
             window_end_ts = timestamps[end_idx - 1]
 
             # Compute cross-correlation for this window
-            best_lag, best_corr, corr_by_lag = compute_cross_correlation(
-                window_a, window_b, self.max_lag
-            )
+            best_lag, best_corr, corr_by_lag = compute_cross_correlation(window_a, window_b, self.max_lag)
 
             if best_lag is not None:
                 # Convert best_lag from steps to milliseconds
                 best_lag_ms = best_lag * self.interval_ms
 
                 # Create and write point
-                point = self._create_lead_lag_point(
-                    market_a, market_b, best_lag_ms, corr_by_lag, window_end_ts
-                )
+                point = self._create_lead_lag_point(market_a, market_b, best_lag_ms, corr_by_lag, window_end_ts)
                 influx_writer.add(point)
                 points_written += 1
 

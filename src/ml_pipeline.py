@@ -1,5 +1,5 @@
 import argparse
-import logging
+from logging import getLogger
 
 from qate.core.model import Market
 from qate.env import sys_env
@@ -17,7 +17,10 @@ from pipeline.steps import (
     QueryTradeAggressionStep,
 )
 
-logging.basicConfig(level=logging.INFO, format="{asctime} {levelname:8s} {name} {message}", style="{")
+from .pipeline.market_pair import LEAD_LAG_PAIRS, find_pair_key
+
+LOG = getLogger(__name__)
+ENV_NAME = EnvName.LUIGI_MARIO
 
 
 def create_feature_stage(market: Market) -> FeatureStage:
@@ -45,26 +48,45 @@ def create_label_stage(market: Market, pnl_bucket: str) -> LabelStage:
     )
 
 
+def create_pipeline(pair_key: str, run_stages: list[str], pnl_bucket: str) -> Pipeline:
+    lead_market, lag_market = LEAD_LAG_PAIRS.get(pair_key)
+    influx_reader = sys_env.get_influxdb_reader()
+    feature_writer = sys_env.get_influxdb_writer(bucket_name=FEATURE_DATA_BUCKET, no_retention=True)
+
+    pipeline = Pipeline()
+    if "Feature" in run_stages:
+        pipeline.add_stage(
+            FeatureStage(feature_writer, lead_market, influx_reader)
+            .step(QueryTradeAggressionStep())
+            .step(QueryOrderBookStateStep())
+            .step(QueryBookChangeStep())
+            .step(AlignAndBuildFeaturesStep())
+        )
+    if pnl_bucket and "Label" in run_stages:
+        label_writer = sys_env.get_influxdb_writer(bucket_name=f"{pnl_bucket}_Label", no_retention=True)
+        pipeline.add_stage(
+            LabelStage(label_writer, lag_market, influx_reader, pnl_bucket).step(
+                PnlLabelStep(
+                    ema_windows=[5, 10, 20],
+                    rolling_windows=[10, 20, 50],
+                )
+            )
+        )
+
+    return pipeline
+
+
 def run_pipeline(args):
-    env_name = EnvName[args.env]
-    env = Env.load_env(sys_env.ENV_DIR, env_name)
-
-    market = Market.from_str(args.market)
+    env = Env.load_env(sys_env.ENV_DIR, ENV_NAME)
     dt_range = DtRange.from_strings(args.from_dt, args.to_dt)
-
+    market = Market.from_str(args.market)
+    pair_key = find_pair_key(market)
     try:
         env.enter()
-
-        pipeline = Pipeline()
-        pipeline.add_stage(create_feature_stage(market))
-
-        # Add LabelStage only if pnl_bucket is specified
-        if args.pnl_bucket:
-            pipeline.add_stage(create_label_stage(market, args.pnl_bucket))
-
-        logging.info(f"Starting ML pipeline for {market.id} from {args.from_dt} to {args.to_dt}")
-        pipeline.process(dt_range, args={"feature_output_dir": args.feature_output_dir})
-        logging.info("ML pipeline finished.")
+        pipeline = create_pipeline(pair_key, args.stages, args.pnl_bucket)
+        LOG.info(f"Starting ML pipeline from {args.from_dt} to {args.to_dt}")
+        pipeline.process(dt_range)
+        LOG.info("ML pipeline finished.")
     finally:
         env.leave()
 
@@ -75,14 +97,19 @@ def main():
     parser.add_argument("--market", required=True, help="Market in format EXCHANGE:SYMBOL (e.g., BINANCE:BTC_USDT)")
     parser.add_argument("--from-dt", required=True, help="Start date in YYYYMMDD format")
     parser.add_argument("--to-dt", required=True, help="End date in YYYYMMDD format")
-    parser.add_argument("--feature-output-dir", default="/tmp", help="Output directory for feature parquet files")
     parser.add_argument(
         "--pnl-bucket",
         required=False,
         help="InfluxDB bucket containing PNL data from backtest. If provided, LabelStage will be executed.",
     )
+    parser.add_argument(
+        "--stages",
+        nargs="*",
+        type=str,
+        default=["Feature", "Label"],
+        help="Optional list of stages",
+    )
     args = parser.parse_args()
-
     run_pipeline(args)
 
 

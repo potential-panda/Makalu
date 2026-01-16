@@ -228,8 +228,7 @@ class AlignAndBuildFeaturesStep(Step):
         feature_df = feature_df.dropna(thresh=threshold)
 
         # Save to parquet
-        output_dir = args.get("feature_output_dir", "/tmp")
-        file_path = f"{output_dir}/{context.market.id}_features.parquet"
+        file_path = f"{context.market.id}_features.parquet"
         DataPointConverter.convert_dataframe_to_parquet(feature_df, file_path)
         LOG.info(
             f"AlignAndBuildFeaturesStep: Built and saved {len(feature_df)} features "
