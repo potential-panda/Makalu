@@ -59,9 +59,12 @@ def compute_returns(prices: np.ndarray, step: int = 1) -> np.ndarray:
 
 def align_series(
     df_a: pd.DataFrame, df_b: pd.DataFrame, price_col: str = "mid"
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> Tuple[pd.DatetimeIndex, np.ndarray, np.ndarray]:
     """
-    Align two price series by their time index.
+    Align two price series using market A's timestamps as reference.
+
+    Uses forward-fill to interpolate market B's prices to match market A's timestamps,
+    matching the behavior of Study/lead_lag.py.
 
     Args:
         df_a: DataFrame with time index and price column for market A
@@ -69,10 +72,10 @@ def align_series(
         price_col: Column name to use for price (default: 'mid')
 
     Returns:
-        (aligned_prices_a, aligned_prices_b) as numpy arrays
+        (timestamps, aligned_prices_a, aligned_prices_b) as numpy arrays
     """
     if df_a.empty or df_b.empty:
-        return np.array([]), np.array([])
+        return pd.DatetimeIndex([]), np.array([]), np.array([])
 
     # Calculate mid price if not present
     if price_col == "mid" and "mid" not in df_a.columns:
@@ -83,18 +86,29 @@ def align_series(
         df_b = df_b.copy()
         df_b["mid"] = (df_b["bid"] + df_b["ask"]) / 2
 
-    # Find common time index
-    common_index = df_a.index.intersection(df_b.index)
+    # Find overlapping time range
+    start_ts = max(df_a.index[0], df_b.index[0])
+    end_ts = min(df_a.index[-1], df_b.index[-1])
 
-    if len(common_index) == 0:
-        return np.array([]), np.array([])
+    if start_ts >= end_ts:
+        return pd.DatetimeIndex([]), np.array([]), np.array([])
 
-    aligned_a = df_a.loc[common_index, price_col].values
-    aligned_b = df_b.loc[common_index, price_col].values
+    # Filter market A to overlapping range
+    mask_a = (df_a.index >= start_ts) & (df_a.index <= end_ts)
+    df_a_overlap = df_a.loc[mask_a]
+
+    # Use market A's timestamps as reference, forward-fill market B
+    # Reindex B to A's timestamps with forward-fill
+    df_b_aligned = df_b[price_col].reindex(df_a_overlap.index, method="ffill")
+
+    # Get aligned arrays
+    timestamps = df_a_overlap.index
+    aligned_a = df_a_overlap[price_col].values
+    aligned_b = df_b_aligned.values
 
     # Remove any NaN values
     valid_mask = ~(np.isnan(aligned_a) | np.isnan(aligned_b))
-    return aligned_a[valid_mask], aligned_b[valid_mask]
+    return timestamps[valid_mask], aligned_a[valid_mask], aligned_b[valid_mask]
 
 
 def compute_cross_correlation(
@@ -157,10 +171,11 @@ def compute_cross_correlation(
 
 class LeadLagStep(Step):
     """
-    Step for computing lead-lag metrics between two markets.
+    Step for computing lead-lag metrics between two markets using rolling windows.
 
     Queries market price data for both markets from InfluxDB,
-    aligns the series, and computes cross-correlation at various lags.
+    aligns the series, and computes cross-correlation at various lags
+    for each rolling window.
     """
 
     def __init__(
@@ -168,6 +183,8 @@ class LeadLagStep(Step):
         interval_ms: int = 1000,
         max_lag: int = 60,
         resample_interval: str = "1s",
+        window_size_sec: int = 300,
+        window_step_sec: int = 60,
     ):
         """
         Initialize the LeadLagStep.
@@ -176,15 +193,19 @@ class LeadLagStep(Step):
             interval_ms: Aggregation interval in milliseconds (for output)
             max_lag: Maximum lag to test in steps
             resample_interval: Pandas resample interval string (e.g., '1s', '100ms')
+            window_size_sec: Rolling window size in seconds (default: 300 = 5 minutes)
+            window_step_sec: Step between windows in seconds (default: 60 = 1 minute)
         """
         super().__init__()
         self.interval_ms = interval_ms
         self.max_lag = max_lag
         self.resample_interval = resample_interval
+        self.window_size_sec = window_size_sec
+        self.window_step_sec = window_step_sec
 
     def populate(self, influx_writer: InfluxWriter, context: Context, args: Dict[str, Any]):
         """
-        Compute lead-lag metrics and write to InfluxDB.
+        Compute lead-lag metrics using rolling windows and write to InfluxDB.
 
         Expects context to have:
         - market_a: First market (potential leader)
@@ -198,6 +219,7 @@ class LeadLagStep(Step):
         dt_range = context.populate_dt_range
 
         LOG.info(f"LeadLagStep: Computing lead-lag between {market_a.id} and {market_b.id}")
+        LOG.info(f"LeadLagStep: Window size={self.window_size_sec}s, step={self.window_step_sec}s")
 
         # Query market price data for both markets
         df_a = influx_reader.query_market_price(MARKET_DATA_BUCKET, dt_range, market_a)
@@ -219,8 +241,8 @@ class LeadLagStep(Step):
 
         LOG.info(f"LeadLagStep: After resampling: {len(df_a_resampled)} for {market_a.id}, {len(df_b_resampled)} for {market_b.id}")
 
-        # Align series
-        aligned_a, aligned_b = align_series(df_a_resampled, df_b_resampled)
+        # Align series with forward-fill (like Study/lead_lag.py)
+        timestamps, aligned_a, aligned_b = align_series(df_a_resampled, df_b_resampled)
 
         if len(aligned_a) == 0:
             LOG.warning("LeadLagStep: No overlapping timestamps between markets")
@@ -228,35 +250,41 @@ class LeadLagStep(Step):
 
         LOG.info(f"LeadLagStep: Aligned series length: {len(aligned_a)}")
 
-        # Compute cross-correlation
-        best_lag, best_corr, corr_by_lag = compute_cross_correlation(aligned_a, aligned_b, self.max_lag)
+        # Compute lead-lag for each rolling window
+        window_size_steps = self.window_size_sec * 1000 // self.interval_ms
+        window_step_steps = self.window_step_sec * 1000 // self.interval_ms
 
-        if best_lag is None:
-            LOG.warning("LeadLagStep: No significant correlation found")
-            return
+        points_written = 0
+        start_idx = 0
 
-        # Convert best_lag from steps to milliseconds
-        best_lag_ms = best_lag * self.interval_ms
+        while start_idx + window_size_steps <= len(aligned_a):
+            end_idx = start_idx + window_size_steps
 
-        LOG.info(f"LeadLagStep: Best lag={best_lag_ms}ms, correlation={best_corr:.4f}")
+            # Extract window data
+            window_a = aligned_a[start_idx:end_idx]
+            window_b = aligned_b[start_idx:end_idx]
+            window_end_ts = timestamps[end_idx - 1]
 
-        # Create combined point with best_lag and correlations at specific lags
-        point = self._create_lead_lag_point(market_a, market_b, best_lag_ms, corr_by_lag, dt_range)
-        influx_writer.add(point)
+            # Compute cross-correlation for this window
+            best_lag, best_corr, corr_by_lag = compute_cross_correlation(
+                window_a, window_b, self.max_lag
+            )
 
-        # Store result in context for potential downstream use
-        context.lead_lag_result = LeadLagResult(
-            best_lag=best_lag,
-            best_corr=best_corr,
-            corr_by_lag=corr_by_lag,
-            lag_seconds=best_lag_ms / 1000.0,
-            leader_market=market_a.id if best_lag < 0 else (market_b.id if best_lag > 0 else None),
-            follower_market=market_b.id if best_lag < 0 else (market_a.id if best_lag > 0 else None),
-            aligned_length=len(aligned_a),
-            interval_ms=self.interval_ms,
-        )
+            if best_lag is not None:
+                # Convert best_lag from steps to milliseconds
+                best_lag_ms = best_lag * self.interval_ms
 
-        LOG.info("LeadLagStep: Wrote 1 point to InfluxDB")
+                # Create and write point
+                point = self._create_lead_lag_point(
+                    market_a, market_b, best_lag_ms, corr_by_lag, window_end_ts
+                )
+                influx_writer.add(point)
+                points_written += 1
+
+            # Move to next window
+            start_idx += window_step_steps
+
+        LOG.info(f"LeadLagStep: Wrote {points_written} points to InfluxDB")
 
     def _create_lead_lag_point(
         self,
@@ -264,7 +292,7 @@ class LeadLagStep(Step):
         market_b: Market,
         best_lag_ms: int,
         corr_by_lag: Dict[int, float],
-        dt_range,
+        timestamp,
     ) -> Point:
         """
         Create a combined InfluxDB point for lead-lag metrics.
@@ -274,7 +302,7 @@ class LeadLagStep(Step):
             market_b: Second market
             best_lag_ms: Best lag in milliseconds
             corr_by_lag: Dict mapping lag steps to correlation values
-            dt_range: Date range for timestamp
+            timestamp: Timestamp for the point
 
         Returns:
             InfluxDB Point with tags (market_a, market_b) and fields (best_lag, lag_0, lag_500, lag_1000)
@@ -284,7 +312,7 @@ class LeadLagStep(Step):
             .tag("market_a", market_a.id)
             .tag("market_b", market_b.id)
             .field("best_lag", best_lag_ms)
-            .time(dt_range.end_dt, WritePrecision.S)
+            .time(timestamp, WritePrecision.NS)
         )
 
         # Add correlations at specific lag values (0ms, 500ms, 1000ms)

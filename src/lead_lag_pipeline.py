@@ -32,6 +32,8 @@ def create_lead_lag_stage(
     market_b: Market,
     interval_ms: int,
     max_lag: int,
+    window_size_sec: int,
+    window_step_sec: int,
 ) -> LeadLagStage:
     """
     Create a LeadLagStage with the specified markets and parameters.
@@ -41,6 +43,8 @@ def create_lead_lag_stage(
         market_b: Second market (potential follower)
         interval_ms: Aggregation interval in milliseconds
         max_lag: Maximum lag to test in steps
+        window_size_sec: Rolling window size in seconds
+        window_step_sec: Step between windows in seconds
 
     Returns:
         Configured LeadLagStage
@@ -59,6 +63,8 @@ def create_lead_lag_stage(
             interval_ms=interval_ms,
             max_lag=max_lag,
             resample_interval=resample_interval,
+            window_size_sec=window_size_sec,
+            window_step_sec=window_step_sec,
         )
     )
 
@@ -82,6 +88,8 @@ def run_pipeline(args):
                 market_b,
                 args.interval_ms,
                 args.max_lag,
+                args.window_size,
+                args.window_step,
             )
         )
 
@@ -89,7 +97,10 @@ def run_pipeline(args):
             f"Starting lead-lag pipeline: {market_a.id} vs {market_b.id} "
             f"from {args.from_dt} to {args.to_dt}"
         )
-        logging.info(f"Parameters: interval={args.interval_ms}ms, max_lag={args.max_lag} steps")
+        logging.info(
+            f"Parameters: interval={args.interval_ms}ms, max_lag={args.max_lag} steps, "
+            f"window_size={args.window_size}s, window_step={args.window_step}s"
+        )
 
         pipeline.process(dt_range, args={})
 
@@ -139,6 +150,18 @@ def main():
         type=int,
         default=60,
         help="Maximum lag to test in steps (default: 60)",
+    )
+    parser.add_argument(
+        "--window-size",
+        type=int,
+        default=300,
+        help="Rolling window size in seconds (default: 300 = 5 minutes)",
+    )
+    parser.add_argument(
+        "--window-step",
+        type=int,
+        default=60,
+        help="Step between windows in seconds (default: 60 = 1 minute)",
     )
 
     args = parser.parse_args()
