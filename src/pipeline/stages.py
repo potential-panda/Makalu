@@ -12,7 +12,7 @@ from qate.store.msgpack_loader import MarketDataLoader
 from qate.util.dt_range import DtRange
 
 from .framework import Stage
-from .steps import MARKET_DATA_BUCKET
+from .market_data_steps import MARKET_DATA_BUCKET
 
 LOG = getLogger(__name__)
 
