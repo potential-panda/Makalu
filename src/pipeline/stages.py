@@ -147,3 +147,31 @@ class LabelStage(Stage):
         self.context.influx_reader = self.influx_reader
         self.context.market = self.market
         self.context.pnl_bucket = self.pnl_bucket
+
+
+class LeadLagStage(Stage):
+    """
+    Stage for computing lead-lag metrics between two markets.
+
+    Analyzes the lead-lag relationship between price movements
+    on different exchanges/markets.
+    """
+
+    def __init__(
+        self,
+        influx_writer: InfluxWriter,
+        market_a: Market,
+        market_b: Market,
+        influx_reader: InfluxReader,
+    ):
+        super().__init__(influx_writer)
+        self.market_a = market_a
+        self.market_b = market_b
+        self.influx_reader = influx_reader
+
+    def before(self, dt_range: DtRange, args: Dict[str, Any]):
+        self.context.populate_dt_range = dt_range
+        self.context.compute_dt_range = dt_range
+        self.context.influx_reader = self.influx_reader
+        self.context.market_a = self.market_a
+        self.context.market_b = self.market_b
