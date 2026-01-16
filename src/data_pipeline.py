@@ -7,6 +7,7 @@ from qate.env.env import Env, EnvName
 from qate.util.dt_range import DtRange
 
 from pipeline.framework import Pipeline
+from pipeline.market_pair import LEAD_LAG_PAIRS, TARGET_SIZE, find_pair_key
 from pipeline.stages import LeadLagStage, MarketDataStage, TradeDerivedStage
 from pipeline.steps import (
     LEAD_LAG_BUCKET,
@@ -23,8 +24,6 @@ from pipeline.steps import (
     PopulateRangeBarStep,
     PopulateTradeStep,
 )
-
-from .pipeline.market_pair import LEAD_LAG_PAIRS, TARGET_SIZE, find_pair_key
 
 LOG = getLogger(__name__)
 ENV_NAME = EnvName.MARIO_MARIO
@@ -104,10 +103,9 @@ def run_pipeline(args):
 
 def main():
     parser = argparse.ArgumentParser(description="Data pipeline CLI for processing market data.")
-    parser.add_argument("--env", required=True, choices=EnvName._member_names_, help="Environment name")
     parser.add_argument("--market", required=True, help="Market in format EXCHANGE:SYMBOL (e.g., BINANCE:BTC_USDT)")
     parser.add_argument("--from-dt", required=True, help="Start date in YYYYMMDD format")
-    parser.add_argument("--to-dt", required=True, help="End date in YYYYMMDD format")
+    parser.add_argument("--to-dt", help="End date in YYYYMMDD format")
     parser.add_argument(
         "--stages",
         nargs="*",
