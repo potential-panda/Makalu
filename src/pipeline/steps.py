@@ -5,6 +5,7 @@ Steps are organized into separate files by stage:
 - market_data_steps.py: Steps for MarketDataStage
 - trade_derived_steps.py: Steps for TradeDerivedStage
 - feature_steps.py: Steps for FeatureStage
+- label_steps.py: Steps for LabelStage
 """
 
 # MarketData stage steps
@@ -36,6 +37,11 @@ from .feature_steps import (
     QueryTradeAggressionStep,
 )
 
+# Label stage steps
+from .label_steps import (
+    PnlLabelStep,
+)
+
 __all__ = [
     # Constants
     "MARKET_DATA_BUCKET",
@@ -58,4 +64,6 @@ __all__ = [
     "QueryOrderBookStateStep",
     "QueryBookChangeStep",
     "AlignAndBuildFeaturesStep",
+    # Label stage steps
+    "PnlLabelStep",
 ]

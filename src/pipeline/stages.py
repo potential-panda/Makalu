@@ -125,3 +125,25 @@ class FeatureStage(Stage):
         self.context.compute_dt_range = dt_range
         self.context.influx_reader = self.influx_reader
         self.context.market = self.market
+
+
+class LabelStage(Stage):
+    """
+    Stage for building labels from PNL data in InfluxDB.
+
+    The PNL data is expected to be populated by a backtest program
+    with measurement=PNL and appropriate tags.
+    """
+
+    def __init__(self, influx_writer: InfluxWriter, market: Market, influx_reader: InfluxReader, pnl_bucket: str):
+        super().__init__(influx_writer)
+        self.market = market
+        self.influx_reader = influx_reader
+        self.pnl_bucket = pnl_bucket
+
+    def before(self, dt_range: DtRange, args: Dict[str, Any]):
+        self.context.populate_dt_range = dt_range
+        self.context.compute_dt_range = dt_range
+        self.context.influx_reader = self.influx_reader
+        self.context.market = self.market
+        self.context.pnl_bucket = self.pnl_bucket

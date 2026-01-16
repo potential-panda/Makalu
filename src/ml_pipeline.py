@@ -6,10 +6,11 @@ from qate.env import sys_env
 from qate.util.dt_range import DtRange
 
 from pipeline.framework import Pipeline
-from pipeline.stages import FeatureStage
+from pipeline.stages import FeatureStage, LabelStage
 from pipeline.steps import (
     FEATURE_BUCKET,
     AlignAndBuildFeaturesStep,
+    PnlLabelStep,
     QueryBookChangeStep,
     QueryOrderBookStateStep,
     QueryTradeAggressionStep,
@@ -30,12 +31,30 @@ def create_feature_stage(market: Market) -> FeatureStage:
     )
 
 
+def create_label_stage(market: Market, pnl_bucket: str) -> LabelStage:
+    influx_reader = sys_env.get_influxdb_reader()
+    # LabelStage doesn't write to InfluxDB, but framework requires a writer
+    # Use a dummy writer or the feature bucket
+    influx_writer = sys_env.get_influxdb_writer(bucket_name=FEATURE_BUCKET, no_retention=True)
+    return LabelStage(influx_writer, market, influx_reader, pnl_bucket).step(
+        PnlLabelStep(
+            ema_windows=[5, 10, 20],
+            rolling_windows=[10, 20, 50],
+        )
+    )
+
+
 def main():
-    parser = argparse.ArgumentParser(description="ML pipeline CLI for building features from market data.")
+    parser = argparse.ArgumentParser(description="ML pipeline CLI for building features and labels from market data.")
     parser.add_argument("--market", required=True, help="Market in format EXCHANGE:SYMBOL (e.g., BINANCE:BTC_USDT)")
     parser.add_argument("--from-dt", required=True, help="Start date in YYYYMMDD format")
     parser.add_argument("--to-dt", required=True, help="End date in YYYYMMDD format")
     parser.add_argument("--feature-output-dir", default="/tmp", help="Output directory for feature parquet files")
+    parser.add_argument(
+        "--pnl-bucket",
+        required=False,
+        help="InfluxDB bucket containing PNL data from backtest. If provided, LabelStage will be executed.",
+    )
     args = parser.parse_args()
 
     market = Market.from_str(args.market)
@@ -43,6 +62,10 @@ def main():
 
     pipeline = Pipeline()
     pipeline.add_stage(create_feature_stage(market))
+
+    # Add LabelStage only if pnl_bucket is specified
+    if args.pnl_bucket:
+        pipeline.add_stage(create_label_stage(market, args.pnl_bucket))
 
     # --- Execution ---
     logging.info(f"Starting ML pipeline for {market.id} from {args.from_dt} to {args.to_dt}")
