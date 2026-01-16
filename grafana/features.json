@@ -1,0 +1,292 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_INFLUXDB",
+      "label": "InfluxDB",
+      "description": "",
+      "type": "datasource",
+      "pluginId": "influxdb",
+      "pluginName": "InfluxDB"
+    }
+  ],
+  "__requires": [
+    {
+      "type": "grafana",
+      "id": "grafana",
+      "name": "Grafana",
+      "version": "10.0.0"
+    },
+    {
+      "type": "panel",
+      "id": "timeseries",
+      "name": "Time series",
+      "version": ""
+    },
+    {
+      "type": "datasource",
+      "id": "influxdb",
+      "name": "InfluxDB",
+      "version": ""
+    }
+  ],
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "gnetId": null,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "title": "Spread & Mid Price",
+      "type": "timeseries",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS_INFLUXDB}"
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS_INFLUXDB}"
+          },
+          "query": "from(bucket: \"feature_data\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn: (r) => r[\"_measurement\"] == \"FEATURE\") |> filter(fn: (r) => r[\"exchange_name\"] == \"${exchange}\") |> filter(fn: (r) => r[\"symbol\"] == \"${symbol}\") |> filter(fn: (r) => r[\"_field\"] == \"spread_bps\" or r[\"_field\"] == \"mid\") |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false) |> yield(name: \"mean\")"
+        }
+      ]
+    },
+    {
+      "title": "Volume Imbalance (k levels)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS_INFLUXDB}"
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS_INFLUXDB}"
+          },
+          "query": "from(bucket: \"feature_data\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn: (r) => r[\"_measurement\"] == \"FEATURE\") |> filter(fn: (r) => r[\"exchange_name\"] == \"${exchange}\") |> filter(fn: (r) => r[\"symbol\"] == \"${symbol}\") |> filter(fn: (r) => r[\"_field\"] =~ /^vol_imb_k/) |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false) |> yield(name: \"mean\")"
+        }
+      ]
+    },
+    {
+      "title": "Weighted Imbalance (k levels)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS_INFLUXDB}"
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS_INFLUXDB}"
+          },
+          "query": "from(bucket: \"feature_data\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn: (r) => r[\"_measurement\"] == \"FEATURE\") |> filter(fn: (r) => r[\"exchange_name\"] == \"${exchange}\") |> filter(fn: (r) => r[\"symbol\"] == \"${symbol}\") |> filter(fn: (r) => r[\"_field\"] =~ /^weighted_imb_k/) |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false) |> yield(name: \"mean\")"
+        }
+      ]
+    },
+    {
+      "title": "Microprice Offset (bps)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS_INFLUXDB}"
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS_INFLUXDB}"
+          },
+          "query": "from(bucket: \"feature_data\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn: (r) => r[\"_measurement\"] == \"FEATURE\") |> filter(fn: (r) => r[\"exchange_name\"] == \"${exchange}\") |> filter(fn: (r) => r[\"symbol\"] == \"${symbol}\") |> filter(fn: (r) => r[\"_field\"] =~ /^microprice_offset_bps/) |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false) |> yield(name: \"mean\")"
+        }
+      ]
+    },
+    {
+      "title": "Trade Imbalance (qty)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS_INFLUXDB}"
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS_INFLUXDB}"
+          },
+          "query": "from(bucket: \"feature_data\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn: (r) => r[\"_measurement\"] == \"FEATURE\") |> filter(fn: (r) => r[\"exchange_name\"] == \"${exchange}\") |> filter(fn: (r) => r[\"symbol\"] == \"${symbol}\") |> filter(fn: (r) => r[\"_field\"] =~ /^imbalance_qty_[0-9]+s$/) |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false) |> yield(name: \"mean\")"
+        }
+      ]
+    },
+    {
+      "title": "Trade Rates (per sec)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS_INFLUXDB}"
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS_INFLUXDB}"
+          },
+          "query": "from(bucket: \"feature_data\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn: (r) => r[\"_measurement\"] == \"FEATURE\") |> filter(fn: (r) => r[\"exchange_name\"] == \"${exchange}\") |> filter(fn: (r) => r[\"symbol\"] == \"${symbol}\") |> filter(fn: (r) => r[\"_field\"] =~ /trades_per_sec/ or r[\"_field\"] =~ /qty_per_sec/) |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false) |> yield(name: \"mean\")"
+        }
+      ]
+    },
+    {
+      "title": "Cross-Window Imbalance Diff",
+      "type": "timeseries",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS_INFLUXDB}"
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS_INFLUXDB}"
+          },
+          "query": "from(bucket: \"feature_data\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn: (r) => r[\"_measurement\"] == \"FEATURE\") |> filter(fn: (r) => r[\"exchange_name\"] == \"${exchange}\") |> filter(fn: (r) => r[\"symbol\"] == \"${symbol}\") |> filter(fn: (r) => r[\"_field\"] =~ /imbalance_qty_diff/) |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false) |> yield(name: \"mean\")"
+        }
+      ]
+    },
+    {
+      "title": "Sign Agreement (Trade vs Book)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS_INFLUXDB}"
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS_INFLUXDB}"
+          },
+          "query": "from(bucket: \"feature_data\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn: (r) => r[\"_measurement\"] == \"FEATURE\") |> filter(fn: (r) => r[\"exchange_name\"] == \"${exchange}\") |> filter(fn: (r) => r[\"symbol\"] == \"${symbol}\") |> filter(fn: (r) => r[\"_field\"] =~ /sign_agreement/) |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false) |> yield(name: \"mean\")"
+        }
+      ]
+    },
+    {
+      "title": "Tight Spread Conditioned Imbalance",
+      "type": "timeseries",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS_INFLUXDB}"
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS_INFLUXDB}"
+          },
+          "query": "from(bucket: \"feature_data\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn: (r) => r[\"_measurement\"] == \"FEATURE\") |> filter(fn: (r) => r[\"exchange_name\"] == \"${exchange}\") |> filter(fn: (r) => r[\"symbol\"] == \"${symbol}\") |> filter(fn: (r) => r[\"_field\"] =~ /tight_spread/) |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false) |> yield(name: \"mean\")"
+        }
+      ]
+    },
+    {
+      "title": "Strong Book Weak Trades",
+      "type": "timeseries",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS_INFLUXDB}"
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS_INFLUXDB}"
+          },
+          "query": "from(bucket: \"feature_data\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn: (r) => r[\"_measurement\"] == \"FEATURE\") |> filter(fn: (r) => r[\"exchange_name\"] == \"${exchange}\") |> filter(fn: (r) => r[\"symbol\"] == \"${symbol}\") |> filter(fn: (r) => r[\"_field\"] =~ /strong_book_weak_trades/) |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false) |> yield(name: \"mean\")"
+        }
+      ]
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 37,
+  "style": "dark",
+  "tags": ["features", "ml", "flux"],
+  "templating": {
+    "list": [
+      {
+        "allValue": null,
+        "current": {},
+        "datasource": {
+          "type": "influxdb",
+          "uid": "${DS_INFLUXDB}"
+        },
+        "definition": "import \"influxdata/influxdb/v1\"\nv1.tagValues(bucket: \"feature_data\", tag: \"exchange_name\", start: -365d)",
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "name": "exchange",
+        "options": [],
+        "query": "import \"influxdata/influxdb/v1\"\nv1.tagValues(bucket: \"feature_data\", tag: \"exchange_name\", start: -365d)",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "type": "query"
+      },
+      {
+        "allValue": null,
+        "current": {},
+        "datasource": {
+          "type": "influxdb",
+          "uid": "${DS_INFLUXDB}"
+        },
+        "definition": "import \"influxdata/influxdb/v1\"\nv1.tagValues(bucket: \"feature_data\", tag: \"symbol\", start: -365d)",
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "name": "symbol",
+        "options": [],
+        "query": "import \"influxdata/influxdb/v1\"\nv1.tagValues(bucket: \"feature_data\", tag: \"symbol\", start: -365d)",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "ML Features (Flux)",
+  "uid": "ml-features-flux",
+  "version": 1
+}
