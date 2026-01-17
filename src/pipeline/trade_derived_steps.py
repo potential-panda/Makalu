@@ -2,6 +2,7 @@ import logging
 from abc import abstractmethod
 from typing import Any, Dict, List
 
+from influxdb_client import Point, WritePrecision
 from qate.store.influx_writer import InfluxWriter
 from qate.trading.aggression import TradeAggressionBuilder
 from qate.trading.chart import (
@@ -11,13 +12,16 @@ from qate.trading.chart import (
     RangeBarBuilder,
 )
 
-from .converter import DataPointConverter
 from .framework import Context, Step, StepProgressLogger
 
 LOG = logging.getLogger(__name__)
 
 # Bucket name constants
 TRADE_DERIVED_BUCKET = "trade_derived"
+
+
+# NOTE Want to make it clear to see what are populated in each step
+# Should explicitly write each field even it looks verbose
 
 
 class PopulateAggressionStep(Step):
@@ -39,7 +43,36 @@ class PopulateAggressionStep(Step):
                 continue
             aggressions = self.builder.get_trade_aggression(trade.get_ts())
             for aggression in aggressions:
-                point = DataPointConverter.convert_trade_aggression_to_influx_point(trade.market, aggression)
+                point = (
+                    Point("TRADE_AGGRESSION")
+                    .tag("exchange_name", trade.market.exchange_name.name)
+                    .tag("symbol", trade.market.symbol.name)
+                    .tag("window_sec", aggression.window_sec)
+                    .field("buy_qty", aggression.buy_qty)
+                    .field("sell_qty", aggression.sell_qty)
+                    .field("buy_count", aggression.buy_count)
+                    .field("sell_count", aggression.sell_count)
+                    .field("imbalance_qty", aggression.imbalance_qty)
+                    .field("imbalance_count", aggression.imbalance_count)
+                    .field("qty_per_sec", aggression.qty_per_sec)
+                    .field("trades_per_sec", aggression.trades_per_sec)
+                    .field("buy_qty_per_sec", aggression.buy_qty_per_sec)
+                    .field("sell_qty_per_sec", aggression.sell_qty_per_sec)
+                    .field("vwap", aggression.vwap)
+                    .field("vwap_buy", aggression.vwap_buy)
+                    .field("vwap_sell", aggression.vwap_sell)
+                    .field("dominant_size_bucket", aggression.dominant_size_bucket)
+                    .field("dominant_bucket_count", aggression.dominant_bucket_count)
+                    .field("dominant_bucket_share", aggression.dominant_bucket_share)
+                    .field("burst_flag", aggression.burst_flag)
+                    .field("max_trade_size", aggression.max_trade_size)
+                    .field("total_qty", aggression.total_qty)
+                    .field("total_count", aggression.total_count)
+                    .field("avg_trade_size", aggression.avg_trade_size)
+                    .field("net_flow", aggression.net_flow)
+                    .field("buy_sell_ratio", aggression.buy_sell_ratio)
+                    .time(int(aggression.ts * 1000), WritePrecision.MS)
+                )
                 influx_writer.add(point)
                 progress.update()
         LOG.info(f"PopulateAggressionStep: Processed {progress.cnt} trade aggressions.")
@@ -71,12 +104,19 @@ class AbstractPopulateChartStep(Step):
                 continue
             bar = builder.on_update(trade)
             if bar:
-                point = DataPointConverter.convert_bar_to_influx_point(
-                    bar,
-                    symbol=trade.market.symbol.name,
-                    exchange=trade.market.exchange_name.name,
-                    interval=self.get_interval_tag(),
-                    bar_type=self.get_bar_type_tag(),
+                point = (
+                    Point("CHART")
+                    .tag("exchange_name", trade.market.exchange_name.name)
+                    .tag("symbol", trade.market.symbol.name)
+                    .tag("interval", self.get_interval_tag())
+                    .tag("bar_type", self.get_bar_type_tag())
+                    .field("open", bar.open)
+                    .field("high", bar.high)
+                    .field("low", bar.low)
+                    .field("close", bar.close)
+                    .field("volume", bar.volume)
+                    .field("tick_count", bar.tick_count)
+                    .time(int(bar.get_ts() * 1000), WritePrecision.MS)
                 )
                 influx_writer.add(point)
                 progress.update()

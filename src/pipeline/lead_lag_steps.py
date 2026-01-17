@@ -213,45 +213,45 @@ class LeadLagStep(Step):
         - influx_reader: InfluxReader instance
         - populate_dt_range: Date range to process
         """
-        market_a: Market = context.market_a
-        market_b: Market = context.market_b
+        market_lead: Market = context.market_lead
+        market_lag: Market = context.market_lag
         influx_reader = context.influx_reader
         dt_range = context.populate_dt_range
 
-        LOG.info(f"LeadLagStep: Computing lead-lag between {market_a.id} and {market_b.id}")
+        LOG.info(f"LeadLagStep: Computing lead-lag between {market_lead.id} and {market_lag.id}")
         LOG.info(f"LeadLagStep: Window size={self.window_size_sec}s, step={self.window_step_sec}s")
 
         # Query market price data for both markets
-        df_a = influx_reader.query_market_price(MARKET_DATA_BUCKET, dt_range, market_a)
-        df_b = influx_reader.query_market_price(MARKET_DATA_BUCKET, dt_range, market_b)
+        df_lead = influx_reader.query_market_price(MARKET_DATA_BUCKET, dt_range, market_lead)
+        df_lag = influx_reader.query_market_price(MARKET_DATA_BUCKET, dt_range, market_lag)
 
-        if df_a.empty:
-            LOG.warning(f"LeadLagStep: No market price data found for {market_a.id}")
+        if df_lead.empty:
+            LOG.warning(f"LeadLagStep: No market price data found for {market_lead.id}")
             return
 
-        if df_b.empty:
-            LOG.warning(f"LeadLagStep: No market price data found for {market_b.id}")
+        if df_lag.empty:
+            LOG.warning(f"LeadLagStep: No market price data found for {market_lag.id}")
             return
 
-        LOG.info(f"LeadLagStep: Loaded {len(df_a)} prices for {market_a.id}, {len(df_b)} for {market_b.id}")
+        LOG.info(f"LeadLagStep: Loaded {len(df_lead)} prices for {market_lead.id}, {len(df_lag)} for {market_lag.id}")
 
         # Resample to fixed intervals using forward-fill
-        df_a_resampled = df_a.resample(self.resample_interval).ffill().dropna()
-        df_b_resampled = df_b.resample(self.resample_interval).ffill().dropna()
+        df_lead_resampled = df_lead.resample(self.resample_interval).ffill().dropna()
+        df_lag_resampled = df_lag.resample(self.resample_interval).ffill().dropna()
 
         LOG.info(
-            f"LeadLagStep: After resampling: {len(df_a_resampled)} for {market_a.id},"
-            f" {len(df_b_resampled)} for {market_b.id}"
+            f"LeadLagStep: After resampling: {len(df_lead_resampled)} for {market_lead.id},"
+            f" {len(df_lag_resampled)} for {market_lag.id}"
         )
 
         # Align series with forward-fill (like Study/lead_lag.py)
-        timestamps, aligned_a, aligned_b = align_series(df_a_resampled, df_b_resampled)
+        timestamps, aligned_lead, aligned_lag = align_series(df_lead_resampled, df_lag_resampled)
 
-        if len(aligned_a) == 0:
+        if len(aligned_lead) == 0:
             LOG.warning("LeadLagStep: No overlapping timestamps between markets")
             return
 
-        LOG.info(f"LeadLagStep: Aligned series length: {len(aligned_a)}")
+        LOG.info(f"LeadLagStep: Aligned series length: {len(aligned_lead)}")
 
         # Compute lead-lag for each rolling window
         window_size_steps = self.window_size_sec * 1000 // self.interval_ms
@@ -260,23 +260,23 @@ class LeadLagStep(Step):
         points_written = 0
         start_idx = 0
 
-        while start_idx + window_size_steps <= len(aligned_a):
+        while start_idx + window_size_steps <= len(aligned_lead):
             end_idx = start_idx + window_size_steps
 
             # Extract window data
-            window_a = aligned_a[start_idx:end_idx]
-            window_b = aligned_b[start_idx:end_idx]
+            window_lead = aligned_lead[start_idx:end_idx]
+            window_lag = aligned_lag[start_idx:end_idx]
             window_end_ts = timestamps[end_idx - 1]
 
             # Compute cross-correlation for this window
-            best_lag, best_corr, corr_by_lag = compute_cross_correlation(window_a, window_b, self.max_lag)
+            best_lag, best_corr, corr_by_lag = compute_cross_correlation(window_lead, window_lag, self.max_lag)
 
             if best_lag is not None:
                 # Convert best_lag from steps to milliseconds
                 best_lag_ms = best_lag * self.interval_ms
 
                 # Create and write point
-                point = self._create_lead_lag_point(market_a, market_b, best_lag_ms, corr_by_lag, window_end_ts)
+                point = self._create_lead_lag_point(market_lead, market_lag, best_lag_ms, corr_by_lag, window_end_ts)
                 influx_writer.add(point)
                 points_written += 1
 

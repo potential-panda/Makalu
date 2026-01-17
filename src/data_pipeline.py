@@ -30,7 +30,7 @@ ENV_NAME = EnvName.MARIO_MARIO
 
 
 def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
-    lead_market, lag_market = LEAD_LAG_PAIRS.get(pair_key)
+    market_lead, market_lag = LEAD_LAG_PAIRS.get(pair_key)
     data_dir = sys_env.get_market_data_dir()
     influx_reader = sys_env.get_influxdb_reader()
     market_writer = sys_env.get_influxdb_writer(bucket_name=MARKET_DATA_BUCKET, no_retention=True)
@@ -40,9 +40,9 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
     pipeline = Pipeline()
     if "MarketData" in run_stages:
         pipeline.add_stage(
-            MarketDataStage(market_writer, lead_market, data_dir)
+            MarketDataStage(market_writer, market_lead, data_dir)
             .step(PopulateTradeStep())
-            .step(PopulateMarketPriceStep(target_size=TARGET_SIZE.get(lead_market.symbol)))
+            .step(PopulateMarketPriceStep(target_size=TARGET_SIZE.get(market_lead.symbol)))
             .step(PopulateOrderBookStep())
             .step(
                 PopulateOrderImbalanceStep(
@@ -56,14 +56,14 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
         )
 
         pipeline.add_stage(
-            MarketDataStage(market_writer, lag_market, data_dir)
+            MarketDataStage(market_writer, market_lag, data_dir)
             .step(PopulateTradeStep())
-            .step(PopulateMarketPriceStep(target_size=TARGET_SIZE.get(lag_market.symbol)))
+            .step(PopulateMarketPriceStep(target_size=TARGET_SIZE.get(market_lag.symbol)))
         )
 
     if "TradeDerived" in run_stages:
         pipeline.add_stage(
-            TradeDerivedStage(derived_writer, lead_market, influx_reader)
+            TradeDerivedStage(derived_writer, market_lead, influx_reader)
             .step(PopulateCandleBarStep(interval_seconds=60))  # 1-minute candle bars
             .step(PopulateHeikinAshiBarStep(interval_seconds=60))  # 1-minute Heikin Ashi bars
             .step(PopulateRangeBarStep(box_size_rate=0.001))  # 0.1% range bars (example)
@@ -72,9 +72,9 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
 
     if "LeadLag" in run_stages:
         pipeline.add_stage(
-            LeadLagStage(lead_lag_writer, lead_market, lag_market, influx_reader).step(
+            LeadLagStage(lead_lag_writer, market_lead, market_lag, influx_reader).step(
                 LeadLagStep(
-                    interval_ms=1000,
+                    interval_ms=500,
                     max_lag=30,
                     resample_interval="1s",
                     window_size_sec=300,

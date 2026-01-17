@@ -1,18 +1,22 @@
 import logging
 from typing import Any, Dict, List
 
+from influxdb_client import Point, WritePrecision
 from qate.core.symbol import get_symbol_def
 from qate.store.influx_writer import InfluxWriter
 from qate.trading import intent
 from qate.trading.book_change import BookChangeBuilder
 
-from .converter import DataPointConverter
 from .framework import Context, Step, StepProgressLogger
 
 LOG = logging.getLogger(__name__)
 
 # Bucket name constants
 MARKET_DATA_BUCKET = "market_data"
+
+
+# NOTE Want to make it clear to see what are populated in each step
+# Should explicitly write each field even it looks verbose
 
 
 class PopulateTradeStep(Step):
@@ -22,7 +26,16 @@ class PopulateTradeStep(Step):
         for trade in context.trades:
             if not context.populate_dt_range.is_within(trade.get_ts()):
                 continue
-            point = DataPointConverter.convert_trade_to_influx_point(trade)
+
+            point = (
+                Point("TRADE")
+                .tag("exchange_name", trade.exchange_name.name)
+                .tag("symbol", trade.symbol.name)
+                .tag("side", trade.side.name)
+                .field("price", trade.price)
+                .field("size", trade.size)
+                .time(int(trade.get_ts() * 1000), WritePrecision.MS)
+            )
             influx_writer.add(point)
             progress.update()
         LOG.info(f"PopulateTradeStep: Processed {progress.cnt} trades.")
@@ -46,10 +59,16 @@ class PopulateMarketPriceStep(Step):
             market_price = orderbook.market_price(self.target_size)
             if not market_price:
                 continue
-            point = DataPointConverter.convert_market_price_to_influx_point(
-                orderbook,
-                market_price,
-                execution_size_str,
+            point = (
+                Point("MARKET_PRICE")
+                .tag("exchange_name", orderbook.exchange_name.name)
+                .tag("symbol", orderbook.symbol.name)
+                .tag("execution_size", execution_size_str)
+                .field("bid", market_price.bid)
+                .field("ask", market_price.ask)
+                .field("spread", market_price.spread)
+                .field("spread_bps", market_price.spread_bps)
+                .time(int(orderbook.get_ts() * 1000), WritePrecision.MS)
             )
             influx_writer.add(point)
             progress.update()
@@ -65,7 +84,17 @@ class PopulateOrderBookStep(Step):
         for orderbook in context.order_books:
             if not context.populate_dt_range.is_within(orderbook.get_ts()):
                 continue
-            point = DataPointConverter.convert_order_book_to_influx_point(orderbook)
+            point = (
+                Point("ORDER_BOOK")
+                .tag("exchange_name", orderbook.exchange_name.name)
+                .tag("symbol", orderbook.symbol.name)
+                .field("best_ask", orderbook.best_ask)
+                .field("best_bid", orderbook.best_bid)
+                .field("mid", orderbook.mid)
+                .field("spread", orderbook.spread)
+                .field("spread_bps", orderbook.spread_bps)
+                .time(int(orderbook.get_ts() * 1000), WritePrecision.MS)
+            )
             influx_writer.add(point)
             progress.update()
         LOG.info(f"PopulateOrderBookStep: Processed {progress.cnt} order books.")
@@ -104,26 +133,54 @@ class PopulateOrderImbalanceStep(Step):
                 continue
             for k in self.volume_imbalance_k:
                 value = intent.compute_volume_imbalance(orderbook, k)
-                point = DataPointConverter.convert_volume_imbalance_to_influx_point(orderbook, k, value)
+                point = (
+                    Point("VOLUME_IMBALANCE")
+                    .tag("exchange_name", orderbook.exchange_name.name)
+                    .tag("symbol", orderbook.symbol.name)
+                    .tag("k", k)
+                    .field("value", value)
+                    .time(int(orderbook.get_ts() * 1000), WritePrecision.MS)
+                )
                 influx_writer.add(point)
                 progress.update()
 
             for k in self.weighted_imbalance_k:
                 value = intent.compute_weighted_imbalance(orderbook, k)
-                point = DataPointConverter.convert_weighted_imbalance_to_influx_point(orderbook, k, value)
+                point = (
+                    Point("WEIGHTED_IMBALANCE")
+                    .tag("exchange_name", orderbook.exchange_name.name)
+                    .tag("symbol", orderbook.symbol.name)
+                    .tag("k", k)
+                    .field("value", value)
+                    .time(int(orderbook.get_ts() * 1000), WritePrecision.MS)
+                )
                 influx_writer.add(point)
                 progress.update()
 
             for rate in self.depth_imbalance_rate:
                 value = intent.compute_depth_imbalance(orderbook, rate)
-                point = DataPointConverter.convert_depth_imbalance_to_influx_point(orderbook, rate, value)
+                point = (
+                    Point("DEPTH_IMBALANCE")
+                    .tag("exchange_name", orderbook.exchange_name.name)
+                    .tag("symbol", orderbook.symbol.name)
+                    .tag("bps", int(rate * 10000))
+                    .field("value", value)
+                    .time(int(orderbook.get_ts() * 1000), WritePrecision.MS)
+                )
                 influx_writer.add(point)
                 progress.update()
 
             for k in self.microprice_k:
                 value = intent.compute_microprice(orderbook, k)
                 if value is not None:
-                    point = DataPointConverter.convert_microprice_to_influx_point(orderbook, k, value)
+                    point = (
+                        Point("MICROPRICE")
+                        .tag("exchange_name", orderbook.exchange_name.name)
+                        .tag("symbol", orderbook.symbol.name)
+                        .tag("k", k)
+                        .field("value", value)
+                        .time(int(orderbook.get_ts() * 1000), WritePrecision.MS)
+                    )
                     influx_writer.add(point)
                     progress.update()
         LOG.info(f"PopulateOrderImbalanceStep: Processed {progress.cnt} order book imbalances.")
@@ -149,7 +206,24 @@ class PopulateBookChangeStep(Step):
                     continue
                 if not context.populate_dt_range.is_within(orderbook.get_ts()):
                     continue
-                point = DataPointConverter.convert_book_change_to_influx_point(orderbook, book_change)
+                point = (
+                    Point("BOOK_CHANGE")
+                    .tag("exchange_name", orderbook.exchange_name.name)
+                    .tag("symbol", orderbook.symbol.name)
+                    .tag("k", str(book_change.k))
+                    .field("delta_sec", book_change.delta_sec)
+                    .field("best_bid_reset", book_change.best_bid_reset)
+                    .field("best_ask_reset", book_change.best_ask_reset)
+                    .field("delta_depth_bid", book_change.delta_depth_bid)
+                    .field("delta_depth_ask", book_change.delta_depth_ask)
+                    .field("delta_depth_bid_rate", book_change.delta_depth_bid_rate)
+                    .field("delta_depth_ask_rate", book_change.delta_depth_ask_rate)
+                    .field("pull_bid_rate", book_change.pull_bid_rate)
+                    .field("pull_ask_rate", book_change.pull_ask_rate)
+                    .field("refill_bid_rate", book_change.refill_bid_rate)
+                    .field("refill_ask_rate", book_change.refill_ask_rate)
+                    .time(int(orderbook.get_ts() * 1000), WritePrecision.MS)
+                )
                 influx_writer.add(point)
                 progress.update()
         LOG.info(f"PopulateBookChangeStep: Processed {progress.cnt} book changes.")
