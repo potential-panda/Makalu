@@ -2,12 +2,12 @@ from qate.core.model import ExchangeName, Market
 from qate.core.symbol import Symbol
 
 TARGET_SIZE = {
-    Symbol.BTC_JPY: 0.002,
-    Symbol.ETH_JPY: 0.1,
-    Symbol.XRP_JPY: 150,
-    Symbol.BTC_USDT: 0.002,
-    Symbol.ETH_USDT: 0.1,
-    Symbol.XRP_USDT: 150,
+    Symbol.BTC_JPY: "0.002",
+    Symbol.ETH_JPY: "0.1",
+    Symbol.XRP_JPY: "150",
+    Symbol.BTC_USDT: "0.002",
+    Symbol.ETH_USDT: "0.1",
+    Symbol.XRP_USDT: "150",
 }
 
 LEAD_LAG_PAIRS = {

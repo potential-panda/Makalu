@@ -21,6 +21,7 @@ class Context:
         self.indicator_data: Dict[str, Any] = {}  # For technical indicators
         self.compute_dt_range: DtRange | None = None
         self.populate_dt_range: DtRange | None = None
+        self.parquet_root_dir: str = ""
 
 
 class StepProgressLogger:

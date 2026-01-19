@@ -31,7 +31,8 @@ ENV_NAME = EnvName.MARIO_MARIO
 
 def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
     market_lead, market_lag = LEAD_LAG_PAIRS.get(pair_key)
-    data_dir = sys_env.get_market_data_dir()
+    parquet_root_dir = sys_env.PARQUET_ROOT_DIR
+    market_data_dir = sys_env.get_market_data_dir()
     influx_reader = sys_env.get_influxdb_reader()
     market_writer = sys_env.get_influxdb_writer(bucket_name=MARKET_DATA_BUCKET, no_retention=True)
     derived_writer = sys_env.get_influxdb_writer(bucket_name=TRADE_DERIVED_BUCKET, no_retention=True)
@@ -40,7 +41,7 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
     pipeline = Pipeline()
     if "MarketData" in run_stages:
         pipeline.add_stage(
-            MarketDataStage(market_writer, market_lead, data_dir)
+            MarketDataStage(market_writer, market_lead, market_data_dir, parquet_root_dir)
             .step(PopulateTradeStep())
             .step(PopulateMarketPriceStep(target_size=TARGET_SIZE.get(market_lead.symbol)))
             .step(PopulateOrderBookStep())
@@ -56,7 +57,7 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
         )
 
         pipeline.add_stage(
-            MarketDataStage(market_writer, market_lag, data_dir)
+            MarketDataStage(market_writer, market_lag, market_data_dir, parquet_root_dir)
             .step(PopulateTradeStep())
             .step(PopulateMarketPriceStep(target_size=TARGET_SIZE.get(market_lag.symbol)))
         )
@@ -73,13 +74,7 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
     if "LeadLag" in run_stages:
         pipeline.add_stage(
             LeadLagStage(lead_lag_writer, market_lead, market_lag, influx_reader).step(
-                LeadLagStep(
-                    interval_ms=500,
-                    max_lag=30,
-                    resample_interval="1s",
-                    window_size_sec=300,
-                    window_step_sec=60,
-                )
+                LeadLagStep(window_size_sec=3600 * 8, window_step_sec=60 * 60)
             )
         )
 

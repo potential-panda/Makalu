@@ -23,10 +23,11 @@ class MarketDataStage(Stage):
     and populating InfluxDB with basic market data metrics.
     """
 
-    def __init__(self, influx_writer: InfluxWriter, market: Market, data_dir: str):
+    def __init__(self, influx_writer: InfluxWriter, market: Market, data_dir: str, parquet_root_dir: str):
         super().__init__(influx_writer)
         self.market = market
         self.data_dir = Path(data_dir)
+        self.parquet_root_dir = parquet_root_dir
 
     def before(self, dt_range: DtRange, args: Dict[str, Any]):
         """
@@ -49,6 +50,8 @@ class MarketDataStage(Stage):
         self.context.trades = trades
         self.context.compute_dt_range = warmup_dt_range
         self.context.populate_dt_range = warmup_dt_range
+        self.context.parquet_root_dir = self.parquet_root_dir
+        self.context.market = self.market
         end_time = time.time()
         LOG.info(
             f"MarketDataStage: Loaded {len(order_books)} order books and {len(trades)} trades"
@@ -122,20 +125,19 @@ class LeadLagStage(Stage):
         self,
         influx_writer: InfluxWriter,
         market_lead: Market,
-        market_leg: Market,
+        market_lag: Market,
         influx_reader: InfluxReader,
     ):
         super().__init__(influx_writer)
         self.market_lead = market_lead
-        self.market_leg = market_leg
+        self.market_lag = market_lag
         self.influx_reader = influx_reader
 
     def before(self, dt_range: DtRange, args: Dict[str, Any]):
-        self.context.populate_dt_range = dt_range
-        self.context.compute_dt_range = dt_range
+        self.context.dt_range = dt_range
         self.context.influx_reader = self.influx_reader
         self.context.market_lead = self.market_lead
-        self.context.market_leg = self.market_lead
+        self.context.market_lag = self.market_lag
 
 
 class FeatureStage(Stage):
@@ -149,8 +151,8 @@ class FeatureStage(Stage):
         self.influx_reader = influx_reader
 
     def before(self, dt_range: DtRange, args: Dict[str, Any]):
+        self.context.compute_dt_range = DtRange(dt_range.start_dt - timedelta(hours=8), dt_range.end_dt)
         self.context.populate_dt_range = dt_range
-        self.context.compute_dt_range = dt_range
         self.context.influx_reader = self.influx_reader
         self.context.market = self.market
 
@@ -170,8 +172,8 @@ class LabelStage(Stage):
         self.pnl_bucket = pnl_bucket
 
     def before(self, dt_range: DtRange, args: Dict[str, Any]):
+        self.context.compute_dt_range = DtRange(dt_range.start_dt - timedelta(hours=8), dt_range.end_dt)
         self.context.populate_dt_range = dt_range
-        self.context.compute_dt_range = dt_range
         self.context.influx_reader = self.influx_reader
         self.context.market = self.market
         self.context.pnl_bucket = self.pnl_bucket

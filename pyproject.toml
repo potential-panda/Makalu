@@ -20,7 +20,7 @@ dependencies = [
     "pandas==2.3.3",
     "seaborn==0.13.2",
     "influxdb-client==1.49.0",
-    "pyarrow>=18.0.0",  # for parquet file support
+    "pyarrow>=22.0.0",  # for parquet file support
     "lightgbm>=4.0.0",  # for ML model training
 ]
 

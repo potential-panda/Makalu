@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 from influxdb_client import Point, WritePrecision
 from qate.core.model import Market
+from qate.store.influx_reader import InfluxReader
 from qate.store.influx_writer import InfluxWriter
 
 from .framework import Context, Step
@@ -180,11 +181,13 @@ class LeadLagStep(Step):
 
     def __init__(
         self,
-        interval_ms: int = 1000,
-        max_lag: int = 60,
-        resample_interval: str = "1s",
-        window_size_sec: int = 300,
-        window_step_sec: int = 60,
+        window_size_sec: int,
+        window_step_sec: int,
+        # NOTE Below 3 args are based on data frequency of the actual market,
+        # the default values are good for the markets we are trading
+        max_lag: int = 10,
+        interval_ms: int = 500,
+        resample_interval: str = "100ms",
     ):
         """
         Initialize the LeadLagStep.
@@ -211,19 +214,18 @@ class LeadLagStep(Step):
         - market_a: First market (potential leader)
         - market_b: Second market (potential follower)
         - influx_reader: InfluxReader instance
-        - populate_dt_range: Date range to process
+        - dt_range: Date range to process
         """
         market_lead: Market = context.market_lead
         market_lag: Market = context.market_lag
-        influx_reader = context.influx_reader
-        dt_range = context.populate_dt_range
+        influx_reader: InfluxReader = context.influx_reader
 
         LOG.info(f"LeadLagStep: Computing lead-lag between {market_lead.id} and {market_lag.id}")
         LOG.info(f"LeadLagStep: Window size={self.window_size_sec}s, step={self.window_step_sec}s")
 
         # Query market price data for both markets
-        df_lead = influx_reader.query_market_price(MARKET_DATA_BUCKET, dt_range, market_lead)
-        df_lag = influx_reader.query_market_price(MARKET_DATA_BUCKET, dt_range, market_lag)
+        df_lead = influx_reader.query_market_price(MARKET_DATA_BUCKET, context.dt_range, market_lead)
+        df_lag = influx_reader.query_market_price(MARKET_DATA_BUCKET, context.dt_range, market_lag)
 
         if df_lead.empty:
             LOG.warning(f"LeadLagStep: No market price data found for {market_lead.id}")
@@ -270,7 +272,7 @@ class LeadLagStep(Step):
 
             # Compute cross-correlation for this window
             best_lag, best_corr, corr_by_lag = compute_cross_correlation(window_lead, window_lag, self.max_lag)
-
+            LOG.info(f"{best_lag}, {best_corr}, {corr_by_lag}")
             if best_lag is not None:
                 # Convert best_lag from steps to milliseconds
                 best_lag_ms = best_lag * self.interval_ms
