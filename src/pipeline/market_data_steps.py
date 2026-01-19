@@ -1,14 +1,15 @@
 import logging
+from dataclasses import dataclass
 from typing import Any, Dict, List
 
 from influxdb_client import Point, WritePrecision
-from qate.core.model import Side
+from qate.core.model import Market, OrderBook, Side, Trade
 from qate.store.influx_writer import InfluxWriter
 from qate.store.parquet_store import ExecutionPriceStore, SingleMarketStore
 from qate.trading import intent
-from qate.trading.book_change import BookChangeBuilder, BookChangeTracker
+from qate.trading.book_change import BookChangeBuilder
 
-from .framework import Context, Step, StepProgressLogger
+from .framework import ContextBase, Step, StepProgressLogger
 
 LOG = logging.getLogger(__name__)
 
@@ -18,6 +19,13 @@ MARKET_DATA_BUCKET = "market_data"
 
 # NOTE I Want to make it clear to see what are populated in each step
 # Should explicitly write each field as much as possible even it looks verbose
+
+
+@dataclass
+class Context(ContextBase):
+    trades: list[Trade]
+    order_books: list[OrderBook]
+    market: Market
 
 
 class PopulateTradeStep(Step):
@@ -159,7 +167,7 @@ class PopulateBookStateStep(Step):
                 fields[f"microprice_{k}"] = value
 
             point = (
-                Point("ORDER_BOOK")
+                Point("BOOK_STATE")
                 .tag("exchange_name", order_book.exchange_name.name)
                 .tag("symbol", order_book.symbol.name)
                 .time(int(order_book.get_ts() * 1000), WritePrecision.MS)
@@ -182,56 +190,57 @@ class PopulateBookChangeStep(Step):
     def __init__(self, k_levels: List[int]):
         super().__init__()
         self.k_levels = k_levels
-        self.builders = [BookChangeBuilder(k) for k in self.k_levels]
 
     def populate(self, influx_writer: InfluxWriter, context: Context, args: Dict[str, Any]):
         """Calculates book changes from OrderBook objects for different k-levels and writes to InfluxDB."""
         progress = StepProgressLogger(self.__class__.__name__, len(context.order_books) * len(self.k_levels))
         parquet_store = SingleMarketStore(context.parquet_root_dir, "BookChange", context.market)
 
-        tracker: BookChangeTracker = None
-        for order_book in context.order_books:
-            if not context.compute_dt_range.is_within(order_book.get_ts()):
-                continue
-            # set the first order book
-            tracker = BookChangeTracker(order_book)
-
+        builder = BookChangeBuilder(self.k_levels)
         for order_book in context.order_books:
             if not context.compute_dt_range.is_within(order_book.get_ts()):
                 continue
 
-            prev_curr = tracker.on_snapshot(order_book)
-            if not prev_curr:
+            book_changes = builder.on_snapshot(order_book)
+            if not book_changes:
                 continue
 
-            for builder in self.builders:
-                book_change = builder.on_snapshot(order_book)
-                if not book_change:
-                    continue
-                if not context.populate_dt_range.is_within(order_book.get_ts()):
-                    continue
+            if not context.populate_dt_range.is_within(order_book.get_ts()):
+                continue
 
+            write_fields = {
+                "delta_sec": book_changes[0].delta_sec,
+            }
+            for book_change in book_changes:
+                fields = {
+                    "best_bid_reset": book_change.best_bid_reset,
+                    "best_ask_reset": book_change.best_ask_reset,
+                    "delta_depth_bid": book_change.delta_depth_bid,
+                    "delta_depth_ask": book_change.delta_depth_ask,
+                    "delta_depth_bid_rate": book_change.delta_depth_bid_rate,
+                    "delta_depth_ask_rate": book_change.delta_depth_ask_rate,
+                    "pull_bid_rate": book_change.pull_bid_rate,
+                    "pull_ask_rate": book_change.pull_ask_rate,
+                    "refill_bid_rate": book_change.refill_bid_rate,
+                    "refill_ask_rate": book_change.refill_ask_rate,
+                }
                 point = (
                     Point("BOOK_CHANGE")
                     .tag("exchange_name", order_book.exchange_name.name)
                     .tag("symbol", order_book.symbol.name)
                     .tag("k", str(book_change.k))
                     .field("delta_sec", book_change.delta_sec)
-                    .field("best_bid_reset", book_change.best_bid_reset)
-                    .field("best_ask_reset", book_change.best_ask_reset)
-                    .field("delta_depth_bid", book_change.delta_depth_bid)
-                    .field("delta_depth_ask", book_change.delta_depth_ask)
-                    .field("delta_depth_bid_rate", book_change.delta_depth_bid_rate)
-                    .field("delta_depth_ask_rate", book_change.delta_depth_ask_rate)
-                    .field("pull_bid_rate", book_change.pull_bid_rate)
-                    .field("pull_ask_rate", book_change.pull_ask_rate)
-                    .field("refill_bid_rate", book_change.refill_bid_rate)
-                    .field("refill_ask_rate", book_change.refill_ask_rate)
                     .time(int(order_book.get_ts() * 1000), WritePrecision.MS)
                 )
+                for k, v in fields.items():
+                    point.field(k, v)
                 influx_writer.add(point)
 
-                progress.update()
+                for k, v in fields.items():
+                    write_fields[f"{k}_{book_change.k}"] = v
+
+            parquet_store.add(order_book.get_ts(), fields)
+            progress.update()
 
         parquet_store.close()
         LOG.info(f"PopulateBookChangeStep: Processed {progress.cnt} book changes.")

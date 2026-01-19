@@ -9,10 +9,13 @@ from qate.core.model import Market, OrderBook, Trade
 from qate.store.influx_reader import InfluxReader
 from qate.store.influx_writer import InfluxWriter
 from qate.store.msgpack_loader import MarketDataLoader
+from qate.store.parquet_store import SingleMarketStore
 from qate.util.dt_range import DtRange
 
-from .framework import Stage
+from .framework import ContextBase, Stage
 from .market_data_steps import MARKET_DATA_BUCKET
+from .market_data_steps import Context as MarketDataContext
+from .trade_derived_steps import Context as TradeDerivedContext
 
 LOG = getLogger(__name__)
 
@@ -34,7 +37,7 @@ class MarketDataStage(Stage):
         Loads market data files based on the date range and populates the context.
         """
         start_time = time.time()
-        warmup_dt_range = DtRange(dt_range.start_dt - timedelta(days=1), dt_range.end_dt)
+        warmup_dt_range = DtRange(dt_range.start_dt - timedelta(hours=1), dt_range.end_dt)
 
         file_paths = self._get_files_for_range(warmup_dt_range)
         if not file_paths:
@@ -45,17 +48,18 @@ class MarketDataStage(Stage):
         all_data = loader.batch_load_mt(file_paths, max_workers=args.get("max_workers", 8))
 
         order_books, trades = self._parse_data(all_data)
-
-        self.context.order_books = order_books
-        self.context.trades = trades
-        self.context.compute_dt_range = warmup_dt_range
-        self.context.populate_dt_range = warmup_dt_range
-        self.context.parquet_root_dir = self.parquet_root_dir
-        self.context.market = self.market
         end_time = time.time()
         LOG.info(
             f"MarketDataStage: Loaded {len(order_books)} order books and {len(trades)} trades"
             f" in {end_time - start_time:.2f} seconds."
+        )
+        return MarketDataContext(
+            warmup_dt_range,
+            dt_range,
+            self.parquet_root_dir,
+            trades,
+            order_books,
+            self.market,
         )
 
     def _get_files_for_range(self, dt_range: DtRange) -> List[str]:
@@ -92,25 +96,31 @@ class TradeDerivedStage(Stage):
     Stage for calculating derived metrics from trades stored in InfluxDB.
     """
 
-    def __init__(self, influx_writer: InfluxWriter, market: Market, influx_reader: InfluxReader):
+    def __init__(self, influx_writer: InfluxWriter, market: Market, parquet_root_dir: str) -> ContextBase:
         super().__init__(influx_writer)
         self.market = market
-        self.influx_reader = influx_reader
+        self.parquet_root_dir = parquet_root_dir
         self.bucket_name = MARKET_DATA_BUCKET
 
     def before(self, dt_range: DtRange, args: Dict[str, Any]):
         start_time = time.time()
-        warmup_dt_range = DtRange(dt_range.start_dt - timedelta(hours=12), dt_range.end_dt)
+        warmup_dt_range = DtRange(dt_range.start_dt - timedelta(hours=8), dt_range.end_dt)
         LOG.info(
             f"TradeDerivedStage: Querying trades for {self.market.id}"
             f"from {warmup_dt_range.start_str} to {warmup_dt_range.end_str}"
         )
-        trades = self.influx_reader.query_trades(self.bucket_name, warmup_dt_range, self.market)
-        self.context.trades = trades
-        self.context.compute_dt_range = warmup_dt_range
-        self.context.populate_dt_range = dt_range
+        parquet_store = SingleMarketStore(self.parquet_root_dir, "Trade", self.market)
+        trades_df = parquet_store.read(warmup_dt_range)
+
         end_time = time.time()
-        LOG.info(f"TradeDerivedStage: Found {len(trades)} trades in {end_time - start_time:.2f} seconds.")
+        LOG.info(f"TradeDerivedStage: Found {len(trades_df)} trades in {end_time - start_time:.2f} seconds.")
+        return TradeDerivedContext(
+            warmup_dt_range,
+            dt_range,
+            self.parquet_root_dir,
+            trades_df,
+            self.market,
+        )
 
 
 class LeadLagStage(Stage):
