@@ -10,6 +10,7 @@ from qate.store.parquet_store import ParquetStore
 from qate.util.dt_range import DtRange
 
 from pipeline.framework import Pipeline
+from pipeline.lead_lag_steps import LeadLagStep
 from pipeline.market_data_steps import (
     PopulateBookChangeStep,
     PopulateBookStateStep,
@@ -18,7 +19,7 @@ from pipeline.market_data_steps import (
     PopulateTradeStep,
 )
 from pipeline.market_pair import EXECUTION_SIZE, LEAD_LAG_PAIRS, find_pair_key
-from pipeline.stages import MarketDataStage, TradeDerivedStage
+from pipeline.stages import LeadLagStage, MarketDataStage, TradeDerivedStage
 from pipeline.trade_derived_steps import (
     PopulateAggressionStep,
     PopulateCandleBarStep,
@@ -66,6 +67,13 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
             .step(PopulateHeikinAshiBarStep(interval_seconds=60))  # 1-minute Heikin Ashi bars
             .step(PopulateRangeBarStep(box_size_rate=0.001))  # 0.1% range bars (example)
             .step(PopulateAggressionStep(windows_sec=[1, 3, 5]))  # Aggression metrics
+        )
+
+    if "LeadLag" in run_stages:
+        pipeline.stage(
+            LeadLagStage(market_lead, market_lag)
+            .step(LeadLagStep(window_size_sec=3600 * 4, window_step_sec=3600))
+            .step(LeadLagStep(window_size_sec=3600 * 12, window_step_sec=3600))
         )
 
     return pipeline

@@ -7,22 +7,27 @@ price movements on different exchanges/markets.
 
 import logging
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 import pandas as pd
 from influxdb_client import Point, WritePrecision
 from qate.core.model import Market
-from qate.store.influx_reader import InfluxReader
-from qate.store.influx_writer import InfluxWriter
+from qate.util.dt_range import DtRange
 
-from .framework import Context, Step
-from .market_data_steps import MARKET_DATA_BUCKET
+from .framework import PipelineContext, StageContext, Step, StepProgressLogger
 
 LOG = logging.getLogger(__name__)
 
 # Bucket name constant
 LEAD_LAG_BUCKET = "lead_lag"
+
+
+@dataclass
+class Context(StageContext):
+    lead_market: Market
+    lag_market: Market
 
 
 @dataclass
@@ -61,20 +66,6 @@ def compute_returns(prices: np.ndarray, step: int = 1) -> np.ndarray:
 def align_series(
     df_a: pd.DataFrame, df_b: pd.DataFrame, price_col: str = "mid"
 ) -> Tuple[pd.DatetimeIndex, np.ndarray, np.ndarray]:
-    """
-    Align two price series using market A's timestamps as reference.
-
-    Uses forward-fill to interpolate market B's prices to match market A's timestamps,
-    matching the behavior of Study/lead_lag.py.
-
-    Args:
-        df_a: DataFrame with time index and price column for market A
-        df_b: DataFrame with time index and price column for market B
-        price_col: Column name to use for price (default: 'mid')
-
-    Returns:
-        (timestamps, aligned_prices_a, aligned_prices_b) as numpy arrays
-    """
     if df_a.empty or df_b.empty:
         return pd.DatetimeIndex([]), np.array([]), np.array([])
 
@@ -171,14 +162,6 @@ def compute_cross_correlation(
 
 
 class LeadLagStep(Step):
-    """
-    Step for computing lead-lag metrics between two markets using rolling windows.
-
-    Queries market price data for both markets from InfluxDB,
-    aligns the series, and computes cross-correlation at various lags
-    for each rolling window.
-    """
-
     def __init__(
         self,
         window_size_sec: int,
@@ -189,52 +172,33 @@ class LeadLagStep(Step):
         interval_ms: int = 500,
         resample_interval: str = "100ms",
     ):
-        """
-        Initialize the LeadLagStep.
-
-        Args:
-            interval_ms: Aggregation interval in milliseconds (for output)
-            max_lag: Maximum lag to test in steps
-            resample_interval: Pandas resample interval string (e.g., '1s', '100ms')
-            window_size_sec: Rolling window size in seconds (default: 300 = 5 minutes)
-            window_step_sec: Step between windows in seconds (default: 60 = 1 minute)
-        """
         super().__init__()
-        self.interval_ms = interval_ms
-        self.max_lag = max_lag
-        self.resample_interval = resample_interval
         self.window_size_sec = window_size_sec
         self.window_step_sec = window_step_sec
+        self.max_lag = max_lag
+        self.interval_ms = interval_ms
+        self.resample_interval = resample_interval
 
-    def populate(self, influx_writer: InfluxWriter, context: Context, args: Dict[str, Any]):
-        """
-        Compute lead-lag metrics using rolling windows and write to InfluxDB.
-
-        Expects context to have:
-        - market_a: First market (potential leader)
-        - market_b: Second market (potential follower)
-        - influx_reader: InfluxReader instance
-        - dt_range: Date range to process
-        """
-        market_lead: Market = context.market_lead
-        market_lag: Market = context.market_lag
-        influx_reader: InfluxReader = context.influx_reader
+    def populate(self, pipeline_context: PipelineContext, stage_context: Context):
+        market_lead: Market = stage_context.market_lead
+        market_lag: Market = stage_context.market_lag
 
         LOG.info(f"LeadLagStep: Computing lead-lag between {market_lead.id} and {market_lag.id}")
         LOG.info(f"LeadLagStep: Window size={self.window_size_sec}s, step={self.window_step_sec}s")
 
-        # Query market price data for both markets
-        df_lead = influx_reader.query_market_price(MARKET_DATA_BUCKET, context.dt_range, market_lead)
-        df_lag = influx_reader.query_market_price(MARKET_DATA_BUCKET, context.dt_range, market_lag)
+        influx_writer = pipeline_context.influx_store.create_writer(LEAD_LAG_BUCKET, no_retention=True)
+        read_store_lead = pipeline_context.parquet_store.create_order_book(market_lead)
+        read_store_lag = pipeline_context.parquet_store.create_order_book(market_lag)
+        write_store_lead_lag = pipeline_context.parquet_store.create_lead_lag(market_lead, market_lag)
 
-        if df_lead.empty:
-            LOG.warning(f"LeadLagStep: No market price data found for {market_lead.id}")
-            return
+        populate_dt_range = stage_context.populate_dt_range
+        compute_dt_range = DtRange(
+            populate_dt_range.start_dt - timedelta(seconds=self.window_size_sec * 2),
+            populate_dt_range.end_dt,
+        )
 
-        if df_lag.empty:
-            LOG.warning(f"LeadLagStep: No market price data found for {market_lag.id}")
-            return
-
+        df_lead = read_store_lead.read(compute_dt_range)
+        df_lag = read_store_lag.read(compute_dt_range)
         LOG.info(f"LeadLagStep: Loaded {len(df_lead)} prices for {market_lead.id}, {len(df_lag)} for {market_lag.id}")
 
         # Resample to fixed intervals using forward-fill
@@ -259,9 +223,8 @@ class LeadLagStep(Step):
         window_size_steps = self.window_size_sec * 1000 // self.interval_ms
         window_step_steps = self.window_step_sec * 1000 // self.interval_ms
 
-        points_written = 0
+        progress = StepProgressLogger(self.__class__.__name__, len(aligned_lead) // window_size_steps)
         start_idx = 0
-
         while start_idx + window_size_steps <= len(aligned_lead):
             end_idx = start_idx + window_size_steps
 
@@ -270,58 +233,38 @@ class LeadLagStep(Step):
             window_lag = aligned_lag[start_idx:end_idx]
             window_end_ts = timestamps[end_idx - 1]
 
+            if not populate_dt_range.is_within(window_end_ts):
+                continue
+
             # Compute cross-correlation for this window
             best_lag, best_corr, corr_by_lag = compute_cross_correlation(window_lead, window_lag, self.max_lag)
             LOG.info(f"{best_lag}, {best_corr}, {corr_by_lag}")
-            if best_lag is not None:
-                # Convert best_lag from steps to milliseconds
-                best_lag_ms = best_lag * self.interval_ms
+            if best_lag is None:
+                continue
 
-                # Create and write point
-                point = self._create_lead_lag_point(market_lead, market_lag, best_lag_ms, corr_by_lag, window_end_ts)
-                influx_writer.add(point)
-                points_written += 1
+            best_lag_ms = int(best_lag * self.interval_ms)
+            fields = {
+                "best_lag": best_lag_ms,
+                "best_corr": best_corr,
+                "lag_0": corr_by_lag[0],
+                f"lag_{int(self.interval_ms * 1)}": corr_by_lag[1],
+                f"lag_{int(self.interval_ms * 2)}": corr_by_lag[2],
+            }
 
-            # Move to next window
+            point = (
+                Point("LEAD_LAG")
+                .tag("market_lead", market_lead.id)
+                .tag("market_lag", market_lag.id)
+                .time(int(window_end_ts * 1000), WritePrecision.NS)
+            )
+            for k, v in fields.items():
+                point.field(k, v)
+
+            influx_writer.add(point)
+            write_store_lead_lag.add(window_end_ts, fields)
+            progress.update()
             start_idx += window_step_steps
 
-        LOG.info(f"LeadLagStep: Wrote {points_written} points to InfluxDB")
-
-    def _create_lead_lag_point(
-        self,
-        market_a: Market,
-        market_b: Market,
-        best_lag_ms: int,
-        corr_by_lag: Dict[int, float],
-        timestamp,
-    ) -> Point:
-        """
-        Create a combined InfluxDB point for lead-lag metrics.
-
-        Args:
-            market_a: First market
-            market_b: Second market
-            best_lag_ms: Best lag in milliseconds
-            corr_by_lag: Dict mapping lag steps to correlation values
-            timestamp: Timestamp for the point
-
-        Returns:
-            InfluxDB Point with tags (market_a, market_b) and fields (best_lag, lag_0, lag_500, lag_1000)
-        """
-        point = (
-            Point("LEAD_LAG")
-            .tag("market_a", market_a.id)
-            .tag("market_b", market_b.id)
-            .field("best_lag", best_lag_ms)
-            .time(timestamp, WritePrecision.NS)
-        )
-
-        # Add correlations at specific lag values (0ms, 500ms, 1000ms)
-        target_lags_ms = [0, 500, 1000]
-        for lag_ms in target_lags_ms:
-            # Convert lag_ms to step
-            step = lag_ms // self.interval_ms
-            if step in corr_by_lag:
-                point = point.field(f"lag_{lag_ms}", corr_by_lag[step])
-
-        return point
+        influx_writer.close()
+        write_store_lead_lag.close()
+        LOG.info(f"LeadLagStep: Processed {progress.cnt} objects")

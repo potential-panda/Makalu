@@ -9,6 +9,7 @@ from qate.store.market_data_store import partition_market_events
 from qate.util.dt_range import DtRange
 
 from .framework import PipelineContext, Stage, StageContext
+from .lead_lag_steps import Context as LeadLagContext
 from .market_data_steps import Context as MarketDataContext
 from .trade_derived_steps import Context as TradeDerivedContext
 
@@ -20,7 +21,7 @@ class MarketDataStage(Stage):
         super().__init__()
         self.market = market
 
-    def before(self, dt_range, pipeline_context: PipelineContext) -> StageContext:
+    def before(self, dt_range: DtRange, pipeline_context: PipelineContext) -> StageContext:
         start_time = time.time()
 
         loader = pipeline_context.market_data_store.create_loader(
@@ -49,7 +50,7 @@ class TradeDerivedStage(Stage):
         super().__init__()
         self.market = market
 
-    def before(self, dt_range, pipeline_context: PipelineContext) -> StageContext:
+    def before(self, dt_range: DtRange, pipeline_context: PipelineContext) -> StageContext:
         start_time = time.time()
         warmup_dt_range = DtRange(dt_range.start_dt - timedelta(hours=8), dt_range.end_dt)
         LOG.info(
@@ -76,11 +77,13 @@ class LeadLagStage(Stage):
         self.market_lead = market_lead
         self.market_lag = market_lag
 
-    def before(self, dt_range: DtRange, args: Dict[str, Any]):
-        self.context.dt_range = dt_range
-        self.context.influx_reader = self.influx_reader
-        self.context.market_lead = self.market_lead
-        self.context.market_lag = self.market_lag
+    def before(self, dt_range: DtRange, pipeline_context: PipelineContext) -> StageContext:
+        return LeadLagContext(
+            dt_range,
+            dt_range,
+            self.market_lead,
+            self.market_lag,
+        )
 
 
 class FeatureStage(Stage):
