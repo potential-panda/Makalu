@@ -78,8 +78,10 @@ class Dataset:
         labels_df = pd.read_parquet(labels_path)
 
         if target_column not in labels_df.columns:
-            raise ValueError(f"Target column '{target_column}' not found in labels. "
-                           f"Available columns: {list(labels_df.columns)}")
+            raise ValueError(
+                f"Target column '{target_column}' not found in labels. "
+                f"Available columns: {list(labels_df.columns)}"
+            )
 
         LOG.info(f"Loaded {len(features_df)} feature rows with {len(features_df.columns)} columns")
         LOG.info(f"Loaded {len(labels_df)} label rows with {len(labels_df.columns)} columns")
@@ -138,12 +140,8 @@ class Dataset:
             raise ValueError(f"Unknown alignment method: {method}")
 
         # Align data
-        self._aligned_features = self.features_df.loc[
-            self.features_df.index.isin(common_index)
-        ].copy()
-        self._aligned_labels = self.labels_df.loc[
-            self.labels_df.index.isin(common_index), self.target_column
-        ].copy()
+        self._aligned_features = self.features_df.loc[self.features_df.index.isin(common_index)].copy()
+        self._aligned_labels = self.labels_df.loc[self.labels_df.index.isin(common_index), self.target_column].copy()
 
         # Drop rows with NaN in target
         valid_mask = ~self._aligned_labels.isna()
@@ -299,12 +297,16 @@ class Dataset:
             "num_features": len(X.columns),
             "feature_columns": list(X.columns),
             "target_column": self.target_column,
-            "target_distribution": y.value_counts().to_dict() if y.dtype in ['int64', 'int32', 'bool'] else {
-                "mean": y.mean(),
-                "std": y.std(),
-                "min": y.min(),
-                "max": y.max(),
-            },
+            "target_distribution": (
+                y.value_counts().to_dict()
+                if y.dtype in ["int64", "int32", "bool"]
+                else {
+                    "mean": y.mean(),
+                    "std": y.std(),
+                    "min": y.min(),
+                    "max": y.max(),
+                }
+            ),
             "na_counts": X.isna().sum().to_dict(),
             "train_size": len(self.X_train) if self.X_train is not None else None,
             "test_size": len(self.X_test) if self.X_test is not None else None,

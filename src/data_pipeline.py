@@ -4,20 +4,22 @@ from logging import getLogger
 from qate.core.model import Market
 from qate.env import sys_env
 from qate.env.env import Env, EnvName
+from qate.store.influx_writer import InfluxdbStore
+from qate.store.market_data_store import MarketDataStore
+from qate.store.parquet_store import ParquetStore
 from qate.util.dt_range import DtRange
 
 from pipeline.framework import Pipeline
 from pipeline.market_data_steps import (
-    MARKET_DATA_BUCKET,
     PopulateBookChangeStep,
     PopulateBookStateStep,
     PopulateMarketPriceStep,
+    PopulateOrderBookStep,
     PopulateTradeStep,
 )
-from pipeline.market_pair import LEAD_LAG_PAIRS, TARGET_SIZE, find_pair_key
+from pipeline.market_pair import EXECUTION_SIZE, LEAD_LAG_PAIRS, find_pair_key
 from pipeline.stages import MarketDataStage, TradeDerivedStage
 from pipeline.trade_derived_steps import (
-    TRADE_DERIVED_BUCKET,
     PopulateAggressionStep,
     PopulateCandleBarStep,
     PopulateHeikinAshiBarStep,
@@ -30,18 +32,17 @@ ENV_NAME = EnvName.MARIO_MARIO
 
 def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
     market_lead, market_lag = LEAD_LAG_PAIRS.get(pair_key)
-    parquet_root_dir = sys_env.PARQUET_ROOT_DIR
-    market_data_dir = sys_env.get_market_data_dir()
-    market_writer = sys_env.get_influxdb_writer(bucket_name=MARKET_DATA_BUCKET, no_retention=True)
-    derived_writer = sys_env.get_influxdb_writer(bucket_name=TRADE_DERIVED_BUCKET, no_retention=True)
-    # lead_lag_writer = sys_env.get_influxdb_writer(bucket_name=LEAD_LAG_BUCKET, no_retention=True)
+    market_data_store = MarketDataStore(sys_env.get_market_data_dir())
+    parquet_store = ParquetStore(sys_env.get_parquet_root_dir())
+    influx_store = InfluxdbStore(sys_env.get_influxdb())
 
-    pipeline = Pipeline()
+    pipeline = Pipeline(market_data_store, parquet_store, influx_store)
     if "MarketData" in run_stages:
-        pipeline.add_stage(
-            MarketDataStage(market_writer, market_lead, market_data_dir, parquet_root_dir)
+        pipeline.stage(
+            MarketDataStage(market_lead)
             .step(PopulateTradeStep())
-            .step(PopulateMarketPriceStep(target_size=TARGET_SIZE.get(market_lead.symbol)))
+            .step(PopulateOrderBookStep())
+            .step(PopulateMarketPriceStep(execution_size_str=EXECUTION_SIZE.get(market_lead.symbol)))
             .step(
                 PopulateBookStateStep(
                     volume_imbalance_k=[1, 3, 5, 10],
@@ -51,29 +52,21 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
                 )
             )
             .step(PopulateBookChangeStep(k_levels=[3, 5, 10]))
-        )
-
-        pipeline.add_stage(
-            MarketDataStage(market_writer, market_lag, market_data_dir, parquet_root_dir)
+        ).stage(
+            MarketDataStage(market_lag)
             .step(PopulateTradeStep())
-            .step(PopulateMarketPriceStep(target_size=TARGET_SIZE.get(market_lag.symbol)))
+            .step(PopulateOrderBookStep())
+            .step(PopulateMarketPriceStep(execution_size_str=EXECUTION_SIZE.get(market_lag.symbol)))
         )
 
     if "TradeDerived" in run_stages:
-        pipeline.add_stage(
-            TradeDerivedStage(derived_writer, market_lead, parquet_root_dir)
+        pipeline.stage(
+            TradeDerivedStage(market_lead)
             .step(PopulateCandleBarStep(interval_seconds=60))  # 1-minute candle bars
             .step(PopulateHeikinAshiBarStep(interval_seconds=60))  # 1-minute Heikin Ashi bars
             .step(PopulateRangeBarStep(box_size_rate=0.001))  # 0.1% range bars (example)
             .step(PopulateAggressionStep(windows_sec=[1, 3, 5]))  # Aggression metrics
         )
-
-    # if "LeadLag" in run_stages:
-    #     pipeline.add_stage(
-    #         LeadLagStage(lead_lag_writer, market_lead, market_lag, influx_reader).step(
-    #             LeadLagStep(window_size_sec=3600 * 8, window_step_sec=60 * 60)
-    #         )
-    #     )
 
     return pipeline
 

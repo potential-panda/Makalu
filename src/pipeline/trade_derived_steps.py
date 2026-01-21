@@ -1,13 +1,10 @@
 import logging
 from abc import abstractmethod
 from dataclasses import dataclass
-from typing import Any, Dict, List
+from typing import List
 
-import pandas as pd
 from influxdb_client import Point, WritePrecision
-from qate.core.model import Market, Side, Trade
-from qate.store.influx_writer import InfluxWriter
-from qate.store.parquet_store import ChartStore, SingleMarketStore
+from qate.core.model import Market, OrderBook, Trade
 from qate.trading.aggression import TradeAggressionBuilder
 from qate.trading.chart import (
     BaseBarBuilder,
@@ -16,7 +13,8 @@ from qate.trading.chart import (
     RangeBarBuilder,
 )
 
-from .framework import ContextBase, Step, StepProgressLogger
+from .converter import convert_to_trade
+from .framework import PipelineContext, StageContext, Step, StepProgressLogger
 
 LOG = logging.getLogger(__name__)
 
@@ -29,42 +27,29 @@ TRADE_DERIVED_BUCKET = "trade_derived"
 
 
 @dataclass
-class Context(ContextBase):
-    trades_df: pd.DataFrame
+class Context(StageContext):
     market: Market
-
-
-def _convert_to_trade(trade_row) -> Trade:
-    return Trade(
-        "",
-        Side.BUY if trade_row.side == 0 else Side.SELL,
-        trade_row.price,
-        trade_row.size,
-        None,
-        None,
-        trade_row.ts,
-    )
+    trades: list[Trade]
+    order_books: list[OrderBook]
 
 
 class PopulateAggressionStep(Step):
-    """Populates InfluxDB with Trade Aggression data."""
-
     def __init__(self, windows_sec: List[int]):
         super().__init__()
         self.windows_sec = windows_sec
 
-    def populate(self, influx_writer: InfluxWriter, context: Context, args: Dict[str, Any]):
-        """Calculates and writes trade aggression metrics to InfluxDB."""
-        progress = StepProgressLogger(self.__class__.__name__, len(context.trades_df) * len(self.windows_sec))
-        parquet_store = SingleMarketStore(context.parquet_root_dir, "TradeAggression", context.market)
-        builder = TradeAggressionBuilder(windows_sec=self.windows_sec)
+    def populate(self, pipeline_context: PipelineContext, stage_context: Context):
+        progress = StepProgressLogger(self.__class__.__name__, len(stage_context.trades_df) * len(self.windows_sec))
 
-        for trade_row in context.trades_df.itertuples(index=False):
-            if not context.compute_dt_range.is_within(trade_row.ts):
+        influx_writer = pipeline_context.influx_store.create_writer(TRADE_DERIVED_BUCKET, no_retention=True)
+        parquet_store = pipeline_context.parquet_store.create_single_market("TradeAggression", stage_context.market)
+        builder = TradeAggressionBuilder(windows_sec=self.windows_sec)
+        for trade_row in stage_context.trades_df.itertuples(index=False):
+            if not stage_context.compute_dt_range.is_within(trade_row.ts):
                 continue
-            trade = _convert_to_trade(trade_row)
+            trade = convert_to_trade(trade_row, stage_context.market)
             builder.on_trade(trade)
-            if not context.populate_dt_range.is_within(trade.get_ts()):
+            if not stage_context.populate_dt_range.is_within(trade.get_ts()):
                 continue
 
             write_fields = {}
@@ -97,8 +82,8 @@ class PopulateAggressionStep(Step):
                 }
                 point = (
                     Point("TRADE_AGGRESSION")
-                    .tag("exchange_name", context.market.exchange_name.name)
-                    .tag("symbol", context.market.symbol.name)
+                    .tag("exchange_name", stage_context.market.exchange_name.name)
+                    .tag("symbol", stage_context.market.symbol.name)
                     .tag("window_sec", aggression.window_sec)
                     .time(int(aggression.ts * 1000), WritePrecision.MS)
                 )
@@ -112,40 +97,34 @@ class PopulateAggressionStep(Step):
             parquet_store.add(trade.get_ts(), write_fields)
             progress.update()
 
+        influx_writer.close()
         parquet_store.close()
-        LOG.info(f"PopulateAggressionStep: Processed {progress.cnt} trade aggressions.")
+        LOG.info(f"PopulateAggressionStep: Processed {progress.cnt} objects")
 
 
 class AbstractPopulateChartStep(Step):
-    """
-    Abstract base class for steps that populate chart data.
-    """
-
     @abstractmethod
     def create_bar_builder(self) -> BaseBarBuilder:
-        """Create a specific bar builder instance."""
         pass
 
     @abstractmethod
     def get_bar_type(self) -> str:
-        """Return the tag for the bar type."""
         pass
 
-    def populate(self, influx_writer: InfluxWriter, context: Context, args: Dict[str, Any]):
-        """
-        Builds bars from trades in context and writes them to InfluxDB.
-        """
-        progress = StepProgressLogger(self.__class__.__name__, len(context.trades_df))
-        parquet_store = ChartStore(context.parquet_root_dir, context.market, self.get_bar_type())
+    def populate(self, pipeline_context: PipelineContext, stage_context: Context):
+        progress = StepProgressLogger(self.__class__.__name__, len(stage_context.trades_df))
+
+        influx_writer = pipeline_context.influx_store.create_writer(TRADE_DERIVED_BUCKET, no_retention=True)
+        parquet_store = pipeline_context.parquet_store.create_chart(stage_context.market, self.get_bar_type())
         builder = self.create_bar_builder()
-        for trade_row in context.trades_df.itertuples(index=False):
-            if not context.populate_dt_range.is_within(trade_row.ts):
+        for trade_row in stage_context.trades_df.itertuples(index=False):
+            if not stage_context.populate_dt_range.is_within(trade_row.ts):
                 continue
-            trade = _convert_to_trade(trade_row)
+            trade = convert_to_trade(trade_row, stage_context.market)
             bar = builder.on_update(trade)
             if not bar:
                 continue
-            if not context.populate_dt_range.is_within(trade.get_ts()):
+            if not stage_context.populate_dt_range.is_within(trade.get_ts()):
                 continue
 
             fields = {
@@ -158,21 +137,22 @@ class AbstractPopulateChartStep(Step):
             }
             point = (
                 Point("CHART")
-                .tag("exchange_name", context.market.exchange_name.name)
-                .tag("symbol", context.market.symbol.name)
+                .tag("exchange_name", stage_context.market.exchange_name.name)
+                .tag("symbol", stage_context.market.symbol.name)
                 .tag("interval", self.get_threshold_str())
                 .tag("bar_type", self.get_bar_type())
                 .time(int(bar.get_ts() * 1000), WritePrecision.MS)
             )
             for k, v in fields.items():
                 point.field(k, v)
-            influx_writer.add(point)
 
+            influx_writer.add(point)
             parquet_store.add(trade.get_ts(), fields)
             progress.update()
 
+        influx_writer.close()
         parquet_store.close()
-        LOG.info(f"{self.__class__.__name__}: Created {progress.cnt} bars.")
+        LOG.info(f"{self.__class__.__name__}: Created {progress.cnt} bars")
 
     @abstractmethod
     def get_threshold_str(self) -> str:

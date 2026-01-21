@@ -1,15 +1,13 @@
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, List
+from typing import List
 
 from influxdb_client import Point, WritePrecision
-from qate.core.model import Market, OrderBook, Side, Trade
-from qate.store.influx_writer import InfluxWriter
-from qate.store.parquet_store import ExecutionPriceStore, SingleMarketStore
+from qate.core.model import Market, OrderBook, Trade
 from qate.trading import intent
 from qate.trading.book_change import BookChangeBuilder
 
-from .framework import ContextBase, Step, StepProgressLogger
+from .framework import PipelineContext, StageContext, Step, StepProgressLogger
 
 LOG = logging.getLogger(__name__)
 
@@ -22,32 +20,23 @@ MARKET_DATA_BUCKET = "market_data"
 
 
 @dataclass
-class Context(ContextBase):
+class Context(StageContext):
+    market: Market
     trades: list[Trade]
     order_books: list[OrderBook]
-    market: Market
 
 
 class PopulateTradeStep(Step):
-    """
-    Populates InfluxDB and optionally parquet files with Trade data.
-
-    Args:
-        parquet_store: Optional TradeStore for writing to daily rolling parquet files.
-                       If provided, trades will be written to both InfluxDB and parquet.
-    """
-
     def __init__(self):
         super().__init__()
 
-    def populate(self, influx_writer: InfluxWriter, context: Context, args: Dict[str, Any]):
-        """Converts Trade objects in context to InfluxDB points and writes them."""
-        progress = StepProgressLogger(self.__class__.__name__, len(context.trades))
+    def populate(self, pipeline_context: PipelineContext, stage_context: Context):
+        progress = StepProgressLogger(self.__class__.__name__, len(stage_context.trades))
 
-        parquet_store = SingleMarketStore(context.parquet_root_dir, "Trade", context.market)
-
-        for trade in context.trades:
-            if not context.populate_dt_range.is_within(trade.get_ts()):
+        influx_writer = pipeline_context.influx_store.create_writer(MARKET_DATA_BUCKET, no_retention=True)
+        parquet_store = pipeline_context.parquet_store.create_trade(stage_context.market)
+        for trade in stage_context.trades:
+            if not stage_context.populate_dt_range.is_within(trade.get_ts()):
                 continue
 
             influx_writer.add(
@@ -60,36 +49,50 @@ class PopulateTradeStep(Step):
                 .time(int(trade.get_ts() * 1000), WritePrecision.MS)
             )
 
-            parquet_store.add(
-                trade.get_ts(),
-                {
-                    "side": 0 if trade.side == Side.BUY else 1,
-                    "price": trade.price,
-                    "size": trade.size,
-                },
-            )
+            parquet_store.add_trade(trade)
+            progress.update()
+
+        influx_writer.close()
+        parquet_store.close()
+        LOG.info(f"PopulateTradeStep: Processed {progress.cnt} objects.")
+
+
+class PopulateOrderBookStep(Step):
+    def __init__(self):
+        super().__init__()
+
+    def populate(self, pipeline_context: PipelineContext, stage_context: Context):
+        progress = StepProgressLogger(self.__class__.__name__, len(stage_context.order_books))
+
+        parquet_store = pipeline_context.parquet_store.create_order_book(stage_context.market)
+        for order_book in stage_context.order_books:
+            if not stage_context.populate_dt_range.is_within(order_book.get_ts()):
+                continue
+
+            parquet_store.add_order_book(order_book)
             progress.update()
 
         parquet_store.close()
-        LOG.info(f"PopulateTradeStep: Processed {progress.cnt} trades to InfluxDB.")
+        LOG.info(f"PopulateOrderBookStep: Processed {progress.cnt} objects.")
 
 
 class PopulateMarketPriceStep(Step):
-    """Populates InfluxDB with Market Price data."""
-
-    def __init__(self, target_size: str):
+    def __init__(self, execution_size_str: str):
         super().__init__()
-        self.target_size = target_size
+        self.execution_size_str = execution_size_str
 
-    def populate(self, influx_writer: InfluxWriter, context: Context, args: Dict[str, Any]):
-        """Calculates market price from OrderBook objects and writes to InfluxDB."""
-        progress = StepProgressLogger(self.__class__.__name__, len(context.order_books))
-        execution_size_str = self.target_size
-        parquet_store = ExecutionPriceStore(context.parquet_root_dir, context.market, execution_size_str)
-        for order_book in context.order_books:
-            if not context.populate_dt_range.is_within(order_book.get_ts()):
+    def populate(self, pipeline_context: PipelineContext, stage_context: Context):
+        progress = StepProgressLogger(self.__class__.__name__, len(stage_context.order_books))
+
+        influx_writer = pipeline_context.influx_store.create_writer(MARKET_DATA_BUCKET, no_retention=True)
+        parquet_store = pipeline_context.parquet_store.create_execution_price(
+            stage_context.market,
+            self.execution_size_str,
+        )
+        for order_book in stage_context.order_books:
+            if not stage_context.populate_dt_range.is_within(order_book.get_ts()):
                 continue
-            market_price = order_book.market_price(float(self.target_size))
+            market_price = order_book.market_price(float(self.execution_size_str))
             if not market_price:
                 continue
 
@@ -105,19 +108,19 @@ class PopulateMarketPriceStep(Step):
                 Point("MARKET_PRICE")
                 .tag("exchange_name", order_book.exchange_name.name)
                 .tag("symbol", order_book.symbol.name)
-                .tag("execution_size", execution_size_str)
+                .tag("execution_size", self.execution_size_str)
                 .time(int(order_book.get_ts() * 1000), WritePrecision.MS)
             )
             for k, v in fields.items():
                 point.field(k, v)
+
             influx_writer.add(point)
-
             parquet_store.add(order_book.get_ts(), fields)
-
             progress.update()
 
+        influx_writer.close()
         parquet_store.close()
-        LOG.info(f"PopulateMarketPriceStep: Processed {progress.cnt} market prices.")
+        LOG.info(f"PopulateMarketPriceStep: Processed {progress.cnt} objects")
 
 
 class PopulateBookStateStep(Step):
@@ -134,12 +137,13 @@ class PopulateBookStateStep(Step):
         self.depth_imbalance_rate = depth_imbalance_rate
         self.microprice_k = microprice_k
 
-    def populate(self, influx_writer: InfluxWriter, context: Context, args: Dict[str, Any]):
-        """Extracts basic metrics from OrderBook objects and writes them to InfluxDB."""
-        progress = StepProgressLogger(self.__class__.__name__, len(context.order_books))
-        parquet_store = SingleMarketStore(context.parquet_root_dir, "BookState", context.market)
-        for order_book in context.order_books:
-            if not context.populate_dt_range.is_within(order_book.get_ts()):
+    def populate(self, pipeline_context: PipelineContext, stage_context: Context):
+        progress = StepProgressLogger(self.__class__.__name__, len(stage_context.order_books))
+
+        influx_writer = pipeline_context.influx_store.create_writer(MARKET_DATA_BUCKET, no_retention=True)
+        parquet_store = pipeline_context.parquet_store.create_single_market("BookState", stage_context.market)
+        for order_book in stage_context.order_books:
+            if not stage_context.populate_dt_range.is_within(order_book.get_ts()):
                 continue
 
             fields = {
@@ -174,38 +178,36 @@ class PopulateBookStateStep(Step):
             )
             for k, v in fields.items():
                 point.field(k, v)
+
             influx_writer.add(point)
-
             parquet_store.add(order_book.get_ts(), fields)
-
             progress.update()
 
+        influx_writer.close()
         parquet_store.close()
-        LOG.info(f"PopulateOrderBookStep: Processed {progress.cnt} order books.")
+        LOG.info(f"PopulateOrderBookStep: Processed {progress.cnt} objects")
 
 
 class PopulateBookChangeStep(Step):
-    """Populates InfluxDB with OrderBook Book Change data for various 'k' levels."""
-
     def __init__(self, k_levels: List[int]):
         super().__init__()
         self.k_levels = k_levels
 
-    def populate(self, influx_writer: InfluxWriter, context: Context, args: Dict[str, Any]):
-        """Calculates book changes from OrderBook objects for different k-levels and writes to InfluxDB."""
-        progress = StepProgressLogger(self.__class__.__name__, len(context.order_books) * len(self.k_levels))
-        parquet_store = SingleMarketStore(context.parquet_root_dir, "BookChange", context.market)
+    def populate(self, pipeline_context: PipelineContext, stage_context: Context):
+        progress = StepProgressLogger(self.__class__.__name__, len(stage_context.order_books) * len(self.k_levels))
 
+        influx_writer = pipeline_context.influx_store.create_writer(MARKET_DATA_BUCKET, no_retention=True)
+        parquet_store = pipeline_context.parquet_store.create_single_market("BookChange", stage_context.market)
         builder = BookChangeBuilder(self.k_levels)
-        for order_book in context.order_books:
-            if not context.compute_dt_range.is_within(order_book.get_ts()):
+        for order_book in stage_context.order_books:
+            if not stage_context.compute_dt_range.is_within(order_book.get_ts()):
                 continue
 
             book_changes = builder.on_snapshot(order_book)
             if not book_changes:
                 continue
 
-            if not context.populate_dt_range.is_within(order_book.get_ts()):
+            if not stage_context.populate_dt_range.is_within(order_book.get_ts()):
                 continue
 
             write_fields = {
@@ -239,8 +241,10 @@ class PopulateBookChangeStep(Step):
                 for k, v in fields.items():
                     write_fields[f"{k}_{book_change.k}"] = v
 
+            influx_writer.add(point)
             parquet_store.add(order_book.get_ts(), fields)
             progress.update()
 
+        influx_writer.close()
         parquet_store.close()
-        LOG.info(f"PopulateBookChangeStep: Processed {progress.cnt} book changes.")
+        LOG.info(f"PopulateBookChangeStep: Processed {progress.cnt} objects.")
