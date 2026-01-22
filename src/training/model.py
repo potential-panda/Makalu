@@ -235,10 +235,12 @@ class LGBMTrainer:
         importance = self.model.feature_importance(importance_type=importance_type)
 
         if as_dataframe:
-            df = pd.DataFrame({
-                "feature": self.feature_names,
-                "importance": importance,
-            })
+            df = pd.DataFrame(
+                {
+                    "feature": self.feature_names,
+                    "importance": importance,
+                }
+            )
             return df.sort_values("importance", ascending=False).reset_index(drop=True)
 
         return importance

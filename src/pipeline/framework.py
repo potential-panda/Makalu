@@ -15,7 +15,6 @@ LOG = getLogger(__name__)
 
 @dataclass
 class StageContext:
-    compute_dt_range: DtRange
     populate_dt_range: DtRange
 
 

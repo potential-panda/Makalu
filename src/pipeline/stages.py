@@ -11,6 +11,7 @@ from qate.util.dt_range import DtRange
 from .framework import PipelineContext, Stage, StageContext
 from .lead_lag_steps import Context as LeadLagContext
 from .market_data_steps import Context as MarketDataContext
+from .order_book_derived_steps import Context as OrderBookDerivedContext
 from .trade_derived_steps import Context as TradeDerivedContext
 
 LOG = getLogger(__name__)
@@ -28,8 +29,7 @@ class MarketDataStage(Stage):
             self.market,
             [EventType.MARKET_ORDER_BOOK, EventType.MARKET_TRADE],
         )
-        warmup_dt_range = DtRange(dt_range.start_dt - timedelta(hours=1), dt_range.end_dt)
-        all_data = loader.batch_load_mt(warmup_dt_range, max_workers=8)
+        all_data = loader.batch_load_mt(dt_range, max_workers=8)
         order_books, trades = partition_market_events(all_data)
         end_time = time.time()
         LOG.info(
@@ -37,10 +37,34 @@ class MarketDataStage(Stage):
             f" in {end_time - start_time:.2f} seconds."
         )
         return MarketDataContext(
-            warmup_dt_range,
             dt_range,
             self.market,
             trades,
+            order_books,
+        )
+
+
+class OrderBookDerivedStage(Stage):
+    def __init__(self, market: Market):
+        super().__init__()
+        self.market = market
+
+    def before(self, dt_range: DtRange, pipeline_context: PipelineContext) -> StageContext:
+        start_time = time.time()
+        compute_dt_range = DtRange(dt_range.start_dt - timedelta(minutes=5), dt_range.end_dt)
+        LOG.info(
+            f"OrderBookDerivedStage: Querying data for {self.market.id}"
+            f"from {compute_dt_range.start_str} to {compute_dt_range.end_str}"
+        )
+        store = pipeline_context.parquet_store.create_order_book(self.market)
+        order_books = store.read_order_books(compute_dt_range)
+
+        end_time = time.time()
+        LOG.info(f"OrderBookDerivedStage: Found {len(order_books)} objects in {end_time - start_time:.2f} seconds.")
+        return OrderBookDerivedContext(
+            compute_dt_range,
+            dt_range,
+            self.market,
             order_books,
         )
 
@@ -52,22 +76,21 @@ class TradeDerivedStage(Stage):
 
     def before(self, dt_range: DtRange, pipeline_context: PipelineContext) -> StageContext:
         start_time = time.time()
-        warmup_dt_range = DtRange(dt_range.start_dt - timedelta(hours=8), dt_range.end_dt)
+        compute_dt_range = DtRange(dt_range.start_dt - timedelta(hours=1), dt_range.end_dt)
         LOG.info(
-            f"TradeDerivedStage: Querying trades for {self.market.id}"
-            f"from {warmup_dt_range.start_str} to {warmup_dt_range.end_str}"
+            f"TradeDerivedStage: Querying data for {self.market.id}"
+            f"from {compute_dt_range.start_str} to {compute_dt_range.end_str}"
         )
         store = pipeline_context.parquet_store.create_trade(self.market)
-        trades = store.read_trades(warmup_dt_range)
+        trades = store.read_trades(compute_dt_range)
 
         end_time = time.time()
-        LOG.info(f"TradeDerivedStage: Found {len(trades)} trades in {end_time - start_time:.2f} seconds.")
+        LOG.info(f"TradeDerivedStage: Found {len(trades)} objects in {end_time - start_time:.2f} seconds.")
         return TradeDerivedContext(
-            warmup_dt_range,
+            compute_dt_range,
             dt_range,
             self.market,
             trades,
-            None,
         )
 
 
@@ -79,7 +102,6 @@ class LeadLagStage(Stage):
 
     def before(self, dt_range: DtRange, pipeline_context: PipelineContext) -> StageContext:
         return LeadLagContext(
-            dt_range,
             dt_range,
             self.market_lead,
             self.market_lag,

@@ -193,7 +193,7 @@ class LeadLagStep(Step):
 
         populate_dt_range = stage_context.populate_dt_range
         compute_dt_range = DtRange(
-            populate_dt_range.start_dt - timedelta(seconds=self.window_size_sec * 2),
+            populate_dt_range.start_dt - timedelta(seconds=self.window_size_sec * 1.5),
             populate_dt_range.end_dt,
         )
 

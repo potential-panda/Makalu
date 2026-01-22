@@ -12,14 +12,19 @@ from qate.util.dt_range import DtRange
 from pipeline.framework import Pipeline
 from pipeline.lead_lag_steps import LeadLagStep
 from pipeline.market_data_steps import (
-    PopulateBookChangeStep,
     PopulateBookStateStep,
     PopulateMarketPriceStep,
     PopulateOrderBookStep,
     PopulateTradeStep,
 )
 from pipeline.market_pair import EXECUTION_SIZE, LEAD_LAG_PAIRS, find_pair_key
-from pipeline.stages import LeadLagStage, MarketDataStage, TradeDerivedStage
+from pipeline.order_book_derived_steps import PopulateBookChangeStep
+from pipeline.stages import (
+    LeadLagStage,
+    MarketDataStage,
+    OrderBookDerivedStage,
+    TradeDerivedStage,
+)
 from pipeline.trade_derived_steps import (
     PopulateAggressionStep,
     PopulateCandleBarStep,
@@ -43,7 +48,7 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
             MarketDataStage(market_lead)
             .step(PopulateTradeStep())
             .step(PopulateOrderBookStep())
-            .step(PopulateMarketPriceStep(execution_size_str=EXECUTION_SIZE.get(market_lead.symbol)))
+            .step(PopulateMarketPriceStep(EXECUTION_SIZE.get(market_lead.symbol)))
             .step(
                 PopulateBookStateStep(
                     volume_imbalance_k=[1, 3, 5, 10],
@@ -52,12 +57,11 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
                     microprice_k=[1, 3, 5, 10],
                 )
             )
-            .step(PopulateBookChangeStep(k_levels=[3, 5, 10]))
         ).stage(
             MarketDataStage(market_lag)
             .step(PopulateTradeStep())
             .step(PopulateOrderBookStep())
-            .step(PopulateMarketPriceStep(execution_size_str=EXECUTION_SIZE.get(market_lag.symbol)))
+            .step(PopulateMarketPriceStep(EXECUTION_SIZE.get(market_lag.symbol)))
         )
 
     if "TradeDerived" in run_stages:
@@ -68,6 +72,9 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
             .step(PopulateRangeBarStep(box_size_rate=0.001))  # 0.1% range bars (example)
             .step(PopulateAggressionStep(windows_sec=[1, 3, 5]))  # Aggression metrics
         )
+
+    if "OrderBookDerived" in run_stages:
+        pipeline.stage(OrderBookDerivedStage(market_lead).step(PopulateBookChangeStep(k_levels=[3, 5, 10])))
 
     if "LeadLag" in run_stages:
         pipeline.stage(
@@ -103,7 +110,7 @@ def main():
         "--stages",
         nargs="*",
         type=str,
-        default=["MarketData", "TradeDerived", "LeadLag"],
+        default=["MarketData", "TradeDerived", "OrderBookDerived", "LeadLag"],
         help="Optional list of stages",
     )
     args = parser.parse_args()

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import List
 
 from influxdb_client import Point, WritePrecision
-from qate.core.model import Market, OrderBook, Trade
+from qate.core.model import Market, Trade
 from qate.trading.aggression import TradeAggressionBuilder
 from qate.trading.chart import (
     BaseBarBuilder,
@@ -12,8 +12,8 @@ from qate.trading.chart import (
     HeikinAshiBarBuilder,
     RangeBarBuilder,
 )
+from qate.util.dt_range import DtRange
 
-from .converter import convert_to_trade
 from .framework import PipelineContext, StageContext, Step, StepProgressLogger
 
 LOG = logging.getLogger(__name__)
@@ -28,9 +28,9 @@ TRADE_DERIVED_BUCKET = "trade_derived"
 
 @dataclass
 class Context(StageContext):
+    compute_dt_range: DtRange
     market: Market
     trades: list[Trade]
-    order_books: list[OrderBook]
 
 
 class PopulateAggressionStep(Step):
@@ -44,10 +44,9 @@ class PopulateAggressionStep(Step):
         influx_writer = pipeline_context.influx_store.create_writer(TRADE_DERIVED_BUCKET, no_retention=True)
         parquet_store = pipeline_context.parquet_store.create_single_market("TradeAggression", stage_context.market)
         builder = TradeAggressionBuilder(windows_sec=self.windows_sec)
-        for trade_row in stage_context.trades_df.itertuples(index=False):
-            if not stage_context.compute_dt_range.is_within(trade_row.ts):
+        for trade in stage_context.trades:
+            if not stage_context.compute_dt_range.is_within(trade.get_ts()):
                 continue
-            trade = convert_to_trade(trade_row, stage_context.market)
             builder.on_trade(trade)
             if not stage_context.populate_dt_range.is_within(trade.get_ts()):
                 continue
@@ -117,10 +116,9 @@ class AbstractPopulateChartStep(Step):
         influx_writer = pipeline_context.influx_store.create_writer(TRADE_DERIVED_BUCKET, no_retention=True)
         parquet_store = pipeline_context.parquet_store.create_chart(stage_context.market, self.get_bar_type())
         builder = self.create_bar_builder()
-        for trade_row in stage_context.trades_df.itertuples(index=False):
-            if not stage_context.populate_dt_range.is_within(trade_row.ts):
+        for trade in stage_context.trades:
+            if not stage_context.compute_dt_range.is_within(trade.get_ts()):
                 continue
-            trade = convert_to_trade(trade_row, stage_context.market)
             bar = builder.on_update(trade)
             if not bar:
                 continue
