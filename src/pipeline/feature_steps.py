@@ -175,6 +175,10 @@ class AlignAndBuildFeaturesStep(Step):
 
         # Post-processing: handle NaN/Inf and filter to populate range
         feature_df = self._postprocess_features(feature_df, stage_context)
+        feature_df = feature_df[
+            (feature_df.index >= stage_context.populate_dt_range.start_dt)
+            & (feature_df.index <= stage_context.populate_dt_range.end_dt)
+        ]
 
         if feature_df.empty:
             LOG.warning("AlignAndBuildFeaturesStep: No data after post-processing.")
