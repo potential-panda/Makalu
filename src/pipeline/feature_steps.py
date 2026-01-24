@@ -155,6 +155,8 @@ class AlignAndBuildFeaturesStep(Step):
         """Main entry point for feature computation."""
         # Align all data sources
         feature_df = self._align_data_sources(stage_context)
+        if feature_df is not None and not feature_df.empty:
+            feature_df = self._normalize_column_names(feature_df)
 
         if feature_df is None or feature_df.empty:
             LOG.warning("AlignAndBuildFeaturesStep: No data available to build features.")
@@ -239,6 +241,34 @@ class AlignAndBuildFeaturesStep(Step):
         feature_df = feature_df.sort_index()
 
         return feature_df
+
+    def _normalize_column_names(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Normalize legacy k-suffixed columns (e.g., *_1) to *_k1."""
+        k_bases = [
+            "vol_imb",
+            "weighted_imb",
+            "microprice",
+            "best_bid_reset",
+            "best_ask_reset",
+            "delta_depth_bid",
+            "delta_depth_ask",
+            "delta_depth_bid_rate",
+            "delta_depth_ask_rate",
+            "pull_bid_rate",
+            "pull_ask_rate",
+            "refill_bid_rate",
+            "refill_ask_rate",
+        ]
+        rename_map = {}
+        for base in k_bases:
+            for k in self.DEPTH_LEVELS:
+                legacy = f"{base}_{k}"
+                target = f"{base}_k{k}"
+                if legacy in df.columns and target not in df.columns:
+                    rename_map[legacy] = target
+        if rename_map:
+            df = df.rename(columns=rename_map)
+        return df
 
     # =========================================================================
     # Section 1: Trade Aggression Features
