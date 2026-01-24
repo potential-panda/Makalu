@@ -923,10 +923,59 @@ class AlignAndBuildFeaturesStep(Step):
     # Post-processing
     # =========================================================================
 
+    def _drop_non_stationary_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Drop raw non-stationary inputs that should not be ML features."""
+        trade_raw_cols = []
+        for window in self.TRADE_WINDOWS:
+            trade_raw_cols.extend(
+                [
+                    f"buy_qty_{window}",
+                    f"sell_qty_{window}",
+                    f"buy_count_{window}",
+                    f"sell_count_{window}",
+                    f"total_qty_{window}",
+                    f"total_count_{window}",
+                    f"vwap_{window}",
+                    f"vwap_buy_{window}",
+                    f"vwap_sell_{window}",
+                    f"qty_per_sec_{window}",
+                    f"trades_per_sec_{window}",
+                ]
+            )
+
+        book_raw_cols = ["best_bid", "best_ask", "best_mid", "best_spread"]
+        exec_raw_cols = ["bid", "ask", "mid", "spread"]
+
+        microprice_cols = []
+        for k in self.DEPTH_LEVELS:
+            microprice_cols.extend([f"microprice_k{k}", f"microprice_{k}"])
+
+        book_change_raw_cols = ["delta_sec"]
+        for k in self.DEPTH_LEVELS:
+            for prefix in [
+                "delta_depth_bid",
+                "delta_depth_ask",
+                "delta_depth_bid_rate",
+                "delta_depth_ask_rate",
+                "pull_bid_rate",
+                "pull_ask_rate",
+                "refill_bid_rate",
+                "refill_ask_rate",
+            ]:
+                book_change_raw_cols.extend([f"{prefix}_k{k}", f"{prefix}_{k}"])
+
+        drop_cols = set(trade_raw_cols + book_raw_cols + exec_raw_cols + microprice_cols + book_change_raw_cols)
+        existing = [col for col in drop_cols if col in df.columns]
+        if existing:
+            df = df.drop(columns=existing)
+        return df
+
     def _postprocess_features(self, df: pd.DataFrame, stage_context: Context) -> pd.DataFrame:
         """Post-process features: handle NaN/Inf, filter to populate range."""
         # Replace inf with NaN
         df = df.replace([np.inf, -np.inf], np.nan)
+
+        df = self._drop_non_stationary_columns(df)
 
         # Filter to populate_dt_range
         df = df[
