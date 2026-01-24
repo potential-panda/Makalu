@@ -86,7 +86,11 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
         )
 
     if "Feature" in run_stages:
-        pipeline.stage(FeatureStage(market_lead).step(QueryDataStep()).step(AlignAndBuildFeaturesStep()))
+        pipeline.stage(
+            FeatureStage(market_lead)
+            .step(QueryDataStep(EXECUTION_SIZE.get(market_lead.symbol)))
+            .step(AlignAndBuildFeaturesStep())
+        )
 
     return pipeline
 

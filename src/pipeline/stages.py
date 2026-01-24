@@ -8,6 +8,7 @@ from qate.core.model import Market
 from qate.store.market_data_store import partition_market_events
 from qate.util.dt_range import DtRange
 
+from .feature_steps import Context as FeatureContext
 from .framework import PipelineContext, Stage, StageContext
 from .lead_lag_steps import Context as LeadLagContext
 from .market_data_steps import Context as MarketDataContext
@@ -119,11 +120,12 @@ class FeatureStage(Stage):
         super().__init__()
         self.market = market
 
-    def before(self, dt_range: DtRange, args: Dict[str, Any]) -> StageContext:
-        self.context.compute_dt_range = DtRange(dt_range.start_dt - timedelta(hours=8), dt_range.end_dt)
-        self.context.populate_dt_range = dt_range
-        self.context.influx_reader = self.influx_reader
-        self.context.market = self.market
+    def before(self, dt_range: DtRange, pipeline_context: PipelineContext) -> StageContext:
+        return FeatureContext(
+            dt_range,
+            DtRange(dt_range.start_dt - timedelta(hours=1), dt_range.end_dt),
+            self.market,
+        )
 
 
 class LabelStage(Stage):
