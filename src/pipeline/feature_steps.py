@@ -341,8 +341,6 @@ class AlignAndBuildFeaturesStep(Step):
 
     def _build_cross_window_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """Build cross-window features for trade aggression (momentum, sign agreement, etc.)."""
-        window_pairs = [("1s", "3s"), ("1s", "5s"), ("3s", "5s")]
-
         # Get vol_imbalance_ratio for each window
         ratio_1s = get_column_if_exists(df, "vol_imbalance_ratio_1s")
         ratio_3s = get_column_if_exists(df, "vol_imbalance_ratio_3s")
