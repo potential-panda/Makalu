@@ -424,9 +424,11 @@ class AlignAndBuildFeaturesStep(Step):
         """
         LOG.info("Building order book state features...")
 
-        mid = get_column_if_exists(df, "mid")
-        if mid is None:
-            LOG.warning("'mid' column not found, skipping order book state features")
+        best_mid = get_column_if_exists(df, "best_mid")
+        if best_mid is None:
+            best_mid = get_column_if_exists(df, "mid")
+        if best_mid is None:
+            LOG.warning("'best_mid' column not found, skipping order book state features")
             return df
 
         # Microprice offset in bps for each k
@@ -434,7 +436,7 @@ class AlignAndBuildFeaturesStep(Step):
             microprice_col = f"microprice_k{k}"
             microprice = get_column_if_exists(df, microprice_col)
             if microprice is not None:
-                df[f"microprice_offset_bps_k{k}"] = compute_bps_offset(microprice, mid)
+                df[f"microprice_offset_bps_k{k}"] = compute_bps_offset(microprice, best_mid)
 
         # Imbalance gradient and divergence
         vol_imb_1 = get_column_if_exists(df, "vol_imb_k1")
@@ -448,7 +450,9 @@ class AlignAndBuildFeaturesStep(Step):
             df["imbalance_divergence"] = (vol_imb_1 - vol_imb_10).abs()
 
         # Spread-normalized microprice offset
-        spread_bps = get_column_if_exists(df, "spread_bps")
+        spread_bps = get_column_if_exists(df, "best_spread_bps")
+        if spread_bps is None:
+            spread_bps = get_column_if_exists(df, "spread_bps")
         microprice_offset_bps_1 = get_column_if_exists(df, "microprice_offset_bps_k1")
         if spread_bps is not None and microprice_offset_bps_1 is not None:
             df["microprice_offset_norm"] = microprice_offset_bps_1 / (spread_bps + EPS)
@@ -463,8 +467,9 @@ class AlignAndBuildFeaturesStep(Step):
         windows = {"1s": "1s", "3s": "3s", "5s": "5s"}
 
         # Features to compute rolling stats for
+        book_spread_bps_name = "best_spread_bps" if "best_spread_bps" in df.columns else "spread_bps"
         feature_patterns = [
-            "spread_bps",
+            book_spread_bps_name,
             "vol_imb_k1",
             "vol_imb_k5",
             "microprice_offset_bps_k1",
@@ -591,7 +596,9 @@ class AlignAndBuildFeaturesStep(Step):
         exec_bid = get_column_if_exists(df, "bid")  # Execution price for selling
         exec_ask = get_column_if_exists(df, "ask")  # Execution price for buying
         mid = get_column_if_exists(df, "mid")
-        spread_bps = get_column_if_exists(df, "spread_bps")
+        spread_bps = get_column_if_exists(df, "best_spread_bps")
+        if spread_bps is None:
+            spread_bps = get_column_if_exists(df, "spread_bps")
 
         # Slippage metrics in bps
         if best_bid is not None and exec_bid is not None:
@@ -655,7 +662,9 @@ class AlignAndBuildFeaturesStep(Step):
 
     def _build_trade_book_interactions(self, df: pd.DataFrame) -> pd.DataFrame:
         """Build Trade Aggression × Order Book State interactions."""
-        mid = get_column_if_exists(df, "mid")
+        best_mid = get_column_if_exists(df, "best_mid")
+        if best_mid is None:
+            best_mid = get_column_if_exists(df, "mid")
         vol_imb_1 = get_column_if_exists(df, "vol_imb_k1")
         vol_imbalance_ratio_1s = get_column_if_exists(df, "vol_imbalance_ratio_1s")
 
@@ -666,13 +675,13 @@ class AlignAndBuildFeaturesStep(Step):
             vwap_buy = get_column_if_exists(df, f"vwap_buy{suffix}")
             vwap_sell = get_column_if_exists(df, f"vwap_sell{suffix}")
 
-            if mid is not None:
+            if best_mid is not None:
                 if vwap is not None:
-                    df[f"vwap_offset_bps{suffix}"] = compute_bps_offset(vwap, mid)
+                    df[f"vwap_offset_bps{suffix}"] = compute_bps_offset(vwap, best_mid)
                 if vwap_buy is not None:
-                    df[f"vwap_buy_offset_bps{suffix}"] = compute_bps_offset(vwap_buy, mid)
+                    df[f"vwap_buy_offset_bps{suffix}"] = compute_bps_offset(vwap_buy, best_mid)
                 if vwap_sell is not None:
-                    df[f"vwap_sell_offset_bps{suffix}"] = compute_bps_offset(vwap_sell, mid)
+                    df[f"vwap_sell_offset_bps{suffix}"] = compute_bps_offset(vwap_sell, best_mid)
 
         # Sign agreement between trade and book
         if vol_imbalance_ratio_1s is not None and vol_imb_1 is not None:
@@ -780,7 +789,9 @@ class AlignAndBuildFeaturesStep(Step):
         exec_bid = get_column_if_exists(df, "bid")
         exec_ask = get_column_if_exists(df, "ask")
         mid = get_column_if_exists(df, "mid")
-        spread_bps = get_column_if_exists(df, "spread_bps")
+        spread_bps = get_column_if_exists(df, "best_spread_bps")
+        if spread_bps is None:
+            spread_bps = get_column_if_exists(df, "spread_bps")
         depth_quality = get_column_if_exists(df, "depth_quality")
 
         # Slippage vs imbalance alignment
@@ -844,7 +855,9 @@ class AlignAndBuildFeaturesStep(Step):
         absorption_ask = get_column_if_exists(df, "absorption_ask")
         trades_per_sec_pct_1s = get_column_if_exists(df, "trades_per_sec_pct_1s")
         total_activity_pct_1 = get_column_if_exists(df, "total_activity_pct_k1")
-        spread_bps = get_column_if_exists(df, "spread_bps")
+        spread_bps = get_column_if_exists(df, "best_spread_bps")
+        if spread_bps is None:
+            spread_bps = get_column_if_exists(df, "spread_bps")
         depth_quality = get_column_if_exists(df, "depth_quality")
 
         # Confirmation score: count agreeing signals

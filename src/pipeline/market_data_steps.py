@@ -137,9 +137,9 @@ class PopulateBookStateStep(Step):
             fields = {
                 "best_bid": order_book.best_bid,
                 "best_ask": order_book.best_ask,
-                "mid": order_book.mid,
-                "spread": order_book.spread,
-                "spread_bps": order_book.spread_bps,
+                "best_mid": order_book.mid,
+                "best_spread": order_book.spread,
+                "best_spread_bps": order_book.spread_bps,
             }
             for k in self.volume_imbalance_k:
                 value = intent.compute_volume_imbalance(order_book, k)
