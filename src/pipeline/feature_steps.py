@@ -61,8 +61,8 @@ def compute_zscore(series: pd.Series, window: str = DEFAULT_ROLLING_WINDOW) -> p
     Compute rolling z-score: (x - mean) / std.
     Returns values typically in range [-3, 3].
     """
-    rolling_mean = series.rolling(window).mean()
-    rolling_std = series.rolling(window).std()
+    rolling_mean = series.rolling(window, closed="left").mean()
+    rolling_std = series.rolling(window, closed="left").std()
     return (series - rolling_mean) / (rolling_std + EPS)
 
 
@@ -71,7 +71,7 @@ def compute_percentile(series: pd.Series, window: str = DEFAULT_ROLLING_WINDOW) 
     Compute rolling percentile rank.
     Returns values in range [0, 1].
     """
-    return series.rolling(window).rank(pct=True)
+    return series.rolling(window, closed="left").rank(pct=True)
 
 
 def compute_bps_offset(price: pd.Series, reference: pd.Series) -> pd.Series:
