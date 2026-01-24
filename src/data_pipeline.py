@@ -80,7 +80,7 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
 
     if "LeadLag" in run_stages:
         pipeline.stage(
-            LeadLagStage(market_lead, market_lag)
+            LeadLagStage(market_lead, market_lag, EXECUTION_SIZE.get(market_lag.symbol))
             .step(LeadLagStep(window_size_sec=3600 * 2, window_step_sec=3600))
             .step(LeadLagStep(window_size_sec=3600 * 4, window_step_sec=3600))
         )

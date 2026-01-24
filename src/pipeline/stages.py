@@ -95,16 +95,18 @@ class TradeDerivedStage(Stage):
 
 
 class LeadLagStage(Stage):
-    def __init__(self, market_lead: Market, market_lag: Market):
+    def __init__(self, market_lead: Market, market_lag: Market, execution_size_str: str):
         super().__init__()
         self.market_lead = market_lead
         self.market_lag = market_lag
+        self.execution_size_str = execution_size_str
 
     def before(self, dt_range: DtRange, pipeline_context: PipelineContext) -> StageContext:
         return LeadLagContext(
             dt_range,
             self.market_lead,
             self.market_lag,
+            self.execution_size_str,
         )
 
 

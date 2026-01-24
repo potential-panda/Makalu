@@ -28,6 +28,7 @@ LEAD_LAG_BUCKET = "lead_lag"
 class Context(StageContext):
     market_lead: Market
     market_lag: Market
+    execution_size_str: str
 
 
 @dataclass
@@ -187,8 +188,14 @@ class LeadLagStep(Step):
         LOG.info(f"LeadLagStep: Window size={self.window_size_sec}s, step={self.window_step_sec}s")
 
         influx_writer = pipeline_context.influx_store.create_writer(LEAD_LAG_BUCKET, no_retention=True)
-        read_store_lead = pipeline_context.parquet_store.create_order_book(market_lead)
-        read_store_lag = pipeline_context.parquet_store.create_order_book(market_lag)
+        read_store_lead = pipeline_context.parquet_store.create_execution_price(
+            market_lead,
+            stage_context.execution_size_str,
+        )
+        read_store_lag = pipeline_context.parquet_store.create_execution_price(
+            market_lag,
+            stage_context.execution_size_str,
+        )
         write_store_lead_lag = pipeline_context.parquet_store.create_lead_lag(market_lead, market_lag)
 
         populate_dt_range = stage_context.populate_dt_range
@@ -201,9 +208,21 @@ class LeadLagStep(Step):
         df_lag = read_store_lag.read(compute_dt_range)
         LOG.info(f"LeadLagStep: Loaded {len(df_lead)} prices for {market_lead.id}, {len(df_lag)} for {market_lag.id}")
 
-        # Resample to fixed intervals using forward-fill
-        df_lead_resampled = df_lead.resample(self.resample_interval).ffill().dropna()
-        df_lag_resampled = df_lag.resample(self.resample_interval).ffill().dropna()
+        if df_lead.empty or df_lag.empty:
+            LOG.warning("LeadLagStep: No data available for one or both markets")
+            return
+
+        # Convert ts column to DatetimeIndex for resampling
+        df_lead.index = pd.to_datetime(df_lead["ts"], unit="s")
+        df_lag.index = pd.to_datetime(df_lag["ts"], unit="s")
+
+        # Drop duplicate timestamps, keeping the last value (most recent state)
+        df_lead = df_lead[~df_lead.index.duplicated(keep="last")]
+        df_lag = df_lag[~df_lag.index.duplicated(keep="last")]
+
+        # Resample to fixed intervals using last value, then forward-fill gaps
+        df_lead_resampled = df_lead.resample(self.resample_interval).last().ffill().dropna()
+        df_lag_resampled = df_lag.resample(self.resample_interval).last().ffill().dropna()
 
         LOG.info(
             f"LeadLagStep: After resampling: {len(df_lead_resampled)} for {market_lead.id},"
@@ -231,15 +250,17 @@ class LeadLagStep(Step):
             # Extract window data
             window_lead = aligned_lead[start_idx:end_idx]
             window_lag = aligned_lag[start_idx:end_idx]
-            window_end_ts = timestamps[end_idx - 1]
+            window_end_ts = timestamps[end_idx - 1].timestamp()  # Convert to Unix timestamp
 
             if not populate_dt_range.is_within(window_end_ts):
+                start_idx += window_step_steps
                 continue
 
             # Compute cross-correlation for this window
             best_lag, best_corr, corr_by_lag = compute_cross_correlation(window_lead, window_lag, self.max_lag)
             LOG.info(f"{best_lag}, {best_corr}, {corr_by_lag}")
             if best_lag is None:
+                start_idx += window_step_steps
                 continue
 
             best_lag_ms = int(best_lag * self.interval_ms)
