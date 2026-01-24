@@ -77,7 +77,7 @@ class PopulateBookChangeStep(Step):
                 influx_writer.add(point)
 
                 for k, v in fields.items():
-                    write_fields[f"{k}_{book_change.k}"] = v
+                    write_fields[f"{k}_k{book_change.k}"] = v
 
             influx_writer.add(point)
             parquet_store.add(order_book.get_ts(), write_fields)

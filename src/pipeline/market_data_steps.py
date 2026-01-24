@@ -143,11 +143,11 @@ class PopulateBookStateStep(Step):
             }
             for k in self.volume_imbalance_k:
                 value = intent.compute_volume_imbalance(order_book, k)
-                fields[f"vol_imb_{k}"] = value
+                fields[f"vol_imb_k{k}"] = value
 
             for k in self.weighted_imbalance_k:
                 value = intent.compute_weighted_imbalance(order_book, k)
-                fields[f"weighted_imb_{k}"] = value
+                fields[f"weighted_imb_k{k}"] = value
 
             for rate in self.depth_imbalance_rate:
                 value = intent.compute_depth_imbalance(order_book, rate)
@@ -156,7 +156,7 @@ class PopulateBookStateStep(Step):
 
             for k in self.microprice_k:
                 value = intent.compute_microprice(order_book, k)
-                fields[f"microprice_{k}"] = value
+                fields[f"microprice_k{k}"] = value
 
             point = (
                 Point("BOOK_STATE")

@@ -107,11 +107,15 @@ class Context(StageContext):
 
 
 class QueryDataStep(Step):
-    """Query all required data sources for feature computation."""
+    def __init__(self, execution_size_str: str):
+        super().__init__()
+        self.execution_size_str = execution_size_str
 
     def populate(self, pipeline_context: PipelineContext, stage_context: Context):
         # Query execution price data
-        parquet_store = pipeline_context.parquet_store.create_execution_price(stage_context.market)
+        parquet_store = pipeline_context.parquet_store.create_execution_price(
+            stage_context.market, self.execution_size_str
+        )
         df = parquet_store.read(stage_context.compute_dt_range)
         stage_context.execution_price_df = df
 
@@ -155,8 +159,6 @@ class AlignAndBuildFeaturesStep(Step):
         """Main entry point for feature computation."""
         # Align all data sources
         feature_df = self._align_data_sources(stage_context)
-        if feature_df is not None and not feature_df.empty:
-            feature_df = self._normalize_column_names(feature_df)
 
         if feature_df is None or feature_df.empty:
             LOG.warning("AlignAndBuildFeaturesStep: No data available to build features.")
@@ -241,34 +243,6 @@ class AlignAndBuildFeaturesStep(Step):
         feature_df = feature_df.sort_index()
 
         return feature_df
-
-    def _normalize_column_names(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Normalize legacy k-suffixed columns (e.g., *_1) to *_k1."""
-        k_bases = [
-            "vol_imb",
-            "weighted_imb",
-            "microprice",
-            "best_bid_reset",
-            "best_ask_reset",
-            "delta_depth_bid",
-            "delta_depth_ask",
-            "delta_depth_bid_rate",
-            "delta_depth_ask_rate",
-            "pull_bid_rate",
-            "pull_ask_rate",
-            "refill_bid_rate",
-            "refill_ask_rate",
-        ]
-        rename_map = {}
-        for base in k_bases:
-            for k in self.DEPTH_LEVELS:
-                legacy = f"{base}_{k}"
-                target = f"{base}_k{k}"
-                if legacy in df.columns and target not in df.columns:
-                    rename_map[legacy] = target
-        if rename_map:
-            df = df.rename(columns=rename_map)
-        return df
 
     # =========================================================================
     # Section 1: Trade Aggression Features
@@ -719,26 +693,18 @@ class AlignAndBuildFeaturesStep(Step):
 
         if vol_imbalance_ratio_1s is not None and pull_imbalance_1 is not None:
             # Trade consumption detection
-            df["trade_consuming_asks"] = (
-                (vol_imbalance_ratio_1s > 0.3) & (pull_imbalance_1 < -0.3)
-            ).astype(int)
+            df["trade_consuming_asks"] = ((vol_imbalance_ratio_1s > 0.3) & (pull_imbalance_1 < -0.3)).astype(int)
 
-            df["trade_consuming_bids"] = (
-                (vol_imbalance_ratio_1s < -0.3) & (pull_imbalance_1 > 0.3)
-            ).astype(int)
+            df["trade_consuming_bids"] = ((vol_imbalance_ratio_1s < -0.3) & (pull_imbalance_1 > 0.3)).astype(int)
 
             # Consumption alignment
             df["consumption_alignment"] = vol_imbalance_ratio_1s * (-pull_imbalance_1)
 
         if vol_imbalance_ratio_1s is not None and delta_depth_imbalance_norm_1 is not None:
             # Absorption detection
-            df["absorption_bid"] = (
-                (vol_imbalance_ratio_1s < -0.3) & (delta_depth_imbalance_norm_1 >= 0)
-            ).astype(int)
+            df["absorption_bid"] = ((vol_imbalance_ratio_1s < -0.3) & (delta_depth_imbalance_norm_1 >= 0)).astype(int)
 
-            df["absorption_ask"] = (
-                (vol_imbalance_ratio_1s > 0.3) & (delta_depth_imbalance_norm_1 <= 0)
-            ).astype(int)
+            df["absorption_ask"] = ((vol_imbalance_ratio_1s > 0.3) & (delta_depth_imbalance_norm_1 <= 0)).astype(int)
 
             # Absorption strength
             df["absorption_strength"] = vol_imbalance_ratio_1s * (-delta_depth_imbalance_norm_1)
@@ -773,9 +739,9 @@ class AlignAndBuildFeaturesStep(Step):
             df["stable_wall_ask"] = ((vol_imb_1 < -0.5) & (best_ask_reset == 0)).astype(int)
 
         if vol_imb_1 is not None and best_bid_reset is not None and best_ask_reset is not None:
-            df["unstable_book"] = (
-                (vol_imb_1.abs() < 0.2) & ((best_bid_reset == 1) | (best_ask_reset == 1))
-            ).astype(int)
+            df["unstable_book"] = ((vol_imb_1.abs() < 0.2) & ((best_bid_reset == 1) | (best_ask_reset == 1))).astype(
+                int
+            )
 
         return df
 
