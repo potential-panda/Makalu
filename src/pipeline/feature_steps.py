@@ -446,20 +446,21 @@ class AlignAndBuildFeaturesStep(Step):
 
         # Features to compute rolling stats for
         book_spread_bps_name = "best_spread_bps" if "best_spread_bps" in df.columns else "spread_bps"
-        feature_patterns = [
+        features_to_roll = [
             book_spread_bps_name,
             "vol_imb_k1",
             "vol_imb_k5",
             "microprice_offset_bps_k1",
         ]
 
-        for feature in feature_patterns:
+        for feature in features_to_roll:
             if feature not in df.columns:
                 continue
 
             for window_name, window_size in windows.items():
-                df[f"{feature}_mean_{window_name}"] = df[feature].rolling(window_size).mean()
-                df[f"{feature}_std_{window_name}"] = df[feature].rolling(window_size).std()
+                rolling_op = df[feature].rolling(window_size, closed="left")
+                df[f"{feature}_mean_{window_name}"] = rolling_op.mean()
+                df[f"{feature}_std_{window_name}"] = rolling_op.std()
 
         return df
 
