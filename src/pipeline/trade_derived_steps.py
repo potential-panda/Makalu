@@ -39,7 +39,7 @@ class PopulateAggressionStep(Step):
         self.windows_sec = windows_sec
 
     def populate(self, pipeline_context: PipelineContext, stage_context: Context):
-        progress = StepProgressLogger(self.__class__.__name__, len(stage_context.trades_df) * len(self.windows_sec))
+        progress = StepProgressLogger(self.__class__.__name__, len(stage_context.trades) * len(self.windows_sec))
 
         influx_writer = pipeline_context.influx_store.create_writer(TRADE_DERIVED_BUCKET, no_retention=True)
         parquet_store = pipeline_context.parquet_store.create_single_market("TradeAggression", stage_context.market)
@@ -111,7 +111,7 @@ class AbstractPopulateChartStep(Step):
         pass
 
     def populate(self, pipeline_context: PipelineContext, stage_context: Context):
-        progress = StepProgressLogger(self.__class__.__name__, len(stage_context.trades_df))
+        progress = StepProgressLogger(self.__class__.__name__, len(stage_context.trades))
 
         influx_writer = pipeline_context.influx_store.create_writer(TRADE_DERIVED_BUCKET, no_retention=True)
         parquet_store = pipeline_context.parquet_store.create_chart(stage_context.market, self.get_bar_type())

@@ -1,13 +1,13 @@
 import logging
-from typing import Any, Dict
+from dataclasses import dataclass
+
 
 import pandas as pd
-from qate.store.influx_writer import InfluxWriter
+from qate.core.model import Market
+from qate.util.dt_range import DtRange
 
 from .converter import DataPointConverter
-from .framework import Context, Step
-from .market_data_steps import MARKET_DATA_BUCKET
-from .trade_derived_steps import TRADE_DERIVED_BUCKET
+from .framework import PipelineContext, StageContext, Step
 
 LOG = logging.getLogger(__name__)
 
@@ -15,152 +15,28 @@ LOG = logging.getLogger(__name__)
 FEATURE_DATA_BUCKET = "feature_data"
 
 
-class QueryTradeAggressionStep(Step):
-    def populate(self, influx_writer: InfluxWriter, context: Context, args: Dict[str, Any]):
-        """Queries trade aggression data from InfluxDB and stores it in context."""
-        ta_df = context.influx_reader.query_trade_aggression(
-            TRADE_DERIVED_BUCKET, context.compute_dt_range, context.market
-        )
-
-        if ta_df.empty:
-            context.trade_aggression_df = ta_df
-            LOG.warning("QueryTradeAggressionStep: No trade aggression data found.")
-            return
-
-        # Pivot by window_sec tag to get separate columns for each window
-        # Reset index to access 'time' as a column
-        ta_df_reset = ta_df.reset_index()
-
-        # Check if window_sec column exists
-        if "window_sec" in ta_df_reset.columns:
-            # Get list of field columns (exclude time, window_sec, and any other tags)
-            exclude_cols = {"time", "window_sec"}
-            field_cols = [col for col in ta_df_reset.columns if col not in exclude_cols]
-
-            # Create separate dataframes for each field, pivoted by window_sec
-            pivoted_dfs = []
-            for field in field_cols:
-                pivoted = ta_df_reset.pivot(index="time", columns="window_sec", values=field)
-                # Rename columns to include window suffix (e.g., imbalance_qty_1, imbalance_qty_3)
-                pivoted.columns = [f"{field}_{int(col)}s" for col in pivoted.columns]
-                pivoted_dfs.append(pivoted)
-
-            # Join all pivoted dataframes
-            if pivoted_dfs:
-                context.trade_aggression_df = pivoted_dfs[0]
-                for df in pivoted_dfs[1:]:
-                    context.trade_aggression_df = context.trade_aggression_df.join(df)
-            else:
-                context.trade_aggression_df = ta_df
-        else:
-            # No window_sec tag, use as is
-            context.trade_aggression_df = ta_df.set_index("time") if "time" in ta_df_reset.columns else ta_df
-
-        LOG.info(f"QueryTradeAggressionStep: Queried {len(context.trade_aggression_df)} trade aggression records.")
+@dataclass
+class Context(StageContext):
+    compute_dt_range: DtRange
+    market: Market
+    trade_aggression_df: pd.DataFrame = None
+    order_book_state_df: pd.DataFrame = None
+    book_change_df: pd.DataFrame = None
 
 
-class QueryOrderBookStateStep(Step):
-    def populate(self, influx_writer: InfluxWriter, context: Context, args: Dict[str, Any]):
-        """Queries order book state data from InfluxDB and stores it in context."""
-        # Query base orderbook data (mid, spread, spread_bps, best_bid, best_ask)
-        ob_base_df = context.influx_reader.query_order_book_state(
-            MARKET_DATA_BUCKET, context.compute_dt_range, context.market
-        )
+class QueryDataStep(Step):
+    def populate(self, pipeline_context: PipelineContext, stage_context: Context):
+        parquet_store = pipeline_context.parquet_store.create_single_market("TradeAggression", stage_context.market)
+        df = parquet_store.read(stage_context.compute_dt_range)
+        stage_context.trade_aggression_df = df
 
-        # Query volume imbalance
-        vol_imb_df = context.influx_reader.query_volume_imbalance(
-            MARKET_DATA_BUCKET, context.compute_dt_range, context.market
-        )
-        vol_imb_df = self._pivot_by_tag(vol_imb_df, "k", "vol_imb_k")
+        parquet_store = pipeline_context.parquet_store.create_single_market("BookState", stage_context.market)
+        df = parquet_store.read(stage_context.compute_dt_range)
+        stage_context.order_book_state_df = df
 
-        # Query weighted imbalance
-        weighted_imb_df = context.influx_reader.query_weighted_imbalance(
-            MARKET_DATA_BUCKET, context.compute_dt_range, context.market
-        )
-        weighted_imb_df = self._pivot_by_tag(weighted_imb_df, "k", "weighted_imb_k")
-
-        # Query depth imbalance
-        depth_imb_df = context.influx_reader.query_depth_imbalance(
-            MARKET_DATA_BUCKET, context.compute_dt_range, context.market
-        )
-        depth_imb_df = self._pivot_by_tag(depth_imb_df, "bps", "depth_imb_bps")
-
-        # Query microprice
-        microprice_df = context.influx_reader.query_microprice(
-            MARKET_DATA_BUCKET, context.compute_dt_range, context.market
-        )
-        microprice_df = self._pivot_by_tag(microprice_df, "k", "microprice_k")
-
-        # Merge all dataframes
-        dfs = [ob_base_df, vol_imb_df, weighted_imb_df, depth_imb_df, microprice_df]
-        dfs = [df for df in dfs if not df.empty]
-
-        if dfs:
-            context.order_book_state_df = dfs[0]
-            for df in dfs[1:]:
-                context.order_book_state_df = context.order_book_state_df.join(df, how="outer")
-        else:
-            context.order_book_state_df = pd.DataFrame()
-
-        LOG.info(f"QueryOrderBookStateStep: Queried {len(context.order_book_state_df)} order book state records.")
-
-    def _pivot_by_tag(self, df: pd.DataFrame, tag_col: str, prefix: str) -> pd.DataFrame:
-        """Pivots a dataframe by tag column to create separate columns for each tag value."""
-        if df.empty:
-            return df
-
-        # Reset index to make 'time' a column for pivoting
-        df_reset = df.reset_index()
-
-        # Pivot: index=time, columns=tag_col, values='value'
-        pivoted = df_reset.pivot(index="time", columns=tag_col, values="value")
-
-        # Rename columns with prefix
-        pivoted.columns = [f"{prefix}{col}" for col in pivoted.columns]
-
-        return pivoted
-
-
-class QueryBookChangeStep(Step):
-    def populate(self, influx_writer: InfluxWriter, context: Context, args: Dict[str, Any]):
-        """Queries book change data from InfluxDB and stores it in context."""
-        bc_df = context.influx_reader.query_book_change(MARKET_DATA_BUCKET, context.compute_dt_range, context.market)
-
-        if bc_df.empty:
-            context.book_change_df = bc_df
-            LOG.warning("QueryBookChangeStep: No book change data found.")
-            return
-
-        # Pivot by k tag to get separate columns for each k level
-        # Reset index to access 'time' as a column
-        bc_df_reset = bc_df.reset_index()
-
-        # Check if k column exists
-        if "k" in bc_df_reset.columns:
-            # Get list of field columns (exclude time, k, and any other tags)
-            exclude_cols = {"time", "k"}
-            field_cols = [col for col in bc_df_reset.columns if col not in exclude_cols]
-
-            # Create separate dataframes for each field, pivoted by k
-            pivoted_dfs = []
-            for field in field_cols:
-                pivoted = bc_df_reset.pivot(index="time", columns="k", values=field)
-                # Rename columns to include k suffix (e.g., net_depth_bid_k3, net_depth_bid_k5)
-                pivoted.columns = [f"{field}_k{int(col)}" for col in pivoted.columns]
-                pivoted_dfs.append(pivoted)
-
-            # Join all pivoted dataframes
-            if pivoted_dfs:
-                context.book_change_df = pivoted_dfs[0]
-                for df in pivoted_dfs[1:]:
-                    context.book_change_df = context.book_change_df.join(df)
-            else:
-                context.book_change_df = bc_df
-        else:
-            # No k tag, use as is
-            context.book_change_df = bc_df.set_index("time") if "time" in bc_df_reset.columns else bc_df
-
-        LOG.info(f"QueryBookChangeStep: Queried {len(context.book_change_df)} book change records.")
+        parquet_store = pipeline_context.parquet_store.create_single_market("BookChange", stage_context.market)
+        df = parquet_store.read(stage_context.compute_dt_range)
+        stage_context.book_change_df = df
 
 
 class AlignAndBuildFeaturesStep(Step):
@@ -175,10 +51,10 @@ class AlignAndBuildFeaturesStep(Step):
     5. Computes interaction features
     """
 
-    def populate(self, influx_writer: InfluxWriter, context: Context, args: Dict[str, Any]):
+    def populate(self, pipeline_context: PipelineContext, stage_context: Context):
         """Aligns data from different sources and builds a single feature DataFrame."""
         # Ensure all DataFrames are sorted by index (time)
-        dfs = [context.trade_aggression_df, context.order_book_state_df, context.book_change_df]
+        dfs = [stage_context.trade_aggression_df, stage_context.order_book_state_df, stage_context.book_change_df]
         for df in dfs:
             if df is not None and not df.empty and not df.index.is_monotonic_increasing:
                 df.sort_index(inplace=True)
@@ -219,31 +95,34 @@ class AlignAndBuildFeaturesStep(Step):
 
         # Filter the DataFrame to the populate_dt_range
         feature_df = feature_df[
-            (feature_df.index >= context.populate_dt_range.start_dt)
-            & (feature_df.index <= context.populate_dt_range.end_dt)
+            (feature_df.index >= stage_context.populate_dt_range.start_dt)
+            & (feature_df.index <= stage_context.populate_dt_range.end_dt)
         ]
 
         # Drop rows with too many NaN values (keep rows with at least 50% valid data)
         threshold = len(feature_df.columns) * 0.5
         feature_df = feature_df.dropna(thresh=threshold)
 
-        # Save to parquet
-        file_path = f"{context.market.id}_features.parquet"
-        DataPointConverter.convert_dataframe_to_parquet(feature_df, file_path)
+        # Save to parquet store (partitioned by date)
+        parquet_store = pipeline_context.parquet_store.create_feature(stage_context.market)
+        parquet_store.add_dataframe(feature_df, ts_column=None)  # DataFrame has DatetimeIndex
+        parquet_store.close()
         LOG.info(
             f"AlignAndBuildFeaturesStep: Built and saved {len(feature_df)} features "
-            f"with {len(feature_df.columns)} columns to {file_path}."
+            f"with {len(feature_df.columns)} columns to parquet store."
         )
 
-        # Write to InfluxDB for Grafana visualization
+        # Save to InfluxDB
+        influx_writer = pipeline_context.influx_store.create_writer(FEATURE_DATA_BUCKET, no_retention=True)
         points = DataPointConverter.convert_dataframe_to_influx_points(
             feature_df,
             measurement="FEATURE",
-            exchange_name=context.market.exchange_name.name,
-            symbol=context.market.symbol.name,
+            exchange_name=stage_context.market.exchange_name.name,
+            symbol=stage_context.market.symbol.name,
         )
         for point in points:
             influx_writer.add(point)
+        influx_writer.close()
         LOG.info(f"AlignAndBuildFeaturesStep: Wrote {len(points)} points to InfluxDB.")
 
     def _compute_microprice_offset_bps(self, df: pd.DataFrame) -> pd.DataFrame:

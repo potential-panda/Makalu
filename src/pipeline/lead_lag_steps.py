@@ -26,8 +26,8 @@ LEAD_LAG_BUCKET = "lead_lag"
 
 @dataclass
 class Context(StageContext):
-    lead_market: Market
-    lag_market: Market
+    market_lead: Market
+    market_lag: Market
 
 
 @dataclass

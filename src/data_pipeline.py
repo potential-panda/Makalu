@@ -9,6 +9,7 @@ from qate.store.market_data_store import MarketDataStore
 from qate.store.parquet_store import ParquetStore
 from qate.util.dt_range import DtRange
 
+from pipeline.feature_steps import AlignAndBuildFeaturesStep, QueryDataStep
 from pipeline.framework import Pipeline
 from pipeline.lead_lag_steps import LeadLagStep
 from pipeline.market_data_steps import (
@@ -20,6 +21,7 @@ from pipeline.market_data_steps import (
 from pipeline.market_pair import EXECUTION_SIZE, LEAD_LAG_PAIRS, find_pair_key
 from pipeline.order_book_derived_steps import PopulateBookChangeStep
 from pipeline.stages import (
+    FeatureStage,
     LeadLagStage,
     MarketDataStage,
     OrderBookDerivedStage,
@@ -79,9 +81,12 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
     if "LeadLag" in run_stages:
         pipeline.stage(
             LeadLagStage(market_lead, market_lag)
+            .step(LeadLagStep(window_size_sec=3600 * 2, window_step_sec=3600))
             .step(LeadLagStep(window_size_sec=3600 * 4, window_step_sec=3600))
-            .step(LeadLagStep(window_size_sec=3600 * 12, window_step_sec=3600))
         )
+
+    if "Feature" in run_stages:
+        pipeline.stage(FeatureStage(market_lead).step(QueryDataStep()).step(AlignAndBuildFeaturesStep()))
 
     return pipeline
 

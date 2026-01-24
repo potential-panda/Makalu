@@ -117,7 +117,7 @@ class FeatureStage(Stage):
         super().__init__()
         self.market = market
 
-    def before(self, dt_range: DtRange, args: Dict[str, Any]):
+    def before(self, dt_range: DtRange, args: Dict[str, Any]) -> StageContext:
         self.context.compute_dt_range = DtRange(dt_range.start_dt - timedelta(hours=8), dt_range.end_dt)
         self.context.populate_dt_range = dt_range
         self.context.influx_reader = self.influx_reader
