@@ -12,12 +12,7 @@ from qate.util.dt_range import DtRange
 from pipeline.feature_steps import AlignAndBuildFeaturesStep, QueryDataStep
 from pipeline.framework import Pipeline
 from pipeline.lead_lag_steps import LeadLagStep
-from pipeline.market_data_steps import (
-    PopulateBookStateStep,
-    PopulateMarketPriceStep,
-    PopulateOrderBookStep,
-    PopulateTradeStep,
-)
+from pipeline.market_data_steps import PopulateBookStateStep, PopulateMarketPriceStep
 from pipeline.market_pair import EXECUTION_SIZE, LEAD_LAG_PAIRS, find_pair_key
 from pipeline.order_book_derived_steps import PopulateBookChangeStep
 from pipeline.stages import (
@@ -48,8 +43,6 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
     if "MarketData" in run_stages:
         pipeline.stage(
             MarketDataStage(market_lead)
-            .step(PopulateTradeStep())
-            .step(PopulateOrderBookStep())
             .step(PopulateMarketPriceStep(EXECUTION_SIZE.get(market_lead.symbol)))
             .step(
                 PopulateBookStateStep(
@@ -59,12 +52,7 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
                     microprice_k=[1, 3, 5, 10],
                 )
             )
-        ).stage(
-            MarketDataStage(market_lag)
-            .step(PopulateTradeStep())
-            .step(PopulateOrderBookStep())
-            .step(PopulateMarketPriceStep(EXECUTION_SIZE.get(market_lag.symbol)))
-        )
+        ).stage(MarketDataStage(market_lag).step(PopulateMarketPriceStep(EXECUTION_SIZE.get(market_lag.symbol))))
 
     if "TradeDerived" in run_stages:
         pipeline.stage(
@@ -91,6 +79,11 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
             .step(QueryDataStep(EXECUTION_SIZE.get(market_lead.symbol)))
             .step(AlignAndBuildFeaturesStep())
         )
+
+    # if "Label" in run_stages:
+    #     pipeline.stage(LabelStage(market_lag).step(GenerateLabelsStep(
+
+    #     )))
 
     return pipeline
 
@@ -119,7 +112,7 @@ def main():
         "--stages",
         nargs="*",
         type=str,
-        default=["MarketData", "TradeDerived", "OrderBookDerived", "LeadLag"],
+        default=["MarketData", "TradeDerived", "OrderBookDerived", "LeadLag", "Feature", "Label"],
         help="Optional list of stages",
     )
     args = parser.parse_args()

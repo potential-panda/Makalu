@@ -1,7 +1,6 @@
 import time
 from datetime import timedelta
 from logging import getLogger
-from typing import Any, Dict
 
 from qate.core.ev_type import EventType
 from qate.core.model import Market
@@ -10,6 +9,7 @@ from qate.util.dt_range import DtRange
 
 from .feature_steps import Context as FeatureContext
 from .framework import PipelineContext, Stage, StageContext
+from .labeling_steps import Context as LabelingContext
 from .lead_lag_steps import Context as LeadLagContext
 from .market_data_steps import Context as MarketDataContext
 from .order_book_derived_steps import Context as OrderBookDerivedContext
@@ -136,13 +136,13 @@ class LabelStage(Stage):
     with measurement=PNL and appropriate tags.
     """
 
-    def __init__(self, market: Market, pnl_bucket: str):
+    def __init__(self, market: Market):
         super().__init__()
         self.market = market
-        self.pnl_bucket = pnl_bucket
 
-    def before(self, dt_range: DtRange, args: Dict[str, Any]):
-        self.context.compute_dt_range = DtRange(dt_range.start_dt - timedelta(hours=8), dt_range.end_dt)
-        self.context.populate_dt_range = dt_range
-        self.context.market = self.market
-        self.context.pnl_bucket = self.pnl_bucket
+    def before(self, dt_range: DtRange, pipeline_context: PipelineContext) -> StageContext:
+        return LabelingContext(
+            dt_range,
+            DtRange(dt_range.start_dt - timedelta(minutes=10), dt_range.end_dt),
+            self.market,
+        )

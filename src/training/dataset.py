@@ -4,11 +4,12 @@ Dataset module for loading and aligning features and labels.
 
 import logging
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
+from qate.store.parquet_store import ParquetStore
+from qate.util.dt_range import DtRange
 
 LOG = logging.getLogger(__name__)
 
@@ -45,43 +46,16 @@ class Dataset:
     @classmethod
     def load(
         cls,
-        features_path: str,
-        labels_path: str,
-        target_column: str = "direction_label",
-        feature_columns: Optional[List[str]] = None,
+        feature_market,
+        label_market,
+        parquet_store: ParquetStore,
+        target_column: str,
+        dt_range: DtRange,
     ) -> "Dataset":
-        """
-        Load features and labels from parquet files.
-
-        Args:
-            features_path: Path to features parquet file
-            labels_path: Path to labels parquet file
-            target_column: Name of the target column in labels
-            feature_columns: Optional list of feature columns to use.
-                           If None, all columns from features file are used.
-
-        Returns:
-            Dataset instance with loaded data
-        """
-        features_path = Path(features_path)
-        labels_path = Path(labels_path)
-
-        if not features_path.exists():
-            raise FileNotFoundError(f"Features file not found: {features_path}")
-        if not labels_path.exists():
-            raise FileNotFoundError(f"Labels file not found: {labels_path}")
-
-        LOG.info(f"Loading features from {features_path}")
-        features_df = pd.read_parquet(features_path)
-
-        LOG.info(f"Loading labels from {labels_path}")
-        labels_df = pd.read_parquet(labels_path)
-
-        if target_column not in labels_df.columns:
-            raise ValueError(
-                f"Target column '{target_column}' not found in labels. "
-                f"Available columns: {list(labels_df.columns)}"
-            )
+        feature_store = parquet_store.create_feature(feature_market)
+        label_store = parquet_store.create_label("TripleBarrierLabel")
+        features_df = feature_store.read(dt_range)
+        labels_df = label_store.read(dt_range)
 
         LOG.info(f"Loaded {len(features_df)} feature rows with {len(features_df.columns)} columns")
         LOG.info(f"Loaded {len(labels_df)} label rows with {len(labels_df.columns)} columns")
@@ -90,7 +64,6 @@ class Dataset:
             features_df=features_df,
             labels_df=labels_df,
             target_column=target_column,
-            feature_columns=feature_columns or [],
         )
 
         # Auto-align on load

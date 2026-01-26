@@ -10,7 +10,6 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import (
     accuracy_score,
-    auc,
     classification_report,
     confusion_matrix,
     f1_score,
@@ -161,8 +160,10 @@ class Evaluator:
             result.predictions = y_pred
             result.probabilities = y_prob
 
-        LOG.info(f"Classification evaluation: accuracy={metrics['accuracy']:.4f}, "
-                f"f1={metrics['f1']:.4f}, roc_auc={metrics['roc_auc']:.4f}")
+        LOG.info(
+            f"Classification evaluation: accuracy={metrics['accuracy']:.4f}, "
+            f"f1={metrics['f1']:.4f}, roc_auc={metrics['roc_auc']:.4f}"
+        )
 
         return result
 
@@ -197,8 +198,9 @@ class Evaluator:
         if return_predictions:
             result.predictions = y_pred
 
-        LOG.info(f"Regression evaluation: rmse={metrics['rmse']:.4f}, "
-                f"mae={metrics['mae']:.4f}, r2={metrics['r2']:.4f}")
+        LOG.info(
+            f"Regression evaluation: rmse={metrics['rmse']:.4f}, " f"mae={metrics['mae']:.4f}, r2={metrics['r2']:.4f}"
+        )
 
         return result
 
@@ -313,8 +315,9 @@ class Evaluator:
         best_idx = results_df[metric].idxmax()
         best_threshold = results_df.loc[best_idx, "threshold"]
 
-        LOG.info(f"Best threshold for {metric}: {best_threshold:.2f} "
-                f"({metric}={results_df.loc[best_idx, metric]:.4f})")
+        LOG.info(
+            f"Best threshold for {metric}: {best_threshold:.2f} " f"({metric}={results_df.loc[best_idx, metric]:.4f})"
+        )
 
         return {
             "best_threshold": best_threshold,
@@ -341,13 +344,15 @@ class Evaluator:
             y_prob = self.model.predict_proba(X)
             y_pred = (y_prob >= self.threshold).astype(int)
 
-            analysis = pd.DataFrame({
-                "y_true": np.array(y),
-                "y_pred": y_pred,
-                "probability": y_prob,
-                "correct": np.array(y) == y_pred,
-                "confidence": np.abs(y_prob - 0.5) * 2,  # 0 to 1 scale
-            })
+            analysis = pd.DataFrame(
+                {
+                    "y_true": np.array(y),
+                    "y_pred": y_pred,
+                    "probability": y_prob,
+                    "correct": np.array(y) == y_pred,
+                    "confidence": np.abs(y_prob - 0.5) * 2,  # 0 to 1 scale
+                }
+            )
 
             # Add prediction category
             analysis["category"] = "TN"
@@ -359,12 +364,14 @@ class Evaluator:
             y_pred = self.model.predict(X)
             y_true = np.array(y)
 
-            analysis = pd.DataFrame({
-                "y_true": y_true,
-                "y_pred": y_pred,
-                "error": y_pred - y_true,
-                "abs_error": np.abs(y_pred - y_true),
-                "pct_error": np.where(y_true != 0, (y_pred - y_true) / y_true * 100, np.nan),
-            })
+            analysis = pd.DataFrame(
+                {
+                    "y_true": y_true,
+                    "y_pred": y_pred,
+                    "error": y_pred - y_true,
+                    "abs_error": np.abs(y_pred - y_true),
+                    "pct_error": np.where(y_true != 0, (y_pred - y_true) / y_true * 100, np.nan),
+                }
+            )
 
         return analysis
