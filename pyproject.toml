@@ -22,6 +22,7 @@ dependencies = [
     "influxdb-client==1.49.0",
     "pyarrow>=22.0.0",  # for parquet file support
     "lightgbm>=4.0.0",  # for ML model training
+    "scikit-learn==1.8.0", # Added for model evaluation and utilities
 ]
 
 [project.optional-dependencies]
