@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 from influxdb_client import Point, WritePrecision
 
@@ -36,7 +37,7 @@ class DataPointConverter:
         points = []
         for timestamp, row in df.iterrows():
             point = Point(measurement).time(timestamp, WritePrecision.NS)
-            
+
             # Add standard and custom tags
             if exchange_name:
                 point = point.tag("exchange_name", exchange_name)
@@ -51,7 +52,7 @@ class DataPointConverter:
                     # Convert numpy types to Python native types
                     if hasattr(value, "item"):
                         value = value.item()
-                    
+
                     # Ensure integer fields are written as integers
                     if isinstance(value, (int, np.integer)):
                         point = point.field(str(col), int(value))

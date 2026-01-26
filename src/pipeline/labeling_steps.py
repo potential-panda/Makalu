@@ -8,7 +8,6 @@ Triple-Barrier Method to create actionable buy/sell/hold labels.
 import logging
 from dataclasses import dataclass
 
-import numpy as np
 import pandas as pd
 from qate.core.model import Market
 from qate.util.dt_range import DtRange
@@ -63,12 +62,13 @@ def _compute_triple_barrier_labels_pandas(
         timeout_ts = entry_ts + timeout_delta
 
         # Slice future prices for the current entry
-        future_prices = prices.iloc[i + 1:]
-        
+        start = i + 1
+        future_prices = prices.iloc[start:]
+
         # Find times when barriers are hit
         pt_hits = future_prices[future_prices >= upper_barrier]
         sl_hits = future_prices[future_prices <= lower_barrier]
-        
+
         # Find the first hit for each barrier
         first_pt_hit_ts = pt_hits.index[0] if not pt_hits.empty else None
         first_sl_hit_ts = sl_hits.index[0] if not sl_hits.empty else None
@@ -100,13 +100,13 @@ def _compute_triple_barrier_labels_pandas(
             last_price_before_timeout = future_prices[future_prices.index <= timeout_ts]
             if not last_price_before_timeout.empty:
                 ret = (last_price_before_timeout.iloc[-1] - entry_price) / (entry_price + EPS)
-            else: # If timeout is before the next tick
+            else:  # If timeout is before the next tick
                 ret = 0.0
             end_dt = timeout_ts
-        
+
         results.append({"label": label, "end_dt": end_dt, "return": ret})
 
-    return pd.DataFrame(results, index=prices.index[:len(results)])
+    return pd.DataFrame(results, index=prices.index[: len(results)])
 
 
 class QueryBookStateStep(Step):
@@ -131,12 +131,13 @@ class GenerateLabelsStep(Step):
     indicate whether a price is likely to hit a profit-take, stop-loss, or
     timeout barrier first.
     """
+
     def __init__(self, profit_take_pct: float, stop_loss_pct: float, timeout_sec: int):
         super().__init__()
         self.pt_pct = profit_take_pct
         self.sl_pct = stop_loss_pct
         self.timeout_sec = timeout_sec
-        
+
         # For tagging and partitioning
         self.pt_bps = int(self.pt_pct * 10000)
         self.sl_bps = int(self.sl_pct * 10000)
@@ -163,16 +164,14 @@ class GenerateLabelsStep(Step):
         timeout_delta = pd.Timedelta(seconds=self.timeout_sec)
 
         # Compute labels
-        labels_df = _compute_triple_barrier_labels_pandas(
-            mid_prices, self.pt_pct, self.sl_pct, timeout_delta
-        )
-        
+        labels_df = _compute_triple_barrier_labels_pandas(mid_prices, self.pt_pct, self.sl_pct, timeout_delta)
+
         # Filter to original populate range (to drop the extra data we read)
         labels_df = labels_df[
             (labels_df.index >= stage_context.populate_dt_range.start_dt)
             & (labels_df.index <= stage_context.populate_dt_range.end_dt)
         ]
-        
+
         if labels_df.empty:
             LOG.warning("GenerateLabelsStep: No labels generated after filtering to populate range.")
             return
@@ -187,35 +186,28 @@ class GenerateLabelsStep(Step):
 
     def _save_to_parquet(self, pipeline_context: PipelineContext, stage_context: Context, labels_df: pd.DataFrame):
         """Saves the generated labels to a partitioned Parquet store."""
-        parquet_store = pipeline_context.parquet_store.create_label(
-            stage_context.market,
-            param_id=self.param_id
-        )
-        
+        parquet_store = pipeline_context.parquet_store.create_label(stage_context.market, param_id=self.param_id)
+
         # Parquet store's add_dataframe expects ts column, not index
         df_to_save = labels_df.copy()
-        
-        parquet_store.add_dataframe(df_to_save, ts_column=None) # Pass ts_column=None to use the DatetimeIndex
+
+        parquet_store.add_dataframe(df_to_save, ts_column=None)  # Pass ts_column=None to use the DatetimeIndex
         parquet_store.close()
         LOG.info(f"GenerateLabelsStep: Saved {len(labels_df)} labels to Parquet with partition {self.param_id}.")
 
     def _save_to_influxdb(self, pipeline_context: PipelineContext, stage_context: Context, labels_df: pd.DataFrame):
         """Saves the generated labels to InfluxDB with specified tags."""
         influx_writer = pipeline_context.influx_store.create_writer(LABEL_DATA_BUCKET, no_retention=True)
-        
+
         # Add required tags for InfluxDB
-        custom_tags = {
-            "profit_take_bps": self.pt_bps,
-            "stop_loss_bps": self.sl_bps,
-            "timeout_sec": self.timeout_sec
-        }
+        custom_tags = {"profit_take_bps": self.pt_bps, "stop_loss_bps": self.sl_bps, "timeout_sec": self.timeout_sec}
 
         points = DataPointConverter.convert_dataframe_to_influx_points(
             labels_df,
             measurement="LABEL",
             exchange_name=stage_context.market.exchange_name.name,
             symbol=stage_context.market.symbol.name,
-            tags=custom_tags
+            tags=custom_tags,
         )
         for point in points:
             influx_writer.add(point)
