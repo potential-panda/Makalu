@@ -16,8 +16,9 @@ class DataPointConverter:
     def convert_dataframe_to_influx_points(
         df: pd.DataFrame,
         measurement: str,
-        exchange_name: str,
-        symbol: str,
+        exchange_name: str = None,
+        symbol: str = None,
+        tags: dict = None,
     ) -> list[Point]:
         """
         Converts a DataFrame to a list of InfluxDB Points.
@@ -25,25 +26,36 @@ class DataPointConverter:
         Args:
             df: DataFrame with time index and numeric columns as fields
             measurement: InfluxDB measurement name
-            exchange_name: Exchange name tag
-            symbol: Symbol tag
+            exchange_name: (Optional) Exchange name tag
+            symbol: (Optional) Symbol tag
+            tags: (Optional) A dictionary of additional custom tags
 
         Returns:
             List of InfluxDB Point objects
         """
         points = []
         for timestamp, row in df.iterrows():
-            point = (
-                Point(measurement)
-                .tag("exchange_name", exchange_name)
-                .tag("symbol", symbol)
-                .time(timestamp, WritePrecision.NS)
-            )
+            point = Point(measurement).time(timestamp, WritePrecision.NS)
+            
+            # Add standard and custom tags
+            if exchange_name:
+                point = point.tag("exchange_name", exchange_name)
+            if symbol:
+                point = point.tag("symbol", symbol)
+            if tags:
+                for tag_key, tag_value in tags.items():
+                    point = point.tag(tag_key, tag_value)
+
             for col, value in row.items():
                 if pd.notna(value):
                     # Convert numpy types to Python native types
                     if hasattr(value, "item"):
                         value = value.item()
-                    point = point.field(str(col), float(value))
+                    
+                    # Ensure integer fields are written as integers
+                    if isinstance(value, (int, np.integer)):
+                        point = point.field(str(col), int(value))
+                    else:
+                        point = point.field(str(col), float(value))
             points.append(point)
         return points
