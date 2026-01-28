@@ -26,9 +26,29 @@ EPS = 1e-9
 
 @dataclass
 class Context(StageContext):
-    compute_dt_range: DtRange
     market: Market
+    execution_size_str: str
     execution_price_df: pd.DataFrame = None
+
+
+class QueryExecutionPriceStep(Step):
+    """Queries the execution price data needed for labeling."""
+
+    def __init__(self, execution_size_str: str):
+        super().__init__()
+        self.execution_size_str = execution_size_str
+
+    def populate(self, pipeline_context: PipelineContext, stage_context: Context):
+        parquet_store = pipeline_context.parquet_store.create_execution_price(
+            stage_context.market,
+            self.execution_size_str,
+        )
+        read_range = DtRange(
+            stage_context.populate_dt_range.start_dt - pd.Timedelta(hours=8),
+            stage_context.populate_dt_range.end_dt + pd.Timedelta(hours=8),
+        )
+        df = parquet_store.read(read_range)
+        stage_context.execution_price_df = df
 
 
 def _compute_labels_for_long_scenario(
@@ -138,25 +158,6 @@ def _compute_labels_for_short_scenario(
     return pd.DataFrame(results, index=entry_bid_prices.index[: len(results)])
 
 
-class QueryExecutionPriceStep(Step):
-    """Queries the execution price data needed for labeling."""
-
-    def __init__(self, execution_size_str: str):
-        super().__init__()
-        self.execution_size_str = execution_size_str
-
-    def populate(self, pipeline_context: PipelineContext, stage_context: Context):
-        parquet_store = pipeline_context.parquet_store.create_execution_price(
-            stage_context.market, self.execution_size_str
-        )
-        read_range = DtRange(
-            stage_context.compute_dt_range.start_dt,
-            stage_context.compute_dt_range.end_dt + pd.Timedelta(seconds=120),  # Read extra for future path
-        )
-        df = parquet_store.read(read_range)
-        stage_context.execution_price_df = df
-
-
 class GenerateLabelsStep(Step):
     """
     Generates labels using the Triple-Barrier Method on realistic execution prices.
@@ -201,10 +202,12 @@ class GenerateLabelsStep(Step):
 
         # Join the results
         # The resulting labels_df will contain the following columns:
-        # - label_long (int): Triple-Barrier label for a hypothetical long position (1: Profit Take, -1: Stop Loss, 0: Timeout)
+        # - label_long (int): Triple-Barrier label for a hypothetical long position
+        #   - (1: Profit Take, -1: Stop Loss, 0: Timeout)
         # - return_long (float): Realized return for the long position (pt_pct, -sl_pct, or actual return at timeout)
         # - end_dt_long (pd.Timestamp): Timestamp when the barrier was hit or timeout occurred for the long position
-        # - label_short (int): Triple-Barrier label for a hypothetical short position (1: Profit Take, -1: Stop Loss, 0: Timeout)
+        # - label_short (int): Triple-Barrier label for a hypothetical short position
+        #   - (1: Profit Take, -1: Stop Loss, 0: Timeout)
         # - return_short (float): Realized return for the short position (pt_pct, -sl_pct, or actual return at timeout)
         # - end_dt_short (pd.Timestamp): Timestamp when the barrier was hit or timeout occurred for the short position
         labels_df = long_labels_df.join(short_labels_df, how="outer")

@@ -112,10 +112,6 @@ class LeadLagStage(Stage):
 
 
 class FeatureStage(Stage):
-    """
-    Stage for building features from InfluxDB data.
-    """
-
     def __init__(self, market: Market):
         super().__init__()
         self.market = market
@@ -128,21 +124,15 @@ class FeatureStage(Stage):
         )
 
 
-class LabelStage(Stage):
-    """
-    Stage for building labels from PNL data in InfluxDB.
-
-    The PNL data is expected to be populated by a backtest program
-    with measurement=PNL and appropriate tags.
-    """
-
-    def __init__(self, market: Market):
+class LabelingStage(Stage):
+    def __init__(self, market: Market, execution_size_str: str):
         super().__init__()
         self.market = market
+        self.execution_size_str = execution_size_str
 
     def before(self, dt_range: DtRange, pipeline_context: PipelineContext) -> StageContext:
         return LabelingContext(
             dt_range,
-            DtRange(dt_range.start_dt - timedelta(minutes=10), dt_range.end_dt),
             self.market,
+            self.execution_size_str,
         )

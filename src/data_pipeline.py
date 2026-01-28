@@ -11,12 +11,14 @@ from qate.util.dt_range import DtRange
 
 from pipeline.feature_steps import AlignAndBuildFeaturesStep, QueryDataStep
 from pipeline.framework import Pipeline
+from pipeline.labeling_steps import QueryExecutionPriceStep
 from pipeline.lead_lag_steps import LeadLagStep
 from pipeline.market_data_steps import PopulateBookStateStep, PopulateMarketPriceStep
 from pipeline.market_pair import EXECUTION_SIZE, LEAD_LAG_PAIRS, find_pair_key
 from pipeline.order_book_derived_steps import PopulateBookChangeStep
 from pipeline.stages import (
     FeatureStage,
+    LabelingStage,
     LeadLagStage,
     MarketDataStage,
     OrderBookDerivedStage,
@@ -28,6 +30,8 @@ from pipeline.trade_derived_steps import (
     PopulateHeikinAshiBarStep,
     PopulateRangeBarStep,
 )
+from pipeline.triple_barrier import TripleBarrierConfig
+from pipeline.triple_barrier_steps import GenerateLabelsStep
 
 LOG = getLogger(__name__)
 ENV_NAME = EnvName.MARIO_MARIO
@@ -80,10 +84,12 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
             .step(AlignAndBuildFeaturesStep())
         )
 
-    # if "Label" in run_stages:
-    #     pipeline.stage(LabelStage(market_lag).step(GenerateLabelsStep(
-
-    #     )))
+    if "Label" in run_stages:
+        pipeline.stage(
+            LabelingStage(market_lag)
+            .step(QueryExecutionPriceStep(EXECUTION_SIZE.get(market_lag.symbol)))
+            .step(GenerateLabelsStep(TripleBarrierConfig()))
+        )
 
     return pipeline
 
