@@ -22,6 +22,7 @@ import pandas as pd
 from numba import jit
 
 LOG = logging.getLogger(__name__)
+TIMEZONE = "Asia/Tokyo"  # Define the local timezone for analysis
 
 
 @dataclass
@@ -229,7 +230,7 @@ def compute_labels(df: pd.DataFrame, config: TripleBarrierConfig) -> LabelingRes
 def ts_index(df: pd.DataFrame) -> pd.DataFrame:
     df["ts"] = pd.to_numeric(df["ts"], errors="coerce")
     df.dropna(subset=["ts"], inplace=True)
-    df.index = pd.to_datetime(df["ts"], unit="s", utc=True)
+    df.index = pd.to_datetime(df["ts"], unit="s", utc=True).dt.tz_convert(TIMEZONE)
     df.drop(columns=["ts"])
     LOG.info(f"generate_labels: Processing {len(df)} data points")
     return df
