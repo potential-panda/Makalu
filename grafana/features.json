@@ -43,7 +43,7 @@
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
         {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"vol_imbalance_ratio_1s\" or r._field == \"vol_imbalance_ratio_3s\" or r._field == \"vol_imbalance_ratio_5s\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange_name == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"ta_vol_imbalance_ratio_1s\" or r._field == \"ta_vol_imbalance_ratio_3s\" or r._field == \"ta_vol_imbalance_ratio_5s\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
           "refId": "A"
         }
       ],
@@ -76,7 +76,7 @@
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
         {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"count_imbalance_ratio_1s\" or r._field == \"count_imbalance_ratio_3s\" or r._field == \"count_imbalance_ratio_5s\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange_name == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"ta_count_imbalance_ratio_1s\" or r._field == \"ta_count_imbalance_ratio_3s\" or r._field == \"ta_count_imbalance_ratio_5s\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
           "refId": "A"
         }
       ],
@@ -114,7 +114,7 @@
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
         {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"vwap_buy_sell_spread_bps_1s\" or r._field == \"vwap_buy_sell_spread_bps_3s\" or r._field == \"vwap_buy_sell_spread_bps_5s\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange_name == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"ta_vwap_buy_sell_spread_bps_1s\" or r._field == \"ta_vwap_buy_sell_spread_bps_3s\" or r._field == \"ta_vwap_buy_sell_spread_bps_5s\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
           "refId": "A"
         }
       ],
@@ -147,7 +147,7 @@
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
         {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"size_asymmetry_norm_1s\" or r._field == \"size_asymmetry_norm_3s\" or r._field == \"size_asymmetry_norm_5s\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange_name == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"ta_size_asymmetry_norm_1s\" or r._field == \"ta_size_asymmetry_norm_3s\" or r._field == \"ta_size_asymmetry_norm_5s\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
           "refId": "A"
         }
       ],
@@ -178,7 +178,7 @@
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
         {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"avg_size_zscore_1s\" or r._field == \"avg_size_zscore_3s\" or r._field == \"avg_size_zscore_5s\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange_name == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"ta_avg_size_zscore_1s\" or r._field == \"ta_avg_size_zscore_3s\" or r._field == \"ta_avg_size_zscore_5s\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
           "refId": "A"
         }
       ],
@@ -210,7 +210,7 @@
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
         {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"avg_size_pct_1s\" or r._field == \"avg_size_pct_3s\" or r._field == \"avg_size_pct_5s\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange_name == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"ta_avg_size_pct_1s\" or r._field == \"ta_avg_size_pct_3s\" or r._field == \"ta_avg_size_pct_5s\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
           "refId": "A"
         }
       ],
@@ -249,7 +249,7 @@
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
         {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"qty_per_sec_zscore_1s\" or r._field == \"qty_per_sec_zscore_3s\" or r._field == \"qty_per_sec_zscore_5s\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange_name == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"ta_qty_per_sec_zscore_1s\" or r._field == \"ta_qty_per_sec_zscore_3s\" or r._field == \"ta_qty_per_sec_zscore_5s\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
           "refId": "A"
         }
       ],
@@ -280,7 +280,7 @@
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
         {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"trades_per_sec_zscore_1s\" or r._field == \"trades_per_sec_zscore_3s\" or r._field == \"trades_per_sec_zscore_5s\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange_name == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"ta_trades_per_sec_zscore_1s\" or r._field == \"ta_trades_per_sec_zscore_3s\" or r._field == \"ta_trades_per_sec_zscore_5s\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
           "refId": "A"
         }
       ],
@@ -312,7 +312,7 @@
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
         {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"qty_per_sec_pct_1s\" or r._field == \"qty_per_sec_pct_3s\" or r._field == \"qty_per_sec_pct_5s\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange_name == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"ta_qty_per_sec_pct_1s\" or r._field == \"ta_qty_per_sec_pct_3s\" or r._field == \"ta_qty_per_sec_pct_5s\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
           "refId": "A"
         }
       ],
@@ -344,7 +344,7 @@
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
         {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"trades_per_sec_pct_1s\" or r._field == \"trades_per_sec_pct_3s\" or r._field == \"trades_per_sec_pct_5s\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange_name == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"ta_trades_per_sec_pct_1s\" or r._field == \"ta_trades_per_sec_pct_3s\" or r._field == \"ta_trades_per_sec_pct_5s\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
           "refId": "A"
         }
       ],
@@ -356,80 +356,7 @@
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 43 },
       "id": 14,
       "panels": [],
-      "title": "Section 1: Trade Aggression Features - Activity Concentration",
-      "type": "row"
-    },
-    {
-      "datasource": { "type": "influxdb", "uid": "${datasource}" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisBorderShow": false,
-            "axisLabel": "share",
-            "axisPlacement": "auto",
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "spanNulls": true
-          },
-          "min": 0,
-          "max": 1
-        }
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 44 },
-      "id": 15,
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
-      "targets": [
-        {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"buy_qty_share_1s\" or r._field == \"buy_qty_share_3s\" or r._field == \"buy_qty_share_5s\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
-          "refId": "A"
-        }
-      ],
-      "title": "Buy Qty Share",
-      "type": "timeseries"
-    },
-    {
-      "datasource": { "type": "influxdb", "uid": "${datasource}" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": true,
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "spanNulls": true
-          },
-          "min": -1,
-          "max": 1
-        }
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 44 },
-      "id": 16,
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
-      "targets": [
-        {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"qty_count_divergence_1s\" or r._field == \"qty_count_divergence_3s\" or r._field == \"qty_count_divergence_5s\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
-          "refId": "A"
-        }
-      ],
-      "title": "Qty-Count Divergence",
-      "type": "timeseries"
-    },
-    {
-      "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 52 },
-      "id": 17,
-      "panels": [],
-      "title": "Section 1: Trade Aggression Features - Cross-Window Momentum",
+      "title": "Section 1: Trade Aggression Features - Cross-Window & Signals",
       "type": "row"
     },
     {
@@ -453,16 +380,16 @@
           "max": 2
         }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 53 },
-      "id": 18,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 44 },
+      "id": 15,
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
         {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"imbalance_momentum_1s_3s\" or r._field == \"imbalance_momentum_1s_5s\" or r._field == \"imbalance_momentum_3s_5s\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange_name == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"ta_imbalance_momentum_1s_3s\" or r._field == \"ta_imbalance_momentum_1s_5s\" or r._field == \"ta_imbalance_momentum_3s_5s\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
           "refId": "A"
         }
       ],
-      "title": "Imbalance Momentum",
+      "title": "Imbalance Momentum (cross-window)",
       "type": "timeseries"
     },
     {
@@ -485,16 +412,16 @@
           "max": 1
         }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 53 },
-      "id": 19,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 44 },
+      "id": 16,
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
         {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"imbalance_sign_agree_1s_3s\" or r._field == \"imbalance_sign_agree_1s_5s\" or r._field == \"imbalance_sign_agree_3s_5s\" or r._field == \"imbalance_sign_agree_all\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange_name == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"ta_imbalance_sign_agree_all\" or r._field == \"ta_imbalance_strengthening_1s_5s\" or r._field == \"ta_imbalance_weakening_1s_5s\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
           "refId": "A"
         }
       ],
-      "title": "Imbalance Sign Agreement",
+      "title": "Sign Agreement & Magnitude Dynamics",
       "type": "timeseries"
     },
     {
@@ -517,54 +444,22 @@
           "max": 1
         }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 61 },
-      "id": 20,
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 52 },
+      "id": 17,
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
         {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"imbalance_strengthening_1s_3s\" or r._field == \"imbalance_strengthening_1s_5s\" or r._field == \"imbalance_weakening_1s_5s\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange_name == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"ta_strong_buy_signal\" or r._field == \"ta_strong_sell_signal\" or r._field == \"ta_exhaustion_signal\" or r._field == \"ta_reversal_signal\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
           "refId": "A"
         }
       ],
-      "title": "Imbalance Strengthening/Weakening",
-      "type": "timeseries"
-    },
-    {
-      "datasource": { "type": "influxdb", "uid": "${datasource}" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisBorderShow": false,
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "spanNulls": true
-          },
-          "min": 0,
-          "max": 1
-        }
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 61 },
-      "id": 21,
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
-      "targets": [
-        {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"strong_buy_signal\" or r._field == \"strong_sell_signal\" or r._field == \"exhaustion_signal\" or r._field == \"reversal_signal\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
-          "refId": "A"
-        }
-      ],
-      "title": "Signal Indicators",
+      "title": "Trade Signals (buy/sell/exhaustion/reversal)",
       "type": "timeseries"
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 69 },
-      "id": 22,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 60 },
+      "id": 18,
       "panels": [],
       "title": "Section 2: Order Book State Features",
       "type": "row"
@@ -588,16 +483,16 @@
           }
         }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 70 },
-      "id": 23,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 61 },
+      "id": 19,
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
         {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"microprice_offset_bps_k1\" or r._field == \"microprice_offset_bps_k3\" or r._field == \"microprice_offset_bps_k5\" or r._field == \"microprice_offset_bps_k10\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange_name == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"bs_microprice_offset_bps_k1\" or r._field == \"bs_microprice_offset_bps_k3\" or r._field == \"bs_microprice_offset_bps_k5\" or r._field == \"bs_microprice_offset_bps_k10\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
           "refId": "A"
         }
       ],
-      "title": "Microprice Offset (bps by k)",
+      "title": "Microprice Offset (bps, by k)",
       "type": "timeseries"
     },
     {
@@ -621,16 +516,46 @@
           "max": 2
         }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 70 },
-      "id": 24,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 61 },
+      "id": 20,
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
         {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"imbalance_gradient\" or r._field == \"imbalance_divergence\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange_name == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"bs_imbalance_gradient\" or r._field == \"bs_imbalance_divergence\" or r._field == \"bs_microprice_offset_norm\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
           "refId": "A"
         }
       ],
       "title": "Imbalance Gradient & Divergence",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "influxdb", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisBorderShow": false,
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 69 },
+      "id": 21,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        {
+          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange_name == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"bs_spread_bps_mean_1s\" or r._field == \"bs_spread_bps_mean_3s\" or r._field == \"bs_spread_bps_mean_5s\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "refId": "A"
+        }
+      ],
+      "title": "Spread (bps) Rolling Mean",
       "type": "timeseries"
     },
     {
@@ -649,19 +574,62 @@
             "pointSize": 5,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "min": -1,
+          "max": 1
         }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 78 },
-      "id": 25,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 69 },
+      "id": 22,
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
         {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"microprice_offset_norm\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange_name == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"bs_vol_imb_k1_mean_1s\" or r._field == \"bs_vol_imb_k1_mean_3s\" or r._field == \"bs_vol_imb_k1_mean_5s\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
           "refId": "A"
         }
       ],
-      "title": "Microprice Offset (spread-normalized)",
+      "title": "Vol Imbalance k1 Rolling Mean",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 77 },
+      "id": 23,
+      "panels": [],
+      "title": "Section 3: Book Change Features",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "influxdb", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": true,
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "min": -1,
+          "max": 1
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 78 },
+      "id": 24,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        {
+          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange_name == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"bc_delta_depth_imbalance_norm_k1\" or r._field == \"bc_delta_depth_imbalance_norm_k3\" or r._field == \"bc_delta_depth_imbalance_norm_k5\" or r._field == \"bc_delta_depth_imbalance_norm_k10\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "refId": "A"
+        }
+      ],
+      "title": "Delta Depth Imbalance (normalized, by k)",
       "type": "timeseries"
     },
     {
@@ -686,85 +654,11 @@
         }
       },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 78 },
-      "id": 26,
+      "id": 25,
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
         {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"vol_imb_k1\" or r._field == \"vol_imb_k5\" or r._field == \"vol_imb_k10\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
-          "refId": "A"
-        }
-      ],
-      "title": "Volume Imbalance (raw from BookState)",
-      "type": "timeseries"
-    },
-    {
-      "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 86 },
-      "id": 27,
-      "panels": [],
-      "title": "Section 3: Book Change Features - Imbalances",
-      "type": "row"
-    },
-    {
-      "datasource": { "type": "influxdb", "uid": "${datasource}" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": true,
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "spanNulls": true
-          },
-          "min": -1,
-          "max": 1
-        }
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 87 },
-      "id": 28,
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
-      "targets": [
-        {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"delta_depth_imbalance_norm_k1\" or r._field == \"delta_depth_imbalance_norm_k3\" or r._field == \"delta_depth_imbalance_norm_k5\" or r._field == \"delta_depth_imbalance_norm_k10\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
-          "refId": "A"
-        }
-      ],
-      "title": "Delta Depth Imbalance (normalized)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": { "type": "influxdb", "uid": "${datasource}" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": true,
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "spanNulls": true
-          },
-          "min": -1,
-          "max": 1
-        }
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 87 },
-      "id": 29,
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
-      "targets": [
-        {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"pull_imbalance_k1\" or r._field == \"pull_imbalance_k3\" or r._field == \"pull_imbalance_k5\" or r._field == \"pull_imbalance_k10\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange_name == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"bc_pull_imbalance_k1\" or r._field == \"bc_pull_imbalance_k3\" or r._field == \"bc_pull_imbalance_k5\" or r._field == \"bc_pull_imbalance_k10\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
           "refId": "A"
         }
       ],
@@ -792,16 +686,47 @@
           "max": 1
         }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 95 },
-      "id": 30,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 86 },
+      "id": 26,
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
         {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"refill_imbalance_k1\" or r._field == \"refill_imbalance_k3\" or r._field == \"refill_imbalance_k5\" or r._field == \"refill_imbalance_k10\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange_name == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"bc_refill_imbalance_k1\" or r._field == \"bc_refill_imbalance_k3\" or r._field == \"bc_refill_imbalance_k5\" or r._field == \"bc_refill_imbalance_k10\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
           "refId": "A"
         }
       ],
       "title": "Refill Imbalance (by k)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "influxdb", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": true,
+            "axisLabel": "z-score",
+            "axisPlacement": "auto",
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 86 },
+      "id": 27,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        {
+          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange_name == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"bc_total_activity_zscore_k1\" or r._field == \"bc_total_activity_zscore_k3\" or r._field == \"bc_total_activity_zscore_k5\" or r._field == \"bc_total_activity_zscore_k10\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "refId": "A"
+        }
+      ],
+      "title": "Total Activity Z-Score (by k)",
       "type": "timeseries"
     },
     {
@@ -825,154 +750,22 @@
           "max": 2
         }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 95 },
-      "id": 31,
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 94 },
+      "id": 28,
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
         {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"pull_imbalance_gradient\" or r._field == \"refill_imbalance_gradient\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange_name == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"bc_pull_imbalance_gradient\" or r._field == \"bc_refill_imbalance_gradient\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
           "refId": "A"
         }
       ],
-      "title": "Pull/Refill Imbalance Gradient",
+      "title": "Cross-k Gradients (pull/refill)",
       "type": "timeseries"
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 103 },
-      "id": 32,
-      "panels": [],
-      "title": "Section 3: Book Change Features - Activity",
-      "type": "row"
-    },
-    {
-      "datasource": { "type": "influxdb", "uid": "${datasource}" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": true,
-            "axisLabel": "z-score",
-            "axisPlacement": "auto",
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "spanNulls": true
-          }
-        }
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 104 },
-      "id": 33,
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
-      "targets": [
-        {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"total_activity_zscore_k1\" or r._field == \"total_activity_zscore_k3\" or r._field == \"total_activity_zscore_k5\" or r._field == \"total_activity_zscore_k10\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
-          "refId": "A"
-        }
-      ],
-      "title": "Total Activity Z-Score (by k)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": { "type": "influxdb", "uid": "${datasource}" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisBorderShow": false,
-            "axisLabel": "percentile",
-            "axisPlacement": "auto",
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "spanNulls": true
-          },
-          "min": 0,
-          "max": 1
-        }
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 104 },
-      "id": 34,
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
-      "targets": [
-        {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"total_activity_pct_k1\" or r._field == \"total_activity_pct_k3\" or r._field == \"total_activity_pct_k5\" or r._field == \"total_activity_pct_k10\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
-          "refId": "A"
-        }
-      ],
-      "title": "Total Activity Percentile (by k)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": { "type": "influxdb", "uid": "${datasource}" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": true,
-            "axisLabel": "z-score",
-            "axisPlacement": "auto",
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "spanNulls": true
-          }
-        }
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 112 },
-      "id": 35,
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
-      "targets": [
-        {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"total_pull_zscore_k1\" or r._field == \"total_pull_zscore_k3\" or r._field == \"total_pull_zscore_k5\" or r._field == \"total_pull_zscore_k10\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
-          "refId": "A"
-        }
-      ],
-      "title": "Total Pull Z-Score (by k)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": { "type": "influxdb", "uid": "${datasource}" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisBorderShow": false,
-            "axisLabel": "ratio",
-            "axisPlacement": "auto",
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "spanNulls": true
-          }
-        }
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 112 },
-      "id": 36,
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
-      "targets": [
-        {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"pull_refill_ratio_k1\" or r._field == \"pull_refill_ratio_k3\" or r._field == \"pull_refill_ratio_k5\" or r._field == \"pull_refill_ratio_k10\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
-          "refId": "A"
-        }
-      ],
-      "title": "Pull/Refill Ratio (by k)",
-      "type": "timeseries"
-    },
-    {
-      "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 120 },
-      "id": 37,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 102 },
+      "id": 29,
       "panels": [],
       "title": "Section 4: Execution Price Features",
       "type": "row"
@@ -995,12 +788,12 @@
           }
         }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 121 },
-      "id": 38,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 103 },
+      "id": 30,
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
         {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"slippage_bid_bps\" or r._field == \"slippage_ask_bps\" or r._field == \"slippage_total_bps\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange_name == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"ep_slippage_bid_bps\" or r._field == \"ep_slippage_ask_bps\" or r._field == \"ep_slippage_total_bps\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
           "refId": "A"
         }
       ],
@@ -1026,81 +819,16 @@
           }
         }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 121 },
-      "id": 39,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 103 },
+      "id": 31,
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
         {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"slippage_zscore\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange_name == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"ep_slippage_zscore\" or r._field == \"ep_slippage_pct\" or r._field == \"ep_slippage_asymmetry\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
           "refId": "A"
         }
       ],
-      "title": "Slippage Z-Score",
-      "type": "timeseries"
-    },
-    {
-      "datasource": { "type": "influxdb", "uid": "${datasource}" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisBorderShow": false,
-            "axisLabel": "percentile",
-            "axisPlacement": "auto",
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "spanNulls": true
-          },
-          "min": 0,
-          "max": 1
-        }
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 129 },
-      "id": 40,
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
-      "targets": [
-        {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"slippage_pct\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
-          "refId": "A"
-        }
-      ],
-      "title": "Slippage Percentile",
-      "type": "timeseries"
-    },
-    {
-      "datasource": { "type": "influxdb", "uid": "${datasource}" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": true,
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "spanNulls": true
-          },
-          "min": -1,
-          "max": 1
-        }
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 129 },
-      "id": 41,
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
-      "targets": [
-        {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"slippage_asymmetry\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
-          "refId": "A"
-        }
-      ],
-      "title": "Slippage Asymmetry",
+      "title": "Slippage Normalized (z-score/pct/asymmetry)",
       "type": "timeseries"
     },
     {
@@ -1121,16 +849,16 @@
           }
         }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 137 },
-      "id": 42,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 111 },
+      "id": 32,
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
         {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"exec_spread_bps\" or r._field == \"spread_expansion_bps\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange_name == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"ep_exec_spread_bps\" or r._field == \"ep_spread_expansion_bps\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
           "refId": "A"
         }
       ],
-      "title": "Exec Spread & Spread Expansion (bps)",
+      "title": "Exec Spread & Expansion (bps)",
       "type": "timeseries"
     },
     {
@@ -1148,25 +876,27 @@
             "pointSize": 5,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "min": 0,
+          "max": 1
         }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 137 },
-      "id": 43,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 111 },
+      "id": 33,
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
         {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"spread_expansion_ratio\" or r._field == \"depth_quality\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange_name == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"ep_depth_quality\" or r._field == \"ep_spread_expansion_ratio\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
           "refId": "A"
         }
       ],
-      "title": "Spread Expansion Ratio & Depth Quality",
+      "title": "Depth Quality & Spread Expansion Ratio",
       "type": "timeseries"
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 145 },
-      "id": 44,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 119 },
+      "id": 34,
       "panels": [],
       "title": "Section 5: Cross-Feature Interactions - Trade x Book",
       "type": "row"
@@ -1190,47 +920,16 @@
           }
         }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 146 },
-      "id": 45,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 120 },
+      "id": 35,
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
         {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"vwap_offset_bps_1s\" or r._field == \"vwap_offset_bps_3s\" or r._field == \"vwap_offset_bps_5s\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange_name == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"cf_vwap_offset_bps_1s\" or r._field == \"cf_vwap_offset_bps_3s\" or r._field == \"cf_vwap_offset_bps_5s\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
           "refId": "A"
         }
       ],
-      "title": "VWAP Offset (bps)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": { "type": "influxdb", "uid": "${datasource}" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": true,
-            "axisLabel": "bps",
-            "axisPlacement": "auto",
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "spanNulls": true
-          }
-        }
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 146 },
-      "id": 46,
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
-      "targets": [
-        {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"vwap_buy_offset_bps_1s\" or r._field == \"vwap_sell_offset_bps_1s\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
-          "refId": "A"
-        }
-      ],
-      "title": "VWAP Buy/Sell Offset (bps, 1s)",
+      "title": "VWAP Offset (bps, by window)",
       "type": "timeseries"
     },
     {
@@ -1253,12 +952,12 @@
           "max": 1
         }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 154 },
-      "id": 47,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 120 },
+      "id": 36,
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
         {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"sign_agree_trade_book\" or r._field == \"strong_agreement\" or r._field == \"trade_book_divergence\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange_name == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"cf_sign_agree_trade_book\" or r._field == \"cf_strong_agreement\" or r._field == \"cf_trade_book_divergence\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
           "refId": "A"
         }
       ],
@@ -1266,107 +965,11 @@
       "type": "timeseries"
     },
     {
-      "datasource": { "type": "influxdb", "uid": "${datasource}" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": true,
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "spanNulls": true
-          },
-          "min": -1,
-          "max": 1
-        }
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 154 },
-      "id": 48,
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
-      "targets": [
-        {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"divergence_magnitude\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
-          "refId": "A"
-        }
-      ],
-      "title": "Divergence Magnitude",
-      "type": "timeseries"
-    },
-    {
-      "datasource": { "type": "influxdb", "uid": "${datasource}" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisBorderShow": false,
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "spanNulls": true
-          },
-          "min": 0,
-          "max": 1
-        }
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 162 },
-      "id": 49,
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
-      "targets": [
-        {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"vwap_microprice_agree\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
-          "refId": "A"
-        }
-      ],
-      "title": "VWAP-Microprice Agreement",
-      "type": "timeseries"
-    },
-    {
-      "datasource": { "type": "influxdb", "uid": "${datasource}" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": true,
-            "axisLabel": "bps",
-            "axisPlacement": "auto",
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "spanNulls": true
-          }
-        }
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 162 },
-      "id": 50,
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
-      "targets": [
-        {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"vwap_microprice_spread\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
-          "refId": "A"
-        }
-      ],
-      "title": "VWAP-Microprice Spread",
-      "type": "timeseries"
-    },
-    {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 170 },
-      "id": 51,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 128 },
+      "id": 37,
       "panels": [],
-      "title": "Section 5: Cross-Feature Interactions - Trade x Change",
+      "title": "Section 5: Cross-Feature Interactions - Trade x Change & Book x Change",
       "type": "row"
     },
     {
@@ -1389,49 +992,16 @@
           "max": 1
         }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 171 },
-      "id": 52,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 129 },
+      "id": 38,
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
         {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"trade_consuming_asks\" or r._field == \"trade_consuming_bids\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange_name == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"cf_trade_consuming_asks\" or r._field == \"cf_trade_consuming_bids\" or r._field == \"cf_absorption_bid\" or r._field == \"cf_absorption_ask\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
           "refId": "A"
         }
       ],
-      "title": "Trade Consumption",
-      "type": "timeseries"
-    },
-    {
-      "datasource": { "type": "influxdb", "uid": "${datasource}" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": true,
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "spanNulls": true
-          },
-          "min": -1,
-          "max": 1
-        }
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 171 },
-      "id": 53,
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
-      "targets": [
-        {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"consumption_alignment\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
-          "refId": "A"
-        }
-      ],
-      "title": "Consumption Alignment",
+      "title": "Trade Consumption & Absorption",
       "type": "timeseries"
     },
     {
@@ -1454,57 +1024,24 @@
           "max": 1
         }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 179 },
-      "id": 54,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 129 },
+      "id": 39,
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
         {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"absorption_bid\" or r._field == \"absorption_ask\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange_name == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"cf_imbalance_building\" or r._field == \"cf_imbalance_fading\" or r._field == \"cf_stable_wall_bid\" or r._field == \"cf_stable_wall_ask\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
           "refId": "A"
         }
       ],
-      "title": "Absorption Signals",
-      "type": "timeseries"
-    },
-    {
-      "datasource": { "type": "influxdb", "uid": "${datasource}" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": true,
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "spanNulls": true
-          },
-          "min": -1,
-          "max": 1
-        }
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 179 },
-      "id": 55,
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
-      "targets": [
-        {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"absorption_strength\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
-          "refId": "A"
-        }
-      ],
-      "title": "Absorption Strength",
+      "title": "Imbalance Building/Fading & Stable Walls",
       "type": "timeseries"
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 187 },
-      "id": 56,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 137 },
+      "id": 40,
       "panels": [],
-      "title": "Section 5: Cross-Feature Interactions - Book x Change",
+      "title": "Section 5: Cross-Feature Interactions - Execution & Multi-way",
       "type": "row"
     },
     {
@@ -1514,39 +1051,6 @@
           "color": { "mode": "palette-classic" },
           "custom": {
             "axisBorderShow": false,
-            "axisCenteredZero": true,
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "spanNulls": true
-          },
-          "min": -1,
-          "max": 1
-        }
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 188 },
-      "id": 57,
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
-      "targets": [
-        {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"imbalance_momentum\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
-          "refId": "A"
-        }
-      ],
-      "title": "Imbalance Momentum (Book x Change)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": { "type": "influxdb", "uid": "${datasource}" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisBorderShow": false,
             "axisLabel": "",
             "axisPlacement": "auto",
             "drawStyle": "line",
@@ -1560,255 +1064,16 @@
           "max": 1
         }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 188 },
-      "id": 58,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 138 },
+      "id": 41,
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
         {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"imbalance_building\" or r._field == \"imbalance_fading\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange_name == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"cf_efficient_trading\" or r._field == \"cf_stressed_trading\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
           "refId": "A"
         }
       ],
-      "title": "Imbalance Building/Fading",
-      "type": "timeseries"
-    },
-    {
-      "datasource": { "type": "influxdb", "uid": "${datasource}" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisBorderShow": false,
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "spanNulls": true
-          },
-          "min": 0,
-          "max": 1
-        }
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 196 },
-      "id": 59,
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
-      "targets": [
-        {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"stable_wall_bid\" or r._field == \"stable_wall_ask\" or r._field == \"unstable_book\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
-          "refId": "A"
-        }
-      ],
-      "title": "Book Stability Signals",
-      "type": "timeseries"
-    },
-    {
-      "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 204 },
-      "id": 60,
-      "panels": [],
-      "title": "Section 5: Cross-Feature Interactions - Multi-Way",
-      "type": "row"
-    },
-    {
-      "datasource": { "type": "influxdb", "uid": "${datasource}" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": true,
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "spanNulls": true
-          },
-          "min": -1,
-          "max": 1
-        }
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 205 },
-      "id": 61,
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
-      "targets": [
-        {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"confirmation_score\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
-          "refId": "A"
-        }
-      ],
-      "title": "Confirmation Score",
-      "type": "timeseries"
-    },
-    {
-      "datasource": { "type": "influxdb", "uid": "${datasource}" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisBorderShow": false,
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "spanNulls": true
-          },
-          "min": 0,
-          "max": 1
-        }
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 205 },
-      "id": 62,
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
-      "targets": [
-        {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"signal_agreement\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
-          "refId": "A"
-        }
-      ],
-      "title": "Signal Agreement",
-      "type": "timeseries"
-    },
-    {
-      "datasource": { "type": "influxdb", "uid": "${datasource}" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisBorderShow": false,
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "spanNulls": true
-          },
-          "min": 0,
-          "max": 1
-        }
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 213 },
-      "id": 63,
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
-      "targets": [
-        {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"regime_trending\" or r._field == \"regime_mean_reverting\" or r._field == \"regime_volatile\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
-          "refId": "A"
-        }
-      ],
-      "title": "Regime Detection",
-      "type": "timeseries"
-    },
-    {
-      "datasource": { "type": "influxdb", "uid": "${datasource}" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": true,
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "spanNulls": true
-          }
-        }
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 213 },
-      "id": 64,
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
-      "targets": [
-        {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"quality_weighted_signal\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
-          "refId": "A"
-        }
-      ],
-      "title": "Quality-Weighted Signal",
-      "type": "timeseries"
-    },
-    {
-      "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 221 },
-      "id": 65,
-      "panels": [],
-      "title": "Section 5: Cross-Feature Interactions - Book x Exec & Trade x Exec",
-      "type": "row"
-    },
-    {
-      "datasource": { "type": "influxdb", "uid": "${datasource}" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": true,
-            "axisLabel": "bps",
-            "axisPlacement": "auto",
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "spanNulls": true
-          }
-        }
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 222 },
-      "id": 66,
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
-      "targets": [
-        {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"microprice_exec_gap\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
-          "refId": "A"
-        }
-      ],
-      "title": "Microprice-Exec Gap",
-      "type": "timeseries"
-    },
-    {
-      "datasource": { "type": "influxdb", "uid": "${datasource}" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisBorderShow": false,
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "spanNulls": true
-          },
-          "min": 0,
-          "max": 1
-        }
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 222 },
-      "id": 67,
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
-      "targets": [
-        {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"efficient_trading\" or r._field == \"stressed_trading\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
-          "refId": "A"
-        }
-      ],
-      "title": "Trading Efficiency",
+      "title": "Trading Efficiency/Stress",
       "type": "timeseries"
     },
     {
@@ -1832,16 +1097,16 @@
           "max": 1
         }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 230 },
-      "id": 68,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 138 },
+      "id": 42,
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
         {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"activity_slippage_divergence\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange_name == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"cf_confirmation_score\" or r._field == \"cf_signal_agreement\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
           "refId": "A"
         }
       ],
-      "title": "Activity-Slippage Divergence",
+      "title": "Confirmation Score & Signal Agreement",
       "type": "timeseries"
     },
     {
@@ -1851,8 +1116,7 @@
           "color": { "mode": "palette-classic" },
           "custom": {
             "axisBorderShow": false,
-            "axisCenteredZero": true,
-            "axisLabel": "bps",
+            "axisLabel": "",
             "axisPlacement": "auto",
             "drawStyle": "line",
             "fillOpacity": 10,
@@ -1860,19 +1124,21 @@
             "pointSize": 5,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "min": 0,
+          "max": 1
         }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 230 },
-      "id": 69,
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 146 },
+      "id": 43,
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
         {
-          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"trade_execution_edge\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "query": "from(bucket: \"feature_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"FEATURE\")\n  |> filter(fn: (r) => r.exchange_name == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r._field == \"cf_regime_trending\" or r._field == \"cf_regime_mean_reverting\" or r._field == \"cf_regime_volatile\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
           "refId": "A"
         }
       ],
-      "title": "Trade Execution Edge",
+      "title": "Regime Detection (trending/mean-reverting/volatile)",
       "type": "timeseries"
     }
   ],
@@ -1882,61 +1148,55 @@
   "templating": {
     "list": [
       {
-        "current": {},
+        "current": { "selected": false, "text": "InfluxDB", "value": "InfluxDB" },
         "hide": 0,
         "includeAll": false,
-        "label": "Datasource",
+        "label": "Data Source",
         "multi": false,
         "name": "datasource",
         "options": [],
         "query": "influxdb",
-        "queryValue": "",
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,
         "type": "datasource"
       },
       {
-        "current": {},
-        "datasource": { "type": "influxdb", "uid": "${datasource}" },
-        "definition": "import \"influxdata/influxdb/schema\"\n\nschema.tagValues(\n  bucket: \"feature_data\",\n  tag: \"exchange\",\n  predicate: (r) => r._measurement == \"FEATURE\"\n)",
+        "current": { "selected": false, "text": "BINANCE_FUTURES", "value": "BINANCE_FUTURES" },
         "hide": 0,
         "includeAll": false,
         "label": "Exchange",
         "multi": false,
         "name": "exchange",
-        "options": [],
-        "query": "import \"influxdata/influxdb/schema\"\n\nschema.tagValues(\n  bucket: \"feature_data\",\n  tag: \"exchange\",\n  predicate: (r) => r._measurement == \"FEATURE\"\n)",
-        "refresh": 1,
-        "regex": "",
+        "options": [
+          { "selected": true, "text": "BINANCE_FUTURES", "value": "BINANCE_FUTURES" }
+        ],
+        "query": "BINANCE_FUTURES",
         "skipUrlSync": false,
-        "sort": 1,
-        "type": "query"
+        "type": "custom"
       },
       {
-        "current": {},
-        "datasource": { "type": "influxdb", "uid": "${datasource}" },
-        "definition": "import \"influxdata/influxdb/schema\"\n\nschema.tagValues(\n  bucket: \"feature_data\",\n  tag: \"symbol\",\n  predicate: (r) => r._measurement == \"FEATURE\" and r.exchange == \"${exchange}\"\n)",
+        "current": { "selected": false, "text": "BTC_USDT", "value": "BTC_USDT" },
         "hide": 0,
         "includeAll": false,
         "label": "Symbol",
         "multi": false,
         "name": "symbol",
-        "options": [],
-        "query": "import \"influxdata/influxdb/schema\"\n\nschema.tagValues(\n  bucket: \"feature_data\",\n  tag: \"symbol\",\n  predicate: (r) => r._measurement == \"FEATURE\" and r.exchange == \"${exchange}\"\n)",
-        "refresh": 1,
-        "regex": "",
+        "options": [
+          { "selected": true, "text": "BTC_USDT", "value": "BTC_USDT" },
+          { "selected": false, "text": "ETH_USDT", "value": "ETH_USDT" }
+        ],
+        "query": "BTC_USDT,ETH_USDT",
         "skipUrlSync": false,
-        "sort": 1,
-        "type": "query"
+        "type": "custom"
       }
     ]
   },
   "time": { "from": "now-1h", "to": "now" },
   "timepicker": {},
-  "timezone": "",
+  "timezone": "browser",
   "title": "ML Features Dashboard",
-  "uid": "ml-features-dashboard",
+  "uid": "features-dashboard",
   "version": 1,
   "weekStart": ""
 }
