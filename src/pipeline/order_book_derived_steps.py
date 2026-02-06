@@ -138,7 +138,7 @@ class PopulateBookChangeStep(Step):
         self.k_levels = k_levels
 
     def populate(self, pipeline_context: PipelineContext, stage_context: Context):
-        progress = StepProgressLogger(self.__class__.__name__, len(stage_context.order_books) * len(self.k_levels))
+        progress = StepProgressLogger(self.__class__.__name__, len(stage_context.order_books))
 
         influx_writer = pipeline_context.influx_store.create_writer(ORDER_BOOK_DERIVED_BUCKET, no_retention=True)
         parquet_store = pipeline_context.parquet_store.create_single_market("BookChange", stage_context.market)

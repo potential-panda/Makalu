@@ -37,7 +37,7 @@ class PopulateAggressionStep(Step):
         self.windows_sec = windows_sec
 
     def populate(self, pipeline_context: PipelineContext, stage_context: Context):
-        progress = StepProgressLogger(self.__class__.__name__, len(stage_context.trades) * len(self.windows_sec))
+        progress = StepProgressLogger(self.__class__.__name__, len(stage_context.trades))
 
         influx_writer = pipeline_context.influx_store.create_writer(TRADE_DERIVED_BUCKET, no_retention=True)
         parquet_store = pipeline_context.parquet_store.create_single_market("TradeAggression", stage_context.market)
@@ -87,7 +87,7 @@ class PopulateAggressionStep(Step):
                 influx_writer.add(point)
 
                 for k, v in fields.items():
-                    write_fields[f"{k}_{aggression.window_sec}"] = v
+                    write_fields[f"{k}_{aggression.window_sec}s"] = v
 
             parquet_store.add(trade.get_ts(), write_fields)
             progress.update()
