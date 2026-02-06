@@ -643,20 +643,7 @@ pull_imbalance_gradient = pull_imbalance_1 - pull_imbalance_5  # [-2, 2]
 | `pull_imbalance_gradient` | pull_imb_1 - pull_imb_5 | [-2, 2] | Shallow vs deep pull asymmetry |
 | `refill_imbalance_gradient` | refill_imb_1 - refill_imb_5 | [-2, 2] | Shallow vs deep refill asymmetry |
 
-### 3.8 Microstructure Signals
-
-```python
-# Spoofing detection: large refill followed by quick pull
-spoof_signal = (refill_bid_rate_1_lag1 > threshold) & (pull_bid_rate_1 > threshold)
-
-# Momentum exhaustion: high pulls on both sides
-exhaustion = (pull_bid_rate_1 > threshold) & (pull_ask_rate_1 > threshold)
-
-# One-sided pressure: pulls on one side only
-bid_pressure = (pull_ask_rate_1 > threshold) & (pull_bid_rate_1 < threshold * 0.2)
-```
-
-### 3.9 Feature Summary Table
+### 3.8 Feature Summary Table
 
 | Feature | Formula | Range | Use Case |
 |---------|---------|-------|----------|
@@ -814,39 +801,11 @@ slippage_asymmetry = (slippage_ask_bps - slippage_bid_bps) / (slippage_total_bps
 | `slippage_pct` | rolling percentile | [0, 1] | Slippage percentile |
 | `slippage_asymmetry` | (ask_slip - bid_slip) / total | [-1, 1] | Which side is harder to execute |
 
-#### Cross-Size Comparison
-
-```python
-# Compare execution prices across different sizes (USE NORMALIZED VERSION ONLY)
-# Raw: slippage_gradient = exec_ask_10 - exec_ask_1  # DON'T USE - non-stationary
-
-# Normalized by mid (USE THIS)
-slippage_gradient_bps = (exec_ask_10 - exec_ask_1) / mid * 10000
-```
-
-| Feature | Formula | Range | Interpretation |
-|---------|---------|-------|----------------|
-| ~~`slippage_gradient`~~ | exec_large - exec_small | (-inf, inf) | **Remove** (non-stationary) |
-| `slippage_gradient_bps` | Normalized version | [0, inf) | Depth quality, comparable across instruments |
-
 #### Depth Quality Score
 
 ```python
 # Inverse of slippage - higher = better depth
 depth_quality = 1 / (slippage_total_bps + 1)
-
-# Or log-scale
-depth_quality_log = -log(slippage_total_bps + 1)
-```
-
-#### Execution Price Movement
-
-```python
-# Rate of change in execution price
-exec_mid_return = (exec_mid - exec_mid_prev) / exec_mid_prev
-
-# Volatility of execution prices
-exec_mid_volatility = exec_mid_return.rolling("1S").std()
 ```
 
 ### 4.6 Comparison with Book State Features
@@ -902,7 +861,6 @@ execution_quality = (expected_exec_price - actual_fill_price) / expected_exec_pr
 | `slippage_asymmetry` | (ask_slip - bid_slip) / total | [-1, 1] | Execution asymmetry |
 | `spread_expansion_bps` | exec_spread_bps - best_spread_bps | [0, inf) | Size penalty |
 | `spread_expansion_ratio` | exec_spread / best_spread | [1, inf) | Spread multiplier |
-| `slippage_gradient_bps` | (exec_10 - exec_1) / mid * 1e4 | [0, inf) | Depth quality measure |
 | `depth_quality` | 1 / (slippage + 1) | (0, 1] | Liquidity score |
 
 > **Note**: Raw execution prices (`exec_bid`, `exec_ask`, `exec_mid`) are absolute prices (non-stationary) and should only be used as intermediate values for computing normalized features. Use `slippage_*_bps`, `slippage_zscore`, or `slippage_asymmetry` as ML features.
@@ -1084,28 +1042,6 @@ absorption_strength = vol_imbalance_ratio_1s * (-delta_depth_imbalance_norm_1)
 
 **Use Case:** High absorption suggests hidden liquidity or strong passive interest.
 
-#### Trade Burst + Book Reaction
-
-How does the book react to trade bursts?
-
-```python
-# Trade burst occurred
-trade_burst = burst_flag_1s == 1
-
-# Book reaction to burst
-burst_pull_reaction = trade_burst * (pull_bid_rate_1 + pull_ask_rate_1)
-burst_refill_reaction = trade_burst * (refill_bid_rate_1 + refill_ask_rate_1)
-
-# Net reaction: pulling or refilling?
-burst_net_reaction = burst_refill_reaction - burst_pull_reaction
-```
-
-| Feature | Interpretation |
-|---------|----------------|
-| `burst_pull_reaction` | Liquidity fleeing after burst |
-| `burst_refill_reaction` | Liquidity arriving after burst |
-| `burst_net_reaction` | Positive = absorbing, Negative = fleeing |
-
 ---
 
 ### 5.3 Order Book State × Book Change
@@ -1133,24 +1069,6 @@ imbalance_fading = (vol_imb_1 > 0) & (pull_imbalance_1 > 0.2)      # Bid pulls >
 | `imbalance_momentum` | vol_imb * delta_imb_norm | [-1, 1] | Imbalance strengthening (+) or weakening (-) |
 | `imbalance_building` | imb > 0 & refill_imb > 0 | {0, 1} | Imbalance being reinforced by refills |
 | `imbalance_fading` | imb > 0 & pull_imb > 0 | {0, 1} | Imbalance being eroded by pulls |
-
-#### Spread Dynamics During Book Changes
-
-```python
-# Spread widening during pulls (liquidity crisis)
-spread_pull_correlation = spread_bps * (pull_bid_rate_1 + pull_ask_rate_1)
-
-# Spread tightening during refills (liquidity arriving)
-spread_refill_correlation = spread_bps * (refill_bid_rate_1 + refill_ask_rate_1)
-
-# Spread change rate
-spread_change_rate = (spread_bps - spread_bps.shift(1)) / delta_sec
-```
-
-| Feature | Interpretation |
-|---------|----------------|
-| `spread_pull_correlation` | High = spread widening as liquidity leaves |
-| `spread_tightening` | Spread decreasing as depth added |
 
 #### Best Level Stability vs Imbalance
 
@@ -1291,14 +1209,14 @@ Use normalized features and boolean conditions.
 
 ```python
 # Trending regime: trades and book aligned, consuming depth
-trending = (
+regime_trending = (
     (sign_agree_trade_book == 1) &
     (trade_consuming_asks | trade_consuming_bids) &
     (signal_agreement > 0.5)
 )
 
 # Mean-reverting regime: divergence with absorption
-mean_reverting = (
+regime_mean_reverting = (
     (sign_agree_trade_book == 0) &
     (absorption_bid | absorption_ask) &
     (signal_agreement < 0.3)
@@ -1306,7 +1224,7 @@ mean_reverting = (
 
 # Volatile regime: high activity, low agreement
 # Use normalized activity features
-volatile = (
+regime_volatile = (
     (trades_per_sec_pct > 0.8) &            # High trade activity (percentile)
     (total_activity_pct_1 > 0.8) &           # High book activity (percentile)
     (signal_agreement < 0.3)
@@ -1315,9 +1233,9 @@ volatile = (
 
 | Feature | Range | Interpretation |
 |---------|-------|----------------|
-| `trending` | {0, 1} | Momentum regime |
-| `mean_reverting` | {0, 1} | Mean reversion regime |
-| `volatile` | {0, 1} | High volatility regime |
+| `regime_trending` | {0, 1} | Momentum regime |
+| `regime_mean_reverting` | {0, 1} | Mean reversion regime |
+| `regime_volatile` | {0, 1} | High volatility regime |
 
 #### Quality-Weighted Signal
 
@@ -1363,10 +1281,10 @@ quality_weighted_signal = (
 | | `stressed_trading` | {0, 1} | High activity, high cost |
 | **Multi-Way** | `confirmation_score` | [-1, 1] | Net direction |
 | | `signal_agreement` | [0, 1] | Confidence level |
-| | `quality_weighted_signal` | ~[-1, 1] | Composite signal |
-| | `trending` | {0, 1} | Momentum regime |
-| | `mean_reverting` | {0, 1} | Reversion regime |
-| | `volatile` | {0, 1} | Volatility regime |
+| | `quality_weighted_signal` | ~[-1, 1] | Composite signal with confidence |
+| | `regime_trending` | {0, 1} | Momentum regime |
+| | `regime_mean_reverting` | {0, 1} | Mean reversion regime |
+| | `regime_volatile` | {0, 1} | Volatility regime |
 
 > **Note**: All interaction features use normalized/stationary inputs (imbalance ratios, bps offsets, percentiles). Avoid using raw values like `imbalance_qty`, `pull_rate`, or `trades_per_sec` in interactions.
 

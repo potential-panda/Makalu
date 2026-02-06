@@ -51,9 +51,13 @@ class Dataset:
         parquet_store: ParquetStore,
         target_column: str,
         dt_range: DtRange,
+        label_param_id: Optional[str] = None,
     ) -> "Dataset":
         feature_store = parquet_store.create_feature(feature_market)
-        label_store = parquet_store.create_label("TripleBarrierLabel")
+        if label_param_id:
+            label_store = parquet_store.create_label("TripleBarrierLabel", label_market, label_param_id)
+        else:
+            label_store = parquet_store.create_label("TripleBarrierLabel", label_market)
         features_df = feature_store.read(dt_range)
         labels_df = label_store.read(dt_range)
 

@@ -52,7 +52,7 @@ class OrderBookDerivedStage(Stage):
 
     def before(self, dt_range: DtRange, pipeline_context: PipelineContext) -> StageContext:
         start_time = time.time()
-        compute_dt_range = DtRange(dt_range.start_dt - timedelta(minutes=5), dt_range.end_dt)
+        compute_dt_range = DtRange(dt_range.start_dt - timedelta(hours=1), dt_range.end_dt)
         LOG.info(
             f"OrderBookDerivedStage: Querying data for {self.market.id}"
             f"from {compute_dt_range.start_str} to {compute_dt_range.end_str}"
@@ -63,7 +63,6 @@ class OrderBookDerivedStage(Stage):
         end_time = time.time()
         LOG.info(f"OrderBookDerivedStage: Found {len(order_books)} objects in {end_time - start_time:.2f} seconds.")
         return OrderBookDerivedContext(
-            compute_dt_range,
             dt_range,
             self.market,
             order_books,
@@ -88,7 +87,6 @@ class TradeDerivedStage(Stage):
         end_time = time.time()
         LOG.info(f"TradeDerivedStage: Found {len(trades)} objects in {end_time - start_time:.2f} seconds.")
         return TradeDerivedContext(
-            compute_dt_range,
             dt_range,
             self.market,
             trades,
@@ -112,15 +110,35 @@ class LeadLagStage(Stage):
 
 
 class FeatureStage(Stage):
-    def __init__(self, market: Market):
+    def __init__(self, market: Market, execution_size_str: str):
         super().__init__()
         self.market = market
+        self.execution_size_str = execution_size_str
 
     def before(self, dt_range: DtRange, pipeline_context: PipelineContext) -> StageContext:
+        compute_dt_range = DtRange(dt_range.start_dt - timedelta(hours=1), dt_range.end_dt)
+        parquet_store = pipeline_context.parquet_store.create_execution_price(self.market, self.execution_size_str)
+        execution_price_df = parquet_store.read(compute_dt_range)
+
+        # Query trade aggression data
+        parquet_store = pipeline_context.parquet_store.create_single_market("TradeAggression", self.market)
+        trade_aggression_df = parquet_store.read(compute_dt_range)
+
+        # Query order book state data
+        parquet_store = pipeline_context.parquet_store.create_single_market("BookState", self.market)
+        order_book_state_df = parquet_store.read(compute_dt_range)
+
+        # Query book change data
+        parquet_store = pipeline_context.parquet_store.create_single_market("BookChange", self.market)
+        book_change_df = parquet_store.read(compute_dt_range)
+
         return FeatureContext(
             dt_range,
-            DtRange(dt_range.start_dt - timedelta(hours=1), dt_range.end_dt),
             self.market,
+            execution_price_df,
+            trade_aggression_df,
+            order_book_state_df,
+            book_change_df,
         )
 
 

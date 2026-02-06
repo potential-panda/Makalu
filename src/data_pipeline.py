@@ -9,18 +9,20 @@ from qate.store.market_data_store import MarketDataStore
 from qate.store.parquet_store import ParquetStore
 from qate.util.dt_range import DtRange
 
-from pipeline.feature_steps import AlignAndBuildFeaturesStep, QueryDataStep
+from pipeline.feature_steps import AlignAndBuildFeaturesStep
 from pipeline.framework import Pipeline
 from pipeline.labeling_steps import QueryExecutionPriceStep
 from pipeline.lead_lag_steps import LeadLagStep
-from pipeline.market_data_steps import PopulateBookStateStep, PopulateMarketPriceStep
 from pipeline.market_pair import EXECUTION_SIZE, LEAD_LAG_PAIRS, find_pair_key
-from pipeline.order_book_derived_steps import PopulateBookChangeStep
+from pipeline.order_book_derived_steps import (
+    PopulateBookChangeStep,
+    PopulateBookStateStep,
+    PopulateMarketPriceStep,
+)
 from pipeline.stages import (
     FeatureStage,
     LabelingStage,
     LeadLagStage,
-    MarketDataStage,
     OrderBookDerivedStage,
     TradeDerivedStage,
 )
@@ -44,19 +46,6 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
     influx_store = InfluxdbStore(sys_env.get_influxdb())
 
     pipeline = Pipeline(market_data_store, parquet_store, influx_store)
-    if "MarketData" in run_stages:
-        pipeline.stage(
-            MarketDataStage(market_lead)
-            .step(PopulateMarketPriceStep(EXECUTION_SIZE.get(market_lead.symbol)))
-            .step(
-                PopulateBookStateStep(
-                    volume_imbalance_k=[1, 3, 5, 10],
-                    weighted_imbalance_k=[1, 3, 5, 10],
-                    depth_imbalance_rate=[0.0001, 0.0002, 0.0005, 0.001],
-                    microprice_k=[1, 3, 5, 10],
-                )
-            )
-        ).stage(MarketDataStage(market_lag).step(PopulateMarketPriceStep(EXECUTION_SIZE.get(market_lag.symbol))))
 
     if "TradeDerived" in run_stages:
         pipeline.stage(
@@ -68,7 +57,19 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
         )
 
     if "OrderBookDerived" in run_stages:
-        pipeline.stage(OrderBookDerivedStage(market_lead).step(PopulateBookChangeStep(k_levels=[3, 5, 10])))
+        pipeline.stage(
+            OrderBookDerivedStage(market_lead)
+            .step(PopulateMarketPriceStep(EXECUTION_SIZE.get(market_lead.symbol)))
+            .step(
+                PopulateBookStateStep(
+                    volume_imbalance_k=[1, 3, 5, 10],
+                    weighted_imbalance_k=[1, 3, 5, 10],
+                    depth_imbalance_rate=[0.0001, 0.0002, 0.0005, 0.001],
+                    microprice_k=[1, 3, 5, 10],
+                )
+            )
+            .step(PopulateBookChangeStep(k_levels=[3, 5, 10]))
+        ).stage(OrderBookDerivedStage(market_lag).step(PopulateMarketPriceStep(EXECUTION_SIZE.get(market_lag.symbol))))
 
     if "LeadLag" in run_stages:
         pipeline.stage(
@@ -79,9 +80,7 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
 
     if "Feature" in run_stages:
         pipeline.stage(
-            FeatureStage(market_lead)
-            .step(QueryDataStep(EXECUTION_SIZE.get(market_lead.symbol)))
-            .step(AlignAndBuildFeaturesStep())
+            FeatureStage(market_lead, EXECUTION_SIZE.get(market_lead.symbol)).step(AlignAndBuildFeaturesStep())
         )
 
     if "Label" in run_stages:
@@ -118,7 +117,7 @@ def main():
         "--stages",
         nargs="*",
         type=str,
-        default=["MarketData", "TradeDerived", "OrderBookDerived", "LeadLag", "Feature", "Label"],
+        default=["TradeDerived", "OrderBookDerived", "LeadLag", "Feature", "Label"],
         help="Optional list of stages",
     )
     args = parser.parse_args()

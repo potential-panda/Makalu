@@ -12,7 +12,6 @@ from qate.trading.chart import (
     HeikinAshiBarBuilder,
     RangeBarBuilder,
 )
-from qate.util.dt_range import DtRange
 
 from .framework import PipelineContext, StageContext, Step, StepProgressLogger
 
@@ -28,7 +27,6 @@ TRADE_DERIVED_BUCKET = "trade_derived"
 
 @dataclass
 class Context(StageContext):
-    compute_dt_range: DtRange
     market: Market
     trades: list[Trade]
 
@@ -45,8 +43,6 @@ class PopulateAggressionStep(Step):
         parquet_store = pipeline_context.parquet_store.create_single_market("TradeAggression", stage_context.market)
         builder = TradeAggressionBuilder(windows_sec=self.windows_sec)
         for trade in stage_context.trades:
-            if not stage_context.compute_dt_range.is_within(trade.get_ts()):
-                continue
             builder.on_trade(trade)
             if not stage_context.populate_dt_range.is_within(trade.get_ts()):
                 continue
@@ -117,8 +113,6 @@ class AbstractPopulateChartStep(Step):
         parquet_store = pipeline_context.parquet_store.create_chart(stage_context.market, self.get_bar_type())
         builder = self.create_bar_builder()
         for trade in stage_context.trades:
-            if not stage_context.compute_dt_range.is_within(trade.get_ts()):
-                continue
             bar = builder.on_update(trade)
             if not bar:
                 continue

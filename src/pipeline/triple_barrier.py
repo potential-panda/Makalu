@@ -39,7 +39,7 @@ class TripleBarrierConfig:
         label_resample_interval: Resample interval for label generation (e.g., '100ms')
     """
 
-    barrier_multiplier: float = 2.0
+    barrier_multiplier: float = 1.5
     return_shift_sec: int = 180
     timeout_sec: int = 180
     volatility_lookback_sec: int = 3600
