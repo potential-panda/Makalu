@@ -132,8 +132,9 @@ class LGBMTrainer:
         if self.verbose_eval > 0:
             callbacks.append(lgb.log_evaluation(period=self.verbose_eval))
 
-        # Record training history
+        # Record training history via callback
         evals_result = {}
+        callbacks.append(lgb.record_evaluation(evals_result))
 
         # Train model
         self.model = lgb.train(
@@ -143,7 +144,6 @@ class LGBMTrainer:
             valid_sets=valid_sets,
             valid_names=valid_names,
             callbacks=callbacks,
-            evals_result=evals_result,
         )
 
         # Store training history

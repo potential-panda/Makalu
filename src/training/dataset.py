@@ -75,17 +75,24 @@ class Dataset:
 
         return dataset
 
-    def align(self, method: str = "inner") -> "Dataset":
+    def align(self, tolerance: str = "1s", direction: str = "nearest") -> "Dataset":
         """
-        Align features and labels by their time index.
+        Align labels to features by finding the nearest label for each feature timestamp.
+
+        Uses merge_asof to match each feature row with its closest label row,
+        keeping all feature rows. This handles cases where features and labels
+        are generated at different intervals or slightly different timestamps.
 
         Args:
-            method: Join method - 'inner' (default), 'outer', 'left', 'right'
+            tolerance: Maximum time difference for matching (e.g., '1s', '100ms', '5s').
+                      Labels further than this from a feature timestamp won't match.
+            direction: Direction for matching - 'nearest', 'backward', 'forward'.
+                      'nearest' finds closest label, 'backward' avoids look-ahead bias.
 
         Returns:
             Self for method chaining
         """
-        LOG.info(f"Aligning features and labels using '{method}' join")
+        LOG.info(f"Aligning labels to features using merge_asof (tolerance={tolerance}, direction={direction})")
 
         # Ensure both have time index
         if not isinstance(self.features_df.index, pd.DatetimeIndex):
@@ -100,32 +107,44 @@ class Dataset:
             else:
                 raise ValueError("Labels DataFrame must have a datetime index or 'time' column")
 
-        # Sort both by index
+        # Sort both by index (required for merge_asof)
         self.features_df = self.features_df.sort_index()
         self.labels_df = self.labels_df.sort_index()
 
-        # Find common index
-        if method == "inner":
-            common_index = self.features_df.index.intersection(self.labels_df.index)
-        elif method == "outer":
-            common_index = self.features_df.index.union(self.labels_df.index)
-        elif method == "left":
-            common_index = self.features_df.index
-        elif method == "right":
-            common_index = self.labels_df.index
-        else:
-            raise ValueError(f"Unknown alignment method: {method}")
+        # Prepare DataFrames for merge_asof (needs 'on' column, not index)
+        # Use a consistent column name '_time' for the merge key
+        features_reset = self.features_df.reset_index(names="_time")
+        labels_reset = self.labels_df[[self.target_column]].reset_index(names="_time")
 
-        # Align data
-        self._aligned_features = self.features_df.loc[self.features_df.index.isin(common_index)].copy()
-        self._aligned_labels = self.labels_df.loc[self.labels_df.index.isin(common_index), self.target_column].copy()
+        # Use merge_asof to find nearest label for each feature timestamp
+        merged = pd.merge_asof(
+            features_reset,
+            labels_reset,
+            on="_time",
+            tolerance=pd.Timedelta(tolerance),
+            direction=direction,
+        )
 
-        # Drop rows with NaN in target
+        # Set time back as index
+        merged = merged.set_index("_time")
+        merged.index.name = None  # Remove the temporary name
+
+        LOG.info(
+            f"Merge result: {len(merged)} rows, "
+            f"{merged[self.target_column].notna().sum()} with matched labels, "
+            f"{merged[self.target_column].isna().sum()} without labels"
+        )
+
+        # Extract aligned features and labels
+        self._aligned_features = merged.drop(columns=[self.target_column]).copy()
+        self._aligned_labels = merged[self.target_column].copy()
+
+        # Drop rows with NaN in target (no matching label found)
         valid_mask = ~self._aligned_labels.isna()
         self._aligned_features = self._aligned_features.loc[valid_mask]
         self._aligned_labels = self._aligned_labels.loc[valid_mask]
 
-        LOG.info(f"Aligned data: {len(self._aligned_features)} rows")
+        LOG.info(f"Aligned data: {len(self._aligned_features)} rows (after dropping unmatched)")
 
         return self
 
