@@ -11,7 +11,6 @@ from qate.util.dt_range import DtRange
 
 from pipeline.feature_steps import AlignAndBuildFeaturesStep
 from pipeline.framework import Pipeline
-from pipeline.labeling_steps import QueryExecutionPriceStep
 from pipeline.lead_lag_steps import LeadLagStep
 from pipeline.market_pair import EXECUTION_SIZE, LEAD_LAG_PAIRS, find_pair_key
 from pipeline.order_book_derived_steps import (
@@ -32,8 +31,8 @@ from pipeline.trade_derived_steps import (
     PopulateHeikinAshiBarStep,
     PopulateRangeBarStep,
 )
-from pipeline.triple_barrier import TripleBarrierConfig
 from pipeline.triple_barrier_steps import GenerateLabelsStep
+from triple_barrier.triple_barrier import TripleBarrierConfig
 
 LOG = getLogger(__name__)
 ENV_NAME = EnvName.MARIO_MARIO
@@ -68,7 +67,7 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
                     microprice_k=[1, 3, 5, 10],
                 )
             )
-            .step(PopulateBookChangeStep(k_levels=[3, 5, 10]))
+            .step(PopulateBookChangeStep(k_levels=[1, 3, 5, 10]))
         ).stage(OrderBookDerivedStage(market_lag).step(PopulateMarketPriceStep(EXECUTION_SIZE.get(market_lag.symbol))))
 
     if "LeadLag" in run_stages:
@@ -85,9 +84,9 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
 
     if "Label" in run_stages:
         pipeline.stage(
-            LabelingStage(market_lag)
-            .step(QueryExecutionPriceStep(EXECUTION_SIZE.get(market_lag.symbol)))
-            .step(GenerateLabelsStep(TripleBarrierConfig()))
+            LabelingStage(market_lag, EXECUTION_SIZE.get(market_lag.symbol)).step(
+                GenerateLabelsStep(TripleBarrierConfig())
+            )
         )
 
     return pipeline

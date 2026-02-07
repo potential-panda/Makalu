@@ -9,11 +9,11 @@ from qate.util.dt_range import DtRange
 
 from .feature_steps import Context as FeatureContext
 from .framework import PipelineContext, Stage, StageContext
-from .labeling_steps import Context as LabelingContext
 from .lead_lag_steps import Context as LeadLagContext
 from .market_data_steps import Context as MarketDataContext
 from .order_book_derived_steps import Context as OrderBookDerivedContext
 from .trade_derived_steps import Context as TradeDerivedContext
+from .triple_barrier_steps import Context as TripleBarrierContext
 
 LOG = getLogger(__name__)
 
@@ -149,8 +149,16 @@ class LabelingStage(Stage):
         self.execution_size_str = execution_size_str
 
     def before(self, dt_range: DtRange, pipeline_context: PipelineContext) -> StageContext:
-        return LabelingContext(
+        parquet_store = pipeline_context.parquet_store.create_execution_price(
+            self.market,
+            self.execution_size_str,
+        )
+        read_range = DtRange(dt_range.start_dt - timedelta(hours=8), dt_range.end_dt + timedelta(hours=8))
+        df = parquet_store.read(read_range)
+
+        return TripleBarrierContext(
             dt_range,
             self.market,
             self.execution_size_str,
+            df,
         )

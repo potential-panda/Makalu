@@ -13,18 +13,28 @@ Usage:
 """
 
 import logging
+from dataclasses import dataclass
 
 import pandas as pd
+from qate.core.model import Market
+
+from triple_barrier.triple_barrier import TripleBarrierConfig, generate_labels
 
 from .converter import DataPointConverter
-from .framework import PipelineContext, Step
-from .labeling_steps import Context
-from .triple_barrier import TripleBarrierConfig, generate_labels
+from .framework import PipelineContext, StageContext, Step
 
 LOG = logging.getLogger(__name__)
 
 # InfluxDB bucket for label data
 LABEL_DATA_BUCKET = "label_data"
+EPS = 1e-9
+
+
+@dataclass
+class Context(StageContext):
+    market: Market
+    execution_size_str: str
+    execution_price_df: pd.DataFrame = None
 
 
 class GenerateLabelsStep(Step):
@@ -51,8 +61,8 @@ class GenerateLabelsStep(Step):
 
         result = generate_labels(df, self.config, exclude_edge=True)
         labels_df = result.labels_df[
-            (result.labels_df.index >= stage_context.populate_dt_range.start_dt)
-            & (result.labels_df.index <= stage_context.populate_dt_range.end_dt)
+            (result.labels_df.index >= stage_context.populate_dt_range.start_dt_utc)
+            & (result.labels_df.index <= stage_context.populate_dt_range.end_dt_utc)
         ]
 
         LOG.info(
@@ -67,26 +77,24 @@ class GenerateLabelsStep(Step):
         self._save_to_influxdb(pipeline_context, stage_context, labels_df)
 
     def _save_to_parquet(self, pipeline_context: PipelineContext, stage_context: Context, labels_df: pd.DataFrame):
-        config = stage_context.config
         parquet_store = pipeline_context.parquet_store.create_label(
             "TripleBarrierLabel",
             stage_context.market,
-            config.param_id,
+            self.config.param_id,
         )
         parquet_store.add_dataframe(labels_df.copy(), ts_column=None)
         parquet_store.close()
-        LOG.info(f"GenerateLabelsStep: Saved {len(labels_df)} labels to Parquet " f"(param_id={config.param_id})")
+        LOG.info(f"GenerateLabelsStep: Saved {len(labels_df)} labels to Parquet " f"(param_id={self.config.param_id})")
 
     def _save_to_influxdb(self, pipeline_context: PipelineContext, stage_context: Context, labels_df: pd.DataFrame):
-        config = stage_context.config
         influx_writer = pipeline_context.influx_store.create_writer(LABEL_DATA_BUCKET, no_retention=True)
 
         custom_tags = {
-            "barrier_multiplier": str(config.barrier_multiplier),
-            "timeout_sec": str(config.timeout_sec),
-            "return_shift_sec": str(config.return_shift_sec),
+            "barrier_multiplier": str(self.config.barrier_multiplier),
+            "timeout_sec": str(self.config.timeout_sec),
+            "return_shift_sec": str(self.config.return_shift_sec),
             "exec_size": stage_context.execution_size_str,
-            "param_id": config.param_id,
+            "param_id": self.config.param_id,
         }
 
         points = DataPointConverter.convert_dataframe_to_influx_points(
