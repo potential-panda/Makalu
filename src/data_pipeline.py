@@ -49,9 +49,9 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
     if "TradeDerived" in run_stages:
         pipeline.stage(
             TradeDerivedStage(market_lead)
-            .step(PopulateCandleBarStep(interval_seconds=60))  # 1-minute candle bars
-            .step(PopulateHeikinAshiBarStep(interval_seconds=60))  # 1-minute Heikin Ashi bars
-            .step(PopulateRangeBarStep(box_size_rate=0.001))  # 0.1% range bars (example)
+            # .step(PopulateCandleBarStep(interval_seconds=60))  # 1-minute candle bars
+            # .step(PopulateHeikinAshiBarStep(interval_seconds=60))  # 1-minute Heikin Ashi bars
+            # .step(PopulateRangeBarStep(box_size_rate=0.001))  # 0.1% range bars (example)
             .step(PopulateAggressionStep(windows_sec=[1, 3, 5]))  # Aggression metrics
         )
 

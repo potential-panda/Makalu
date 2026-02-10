@@ -75,7 +75,12 @@ class Dataset:
 
         return dataset
 
-    def align(self, tolerance: str = "1s", direction: str = "nearest") -> "Dataset":
+    def align(
+        self,
+        tolerance: str = "1s",
+        direction: str = "nearest",
+        include_label_columns: Optional[List[str]] = None,
+    ) -> "Dataset":
         """
         Align labels to features by finding the nearest label for each feature timestamp.
 
@@ -88,33 +93,23 @@ class Dataset:
                       Labels further than this from a feature timestamp won't match.
             direction: Direction for matching - 'nearest', 'backward', 'forward'.
                       'nearest' finds closest label, 'backward' avoids look-ahead bias.
+            include_label_columns: Additional columns from labels_df to include in aligned data.
+                      Useful for post-alignment filtering (e.g., volatility_ema, spread_pct_ema).
 
         Returns:
             Self for method chaining
         """
         LOG.info(f"Aligning labels to features using merge_asof (tolerance={tolerance}, direction={direction})")
 
-        # Ensure both have time index
-        if not isinstance(self.features_df.index, pd.DatetimeIndex):
-            if "time" in self.features_df.columns:
-                self.features_df = self.features_df.set_index("time")
-            else:
-                raise ValueError("Features DataFrame must have a datetime index or 'time' column")
-
-        if not isinstance(self.labels_df.index, pd.DatetimeIndex):
-            if "time" in self.labels_df.columns:
-                self.labels_df = self.labels_df.set_index("time")
-            else:
-                raise ValueError("Labels DataFrame must have a datetime index or 'time' column")
-
-        # Sort both by index (required for merge_asof)
-        self.features_df = self.features_df.sort_index()
-        self.labels_df = self.labels_df.sort_index()
+        # Determine which columns to include from labels_df
+        label_columns = [self.target_column]
+        if include_label_columns:
+            label_columns.extend([c for c in include_label_columns if c in self.labels_df.columns])
 
         # Prepare DataFrames for merge_asof (needs 'on' column, not index)
         # Use a consistent column name '_time' for the merge key
         features_reset = self.features_df.reset_index(names="_time")
-        labels_reset = self.labels_df[[self.target_column]].reset_index(names="_time")
+        labels_reset = self.labels_df[label_columns].reset_index(names="_time")
 
         # Use merge_asof to find nearest label for each feature timestamp
         merged = pd.merge_asof(
@@ -136,7 +131,9 @@ class Dataset:
         )
 
         # Extract aligned features and labels
-        self._aligned_features = merged.drop(columns=[self.target_column]).copy()
+        # Keep additional label columns in features for post-alignment filtering
+        columns_to_drop = [self.target_column]
+        self._aligned_features = merged.drop(columns=columns_to_drop).copy()
         self._aligned_labels = merged[self.target_column].copy()
 
         # Drop rows with NaN in target (no matching label found)
@@ -145,6 +142,104 @@ class Dataset:
         self._aligned_labels = self._aligned_labels.loc[valid_mask]
 
         LOG.info(f"Aligned data: {len(self._aligned_features)} rows (after dropping unmatched)")
+
+        return self
+
+    def filter_by_vol_spread(self, min_ratio: float = 1.2) -> "Dataset":
+        """
+        Filter aligned data to keep only rows where volatility exceeds spread by the given ratio.
+
+        This ensures we only train on periods with favorable structural conditions for trading.
+        Must be called after align() with include_label_columns=['volatility_ema', 'spread_pct_ema'].
+
+        Args:
+            min_ratio: Minimum ratio of volatility to spread (e.g., 1.2 means vol must be 1.2x spread)
+
+        Returns:
+            Self for method chaining
+        """
+        before_count = len(self._aligned_features)
+
+        # Apply filter
+        filter_mask = self._aligned_features["volatility_ema"] > self._aligned_features["spread_pct_ema"] * min_ratio
+        self._aligned_features = self._aligned_features.loc[filter_mask]
+        self._aligned_labels = self._aligned_labels.loc[filter_mask]
+
+        after_count = len(self._aligned_features)
+        removed = before_count - after_count
+
+        LOG.info(
+            f"Vol/Spread filter (ratio={min_ratio}): "
+            f"{before_count:,} -> {after_count:,} rows (removed {removed:,}, {removed/before_count*100:.1f}%)"
+        )
+
+        # Remove the filter columns from features (not needed for training)
+        self._aligned_features = self._aligned_features.drop(
+            columns=["volatility_ema", "spread_pct_ema"], errors="ignore"
+        )
+
+        return self
+
+    def convert_to_binary(self, drop_timeout: bool = True) -> "Dataset":
+        """
+        Convert triple-barrier labels to binary classification.
+
+        Triple-barrier labels: 1=Win, -1=Loss, 0=Timeout
+        Binary labels: 1=Win, 0=Loss (Timeout dropped by default)
+
+        Args:
+            drop_timeout: If True, drop rows where label == 0 (Timeout).
+                         If False, treat Timeout as Loss (0).
+
+        Returns:
+            Self for method chaining
+        """
+        before_count = len(self._aligned_labels)
+
+        if drop_timeout:
+            # Drop timeout labels (0)
+            mask = self._aligned_labels != 0
+            self._aligned_features = self._aligned_features.loc[mask]
+            self._aligned_labels = self._aligned_labels.loc[mask]
+            dropped = before_count - len(self._aligned_labels)
+            LOG.info(f"Dropped {dropped:,} timeout labels (label=0)")
+
+        # Convert -1 (Loss) to 0, keep 1 (Win) as 1
+        self._aligned_labels = (self._aligned_labels == 1).astype(int)
+
+        after_count = len(self._aligned_labels)
+        win_count = self._aligned_labels.sum()
+        loss_count = after_count - win_count
+
+        LOG.info(
+            f"Converted to binary: {after_count:,} samples "
+            f"(Win={win_count:,}, Loss={loss_count:,}, Win rate={win_count/after_count:.2%})"
+        )
+
+        return self
+
+    def convert_to_multiclass(self) -> "Dataset":
+        """
+        Convert triple-barrier labels to multiclass format for LightGBM.
+
+        Triple-barrier labels: -1=Short, 0=NoEntry, 1=Long
+        Multiclass labels (LightGBM requires [0, num_class)):
+            0 = Short (was -1)
+            1 = NoEntry (was 0)
+            2 = Long (was 1)
+
+        Returns:
+            Self for method chaining
+        """
+        # Map: -1 -> 0, 0 -> 1, 1 -> 2
+        label_map = {-1: 0, 0: 1, 1: 2}
+        self._aligned_labels = self._aligned_labels.map(label_map).astype(int)
+
+        counts = self._aligned_labels.value_counts().sort_index()
+        LOG.info(
+            f"Converted to multiclass: Short(0)={counts.get(0, 0):,}, "
+            f"NoEntry(1)={counts.get(1, 0):,}, Long(2)={counts.get(2, 0):,}"
+        )
 
         return self
 
@@ -161,9 +256,6 @@ class Dataset:
         Returns:
             Tuple of (features DataFrame, labels Series)
         """
-        if self._aligned_features is None or self._aligned_labels is None:
-            self.align()
-
         feature_cols = self.get_feature_columns()
         available_cols = [c for c in feature_cols if c in self._aligned_features.columns]
 
