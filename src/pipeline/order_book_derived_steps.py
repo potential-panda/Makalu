@@ -39,6 +39,9 @@ class PopulateMarketPriceStep(Step):
             self.execution_size_str,
         )
         for order_book in stage_context.order_books:
+            if not stage_context.populate_dt_range.is_within(order_book.get_ts()):
+                continue
+
             market_price = order_book.market_price(float(self.execution_size_str))
             if not market_price:
                 continue
@@ -90,6 +93,9 @@ class PopulateBookStateStep(Step):
         influx_writer = pipeline_context.influx_store.create_writer(ORDER_BOOK_DERIVED_BUCKET, no_retention=True)
         parquet_store = pipeline_context.parquet_store.create_single_market("BookState", stage_context.market)
         for order_book in stage_context.order_books:
+            if not stage_context.populate_dt_range.is_within(order_book.get_ts()):
+                continue
+
             fields = {
                 "best_bid": order_book.best_bid,
                 "best_ask": order_book.best_ask,
