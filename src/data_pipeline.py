@@ -49,9 +49,9 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
     if "TradeDerived" in run_stages:
         pipeline.stage(
             TradeDerivedStage(market_lead)
-            # .step(PopulateCandleBarStep(interval_seconds=60))  # 1-minute candle bars
-            # .step(PopulateHeikinAshiBarStep(interval_seconds=60))  # 1-minute Heikin Ashi bars
-            # .step(PopulateRangeBarStep(box_size_rate=0.001))  # 0.1% range bars (example)
+            .step(PopulateCandleBarStep(interval_seconds=60))  # 1-minute candle bars
+            .step(PopulateHeikinAshiBarStep(interval_seconds=60))  # 1-minute Heikin Ashi bars
+            .step(PopulateRangeBarStep(box_size_rate=0.001))  # 0.1% range bars (example)
             .step(PopulateAggressionStep(windows_sec=[1, 3, 5]))  # Aggression metrics
         )
 
@@ -94,17 +94,16 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
 
 def run_pipeline(args):
     env = Env.load_env(sys_env.ENV_DIR, ENV_NAME)
+    env.enable_multiprocess_logging = True
     dt_range = DtRange.from_strings(args.from_dt, args.to_dt)
     market = Market.from_str(args.market)
     pair_key = find_pair_key(market)
-    try:
-        env.enter()
-        pipeline = create_pipeline(pair_key, args.stages)
-        LOG.info(f"Starting Data pipeline from {args.from_dt} to {args.to_dt}")
-        pipeline.process(dt_range)
-        LOG.info("Data pipeline finished.")
-    finally:
-        env.leave()
+
+    env.visit()
+    pipeline = create_pipeline(pair_key, args.stages)
+    LOG.info(f"Starting Data pipeline from {args.from_dt} to {args.to_dt}")
+    pipeline.process(dt_range)
+    LOG.info("Data pipeline finished.")
 
 
 def main():
