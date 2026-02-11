@@ -1376,3 +1376,107 @@ df = df.fillna(df.median())  # For rates
 | `_pct` | Percentile rank | [0, 1] |
 | `_norm` | Generic normalized version | varies |
 | `_agree`, `_flag`, `_reset` | Boolean indicator | {0, 1} |
+
+---
+
+## 7. Backtest Module
+
+The backtest module (`src/backtest/`) provides an event-driven backtesting framework for cross-exchange trading strategies. It processes market data from multiple exchanges in chronological order, calculates features in real-time, makes trading decisions using trained ML models, and tracks PnL.
+
+### 7.1 Architecture Overview
+
+```
+Events (merged) → Simulator → FeatureCalculator (BINANCE)
+                           → VolatilityTracker (GMO)
+                           → PositionManager → TradeRecords
+                           → SimulationResult
+```
+
+### 7.2 Components
+
+| Component | File | Purpose |
+|-----------|------|---------|
+| `BacktestDataLoader` | `data_loader.py` | Load order books and trades from parquet stores |
+| `EventMerger` | `event_merger.py` | Merge events from multiple sources chronologically |
+| `FeatureCalculator` | `feature_calculator.py` | Calculate real-time features from BINANCE data |
+| `VolatilityTracker` | `volatility_tracker.py` | Track volatility and spread from GMO data |
+| `PositionManager` | `position_manager.py` | Handle trade entry/exit with triple barrier |
+| `SimulatorV2` | `simulator.py` | Main simulation loop |
+| `SimulationResult` | `result.py` | Results container with analysis methods |
+
+### 7.3 Features Calculated in Real-Time
+
+The `FeatureCalculator` computes features from streaming BINANCE data:
+
+**Order Book Features:**
+- `spread_bps`: Spread in basis points
+- `microprice_vs_mid`: Microprice offset from mid
+- `volume_imbalance_k`: Volume imbalance at top k levels
+- `weighted_imbalance`: Distance-weighted imbalance
+- `depth_imbalance_Xbps`: Depth within X bps of mid
+- `depth_ratio_k`: Bid/total depth ratio
+
+**Trade Aggression Features:**
+- `aggression_imbalance_Xs`: Buy/sell volume imbalance over X seconds
+- `trades_per_sec_Xs`: Trade frequency
+- `qty_per_sec_Xs`: Volume velocity
+
+**Book Change Features:**
+- `pull_imbalance_k`: Which side losing liquidity faster
+- `refill_imbalance_k`: Which side gaining liquidity faster
+- `delta_depth_bid/ask_k`: Depth changes
+
+### 7.4 Volatility Tracking
+
+The `VolatilityTracker` calculates from GMO data:
+- Rolling volatility using return standard deviation
+- EMA-smoothed volatility and spread percentage
+- Trade entry filter: `vol > spread * min_vol_spread_ratio`
+
+### 7.5 Position Management
+
+Triple barrier exit logic:
+- **Profit-Take**: Price reaches `entry * (1 + barrier_pct)` for long
+- **Stop-Loss**: Price reaches `entry * (1 - barrier_pct)` for long
+- **Timeout**: Position held longer than `timeout_sec`
+
+Barrier percentage: `barrier_pct = volatility_ema * barrier_multiplier`
+
+### 7.6 Usage Example
+
+```python
+from backtest import (
+    BacktestDataConfig, BacktestDataLoader, EventMerger,
+    SimulatorConfig, SimulatorV2, FeatureConfig, VolatilityConfig, PositionConfig
+)
+
+# Configure
+data_config = BacktestDataConfig(
+    dt_range=DtRange("2025-01-15", "2025-01-16"),
+    market_binance=Market(ExchangeName.BINANCE, Symbol.XRP_USDT),
+    market_gmo=Market(ExchangeName.GMO, Symbol.XRP_JPY),
+    parquet_root="/data/parquet"
+)
+
+sim_config = SimulatorConfig(
+    model_path="model.pkl",
+    feature_columns=[...],
+    long_prediction=2,
+    short_prediction=0,
+)
+
+# Load and merge
+loader = BacktestDataLoader(data_config)
+events = EventMerger.merge(
+    loader.load_binance_orderbooks(),
+    loader.load_binance_trades(),
+    loader.load_gmo_orderbooks()
+)
+
+# Run simulation
+result = SimulatorV2(sim_config).run(events)
+result.print_summary()
+result.plot_pnl()
+```
+
+See `notebooks/backtest_simulation.ipynb` for a complete example.

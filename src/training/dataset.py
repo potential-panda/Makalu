@@ -78,7 +78,7 @@ class Dataset:
     def align(
         self,
         tolerance: str = "1s",
-        direction: str = "nearest",
+        direction: str = "backward",
         include_label_columns: Optional[List[str]] = None,
     ) -> "Dataset":
         """
@@ -317,6 +317,64 @@ class Dataset:
         if self.X_test is None or self.y_test is None:
             raise ValueError("Call train_test_split() first")
         return self.X_test, self.y_test
+
+    def leak_safe_preprocess(
+        self,
+        test_size: float = 0.2,
+        na_threshold: float = 0.5,
+        fill_method: str = "ffill",
+    ) -> "Dataset":
+        """
+        Execute split and cleaning in a leak-safe manner.
+        1. Split Train/Test.
+        2. Identify NA columns using Train set only.
+        3. Drop those columns from both.
+        4. Fill NA in Train and Test independently.
+        """
+        if self._aligned_features is None:
+            self.align()
+
+        # 1. Split
+        self.train_test_split(test_size=test_size, shuffle=False)
+
+        # 2. Identify columns to drop (Train stats only)
+        na_fractions = self.X_train.isna().mean()
+        cols_to_drop = na_fractions[na_fractions > na_threshold].index.tolist()
+
+        if cols_to_drop:
+            LOG.info(f"Leak-safe drop: Removing {len(cols_to_drop)} columns based on Train stats")
+            self.X_train = self.X_train.drop(columns=cols_to_drop)
+            self.X_test = self.X_test.drop(columns=cols_to_drop)
+            if self.feature_columns:
+                self.feature_columns = [c for c in self.feature_columns if c not in cols_to_drop]
+
+        # 3. Fill NA independently
+        def _fill(df):
+            if fill_method == "ffill":
+                return df.ffill()
+            elif fill_method == "bfill":
+                return df.bfill()
+            elif fill_method == "zero":
+                return df.fillna(0)
+            elif fill_method == "mean":
+                # Mean from same set to avoid leakage
+                return df.fillna(df.mean())
+            return df
+
+        self.X_train = _fill(self.X_train)
+        self.X_test = _fill(self.X_test)
+
+        # 4. Drop remaining NaN rows (usually at the start of each set)
+        train_valid = ~self.X_train.isna().any(axis=1)
+        test_valid = ~self.X_test.isna().any(axis=1)
+
+        self.X_train = self.X_train.loc[train_valid]
+        self.y_train = self.y_train.loc[train_valid]
+        self.X_test = self.X_test.loc[test_valid]
+        self.y_test = self.y_test.loc[test_valid]
+
+        LOG.info(f"Preprocess complete. Train: {len(self.X_train)}, Test: {len(self.X_test)}")
+        return self
 
     def drop_na_features(self, threshold: float = 0.5) -> "Dataset":
         """
