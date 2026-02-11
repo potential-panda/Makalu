@@ -57,6 +57,19 @@ class GenerateLabelsStep(Step):
         self.config = config
 
     def populate(self, pipeline_context: PipelineContext, stage_context: Context):
+        df = self._populate(pipeline_context, stage_context)
+        if df is None or df.empty:
+            return
+        parquet_store = pipeline_context.parquet_store.create_label(
+            "TripleBarrierLabel",
+            stage_context.market,
+            self.config.param_id,
+        )
+        parquet_store.add_dataframe(df.copy(), ts_column=None)
+        parquet_store.close()
+        LOG.info(f"GenerateLabelsStep: Saved {len(df)} labels to Parquet (param_id={self.config.param_id})")
+
+    def _populate(self, pipeline_context: PipelineContext, stage_context: Context):
         df = stage_context.execution_price_df
 
         LOG.info(
@@ -92,20 +105,13 @@ class GenerateLabelsStep(Step):
             f"Ambiguous: {result.ambiguous_count})"
         )
 
-        self._save_to_parquet(pipeline_context, stage_context, df)
-        self._save_to_influxdb(pipeline_context, stage_context, df)
+        return df
 
-    def _save_to_parquet(self, pipeline_context: PipelineContext, stage_context: Context, df: pd.DataFrame):
-        parquet_store = pipeline_context.parquet_store.create_label(
-            "TripleBarrierLabel",
-            stage_context.market,
-            self.config.param_id,
-        )
-        parquet_store.add_dataframe(df.copy(), ts_column=None)
-        parquet_store.close()
-        LOG.info(f"GenerateLabelsStep: Saved {len(df)} labels to Parquet " f"(param_id={self.config.param_id})")
+    def populate_influxdb(self, pipeline_context: PipelineContext, stage_context: Context):
+        df = self._populate(pipeline_context, stage_context)
+        if df is None or df.empty:
+            return
 
-    def _save_to_influxdb(self, pipeline_context: PipelineContext, stage_context: Context, df: pd.DataFrame):
         influx_writer = pipeline_context.influx_store.create_writer(LABEL_DATA_BUCKET, no_retention=True)
 
         exchange_name = stage_context.market.exchange_name.name

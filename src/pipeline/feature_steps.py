@@ -21,8 +21,10 @@ LOG = logging.getLogger(__name__)
 # Bucket name constant
 FEATURE_DATA_BUCKET = "feature_data"
 
-# Default rolling window for z-score and percentile calculations
-DEFAULT_ROLLING_WINDOW = "5min"
+# Rolling windows for z-score and percentile calculations
+# Multiple windows capture different timescales (short-term reactivity vs long-term stability)
+ROLLING_WINDOWS = ["1min", "3min", "5min"]
+DEFAULT_ROLLING_WINDOW = "1min"  # Default for single-window features
 
 # Small epsilon to avoid division by zero
 EPS = 1e-9
@@ -119,9 +121,28 @@ class AlignAndBuildFeaturesStep(Step):
     DEPTH_LEVELS = [1, 3, 5, 10]
 
     def populate(self, pipeline_context: PipelineContext, stage_context: Context):
-        """Main entry point for feature computation."""
+        """Main entry point for feature computation - saves to Parquet only."""
+        feature_df = self._populate(pipeline_context, stage_context)
+        if feature_df is None or feature_df.empty:
+            return
+
+        # Save to parquet store
+        parquet_store = pipeline_context.parquet_store.create_feature(stage_context.market)
+        parquet_store.add_dataframe(feature_df, ts_column=None)
+        parquet_store.close()
+        LOG.info(
+            f"AlignAndBuildFeaturesStep: Saved {len(feature_df)} rows "
+            f"with {len(feature_df.columns)} columns to Parquet store."
+        )
+
+    def _populate(self, pipeline_context: PipelineContext, stage_context: Context):
+        """Shared logic for feature computation."""
         # Align all data sources into a single read-only source DataFrame
         source_df = self._align_data_sources(stage_context)
+        if source_df is None or source_df.empty:
+            LOG.warning("AlignAndBuildFeaturesStep: No data sources available")
+            return None
+
         LOG.info(
             f"AlignAndBuildFeaturesStep: Starting with {len(source_df)} rows, "
             f"{len(source_df.columns)} source columns"
@@ -164,16 +185,14 @@ class AlignAndBuildFeaturesStep(Step):
         ]
         LOG.info(f"AlignAndBuildFeaturesStep: Feature columns: {sorted(feature_df.columns.tolist())}")
 
-        # Save to parquet store
-        parquet_store = pipeline_context.parquet_store.create_feature(stage_context.market)
-        parquet_store.add_dataframe(feature_df, ts_column=None)
-        parquet_store.close()
-        LOG.info(
-            f"AlignAndBuildFeaturesStep: Built and saved {len(feature_df)} rows "
-            f"with {len(feature_df.columns)} columns to parquet store."
-        )
+        return feature_df
 
-        # Save to InfluxDB
+    def populate_influxdb(self, pipeline_context: PipelineContext, stage_context: Context):
+        """Saves features to InfluxDB only."""
+        feature_df = self._populate(pipeline_context, stage_context)
+        if feature_df is None or feature_df.empty:
+            return
+
         influx_writer = pipeline_context.influx_store.create_writer(FEATURE_DATA_BUCKET, no_retention=True)
         points = DataPointConverter.convert_dataframe_to_influx_points(
             feature_df,
@@ -191,8 +210,14 @@ class AlignAndBuildFeaturesStep(Step):
     # =========================================================================
 
     def _align_data_sources(self, stage_context: Context) -> Optional[pd.DataFrame]:
-        """Align all data sources into a single DataFrame with DatetimeIndex."""
+        """Align all data sources into a single DataFrame with DatetimeIndex.
+
+        Trade aggression data is forward-filled to carry forward the last known
+        trade metrics to timestamps where no trades occurred. This ensures
+        cross-feature interactions have valid data.
+        """
         dfs_to_merge = []
+        trade_aggression_columns = []
 
         # Process each data source
         for df, name in [
@@ -210,6 +235,11 @@ class AlignAndBuildFeaturesStep(Step):
                 # Ensure sorted
                 if not df.index.is_monotonic_increasing:
                     df = df.sort_index()
+
+                # Track trade_aggression columns for forward-fill
+                if name == "trade_aggression":
+                    trade_aggression_columns = df.columns.tolist()
+
                 dfs_to_merge.append((df, name))
                 LOG.info(f"AlignAndBuildFeaturesStep: Loaded {name} with {len(df)} rows")
 
@@ -229,6 +259,15 @@ class AlignAndBuildFeaturesStep(Step):
 
         # Sort by index
         result = result.sort_index()
+
+        # Forward-fill trade aggression columns to carry forward last known values
+        # This is semantically correct: if the last trade imbalance was +0.5,
+        # that information remains valid until the next trade occurs
+        if trade_aggression_columns:
+            cols_to_ffill = [c for c in trade_aggression_columns if c in result.columns]
+            if cols_to_ffill:
+                result[cols_to_ffill] = result[cols_to_ffill].ffill()
+                LOG.info(f"AlignAndBuildFeaturesStep: Forward-filled {len(cols_to_ffill)} trade_aggression columns")
 
         return result
 
@@ -276,15 +315,17 @@ class AlignAndBuildFeaturesStep(Step):
         # Size asymmetry (which side trades bigger)
         features[f"ta_size_asymmetry_norm{suffix}"] = compute_imbalance(avg_buy_size, avg_sell_size)
 
-        # Avg size z-score and percentile
-        features[f"ta_avg_size_zscore{suffix}"] = compute_zscore(avg_size)
-        features[f"ta_avg_size_pct{suffix}"] = compute_percentile(avg_size)
+        # Avg size z-score and percentile (multiple rolling windows)
+        for roll_window in ROLLING_WINDOWS:
+            roll_suffix = f"_{roll_window.replace('min', 'm')}"
+            features[f"ta_avg_size_zscore{suffix}{roll_suffix}"] = compute_zscore(avg_size, roll_window)
+            features[f"ta_avg_size_pct{suffix}{roll_suffix}"] = compute_percentile(avg_size, roll_window)
 
-        features[f"ta_qty_per_sec_zscore{suffix}"] = compute_zscore(qty_per_sec)
-        features[f"ta_qty_per_sec_pct{suffix}"] = compute_percentile(qty_per_sec)
+            features[f"ta_qty_per_sec_zscore{suffix}{roll_suffix}"] = compute_zscore(qty_per_sec, roll_window)
+            features[f"ta_qty_per_sec_pct{suffix}{roll_suffix}"] = compute_percentile(qty_per_sec, roll_window)
 
-        features[f"ta_trades_per_sec_zscore{suffix}"] = compute_zscore(trades_per_sec)
-        features[f"ta_trades_per_sec_pct{suffix}"] = compute_percentile(trades_per_sec)
+            features[f"ta_trades_per_sec_zscore{suffix}{roll_suffix}"] = compute_zscore(trades_per_sec, roll_window)
+            features[f"ta_trades_per_sec_pct{suffix}{roll_suffix}"] = compute_percentile(trades_per_sec, roll_window)
 
         features[f"ta_buy_qty_share{suffix}"] = buy_qty / (total_qty + EPS)
         features[f"ta_buy_count_share{suffix}"] = buy_count / (total_count + EPS)
@@ -417,14 +458,17 @@ class AlignAndBuildFeaturesStep(Step):
         features[f"bc_refill_imbalance{suffix}"] = compute_imbalance(refill_bid_rate, refill_ask_rate)
 
         total_pull_rate = pull_bid_rate + pull_ask_rate
-        features[f"bc_total_pull_zscore{suffix}"] = compute_zscore(total_pull_rate)
-
         total_refill_rate = refill_bid_rate + refill_ask_rate
         features[f"bc_pull_refill_ratio{suffix}"] = total_pull_rate / (total_refill_rate + EPS)
 
         total_activity = pull_bid_rate + pull_ask_rate + refill_bid_rate + refill_ask_rate
-        features[f"bc_total_activity_zscore{suffix}"] = compute_zscore(total_activity)
-        features[f"bc_total_activity_pct{suffix}"] = compute_percentile(total_activity)
+
+        # Z-score and percentile with multiple rolling windows
+        for roll_window in ROLLING_WINDOWS:
+            roll_suffix = f"_{roll_window.replace('min', 'm')}"
+            features[f"bc_total_pull_zscore{suffix}{roll_suffix}"] = compute_zscore(total_pull_rate, roll_window)
+            features[f"bc_total_activity_zscore{suffix}{roll_suffix}"] = compute_zscore(total_activity, roll_window)
+            features[f"bc_total_activity_pct{suffix}{roll_suffix}"] = compute_percentile(total_activity, roll_window)
 
     def _build_book_change_cross_k_features(self, source_df: pd.DataFrame, features: Dict[str, pd.Series]) -> None:
         """Build cross-k features comparing shallow vs deep book changes."""
@@ -464,9 +508,11 @@ class AlignAndBuildFeaturesStep(Step):
         slippage_total_bps = slippage_bid_bps + slippage_ask_bps
         features["ep_slippage_total_bps"] = slippage_total_bps
 
-        # Slippage magnitude features (normalized)
-        features["ep_slippage_zscore"] = compute_zscore(slippage_total_bps)
-        features["ep_slippage_pct"] = compute_percentile(slippage_total_bps)
+        # Slippage magnitude features (normalized) with multiple rolling windows
+        for roll_window in ROLLING_WINDOWS:
+            roll_suffix = f"_{roll_window.replace('min', 'm')}"
+            features[f"ep_slippage_zscore{roll_suffix}"] = compute_zscore(slippage_total_bps, roll_window)
+            features[f"ep_slippage_pct{roll_suffix}"] = compute_percentile(slippage_total_bps, roll_window)
 
         # Slippage asymmetry
         features["ep_slippage_asymmetry"] = (slippage_ask_bps - slippage_bid_bps) / (slippage_total_bps + EPS)
@@ -602,8 +648,9 @@ class AlignAndBuildFeaturesStep(Step):
         """Build Trade Aggression x Execution Price interactions."""
         vwap_1s = source_df["vwap_1s"]
         mid = source_df["mid"]
-        trades_per_sec_pct_1s = features["ta_trades_per_sec_pct_1s"]
-        slippage_pct = features["ep_slippage_pct"]
+        # Use 1-minute rolling window (most responsive for short-term prediction)
+        trades_per_sec_pct_1s = features["ta_trades_per_sec_pct_1s_1m"]
+        slippage_pct = features["ep_slippage_pct_1m"]
 
         features["cf_efficient_trading"] = ((trades_per_sec_pct_1s > 0.7) & (slippage_pct < 0.3)).astype(int)
         features["cf_stressed_trading"] = ((trades_per_sec_pct_1s > 0.7) & (slippage_pct > 0.7)).astype(int)
@@ -621,8 +668,9 @@ class AlignAndBuildFeaturesStep(Step):
         trade_consuming_bids = features["cf_trade_consuming_bids"]
         absorption_bid = features["cf_absorption_bid"]
         absorption_ask = features["cf_absorption_ask"]
-        trades_per_sec_pct_1s = features["ta_trades_per_sec_pct_1s"]
-        total_activity_pct_1 = features["bc_total_activity_pct_k1"]
+        # Use 1-minute rolling window (most responsive for short-term prediction)
+        trades_per_sec_pct_1s = features["ta_trades_per_sec_pct_1s_1m"]
+        total_activity_pct_1 = features["bc_total_activity_pct_k1_1m"]
         spread_bps = source_df["spread_bps"]
         depth_quality = features["ep_depth_quality"]
 

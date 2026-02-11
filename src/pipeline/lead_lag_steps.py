@@ -52,11 +52,22 @@ class LeadLagStep(Step):
     def populate(self, pipeline_context: PipelineContext, stage_context: Context):
         market_lead: Market = stage_context.market_lead
         market_lag: Market = stage_context.market_lag
+        write_store_lead_lag = pipeline_context.parquet_store.create_lead_lag(market_lead, market_lag)
+        count = 0
+        for ts, fields in self._populate(pipeline_context, stage_context):
+            write_store_lead_lag.add(ts, fields)
+            count += 1
+        write_store_lead_lag.close()
+        LOG.info(f"LeadLagStep: Wrote {count} records to Parquet store")
+
+    def _populate(self, pipeline_context: PipelineContext, stage_context: Context):
+        """Generator that yields (ts, fields) tuples."""
+        market_lead: Market = stage_context.market_lead
+        market_lag: Market = stage_context.market_lag
 
         LOG.info(f"LeadLagStep: Computing lead-lag between {market_lead.id} and {market_lag.id}")
         LOG.info(f"LeadLagStep: Window size={self.window_size_sec}s, step={self.window_step_sec}s")
 
-        influx_writer = pipeline_context.influx_store.create_writer(LEAD_LAG_BUCKET, no_retention=True)
         read_store_lead = pipeline_context.parquet_store.create_execution_price(
             market_lead,
             stage_context.execution_size_str,
@@ -65,7 +76,6 @@ class LeadLagStep(Step):
             market_lag,
             stage_context.execution_size_str,
         )
-        write_store_lead_lag = pipeline_context.parquet_store.create_lead_lag(market_lead, market_lag)
 
         populate_dt_range = stage_context.populate_dt_range
         compute_dt_range = DtRange(
@@ -141,20 +151,27 @@ class LeadLagStep(Step):
                 f"lag_{int(self.interval_ms * 2)}": corr_by_lag[2],
             }
 
+            yield (window_end_ts, fields)
+            progress.update()
+            start_idx += window_step_steps
+
+        LOG.info(f"LeadLagStep: Processed {progress.cnt} objects")
+
+    def populate_influxdb(self, pipeline_context: PipelineContext, stage_context: Context):
+        market_lead: Market = stage_context.market_lead
+        market_lag: Market = stage_context.market_lag
+        influx_writer = pipeline_context.influx_store.create_writer(LEAD_LAG_BUCKET, no_retention=True)
+        count = 0
+        for ts, fields in self._populate(pipeline_context, stage_context):
             point = (
                 Point("LEAD_LAG")
                 .tag("market_lead", market_lead.id)
                 .tag("market_lag", market_lag.id)
-                .time(int(window_end_ts * 1000), WritePrecision.NS)
+                .time(int(ts * 1000), WritePrecision.NS)
             )
             for k, v in fields.items():
                 point.field(k, v)
-
             influx_writer.add(point)
-            write_store_lead_lag.add(window_end_ts, fields)
-            progress.update()
-            start_idx += window_step_steps
-
+            count += 1
         influx_writer.close()
-        write_store_lead_lag.close()
-        LOG.info(f"LeadLagStep: Processed {progress.cnt} objects")
+        LOG.info(f"LeadLagStep: Wrote {count} points to InfluxDB")

@@ -31,13 +31,20 @@ class PopulateMarketPriceStep(Step):
         self.execution_size_str = execution_size_str
 
     def populate(self, pipeline_context: PipelineContext, stage_context: Context):
-        progress = StepProgressLogger(self.__class__.__name__, len(stage_context.order_books))
-
-        influx_writer = pipeline_context.influx_store.create_writer(ORDER_BOOK_DERIVED_BUCKET, no_retention=True)
         parquet_store = pipeline_context.parquet_store.create_execution_price(
             stage_context.market,
             self.execution_size_str,
         )
+        count = 0
+        for ts, fields in self._populate(pipeline_context, stage_context):
+            parquet_store.add(ts, fields)
+            count += 1
+        parquet_store.close()
+        LOG.info(f"PopulateMarketPriceStep: Wrote {count} records to Parquet store")
+
+    def _populate(self, pipeline_context: PipelineContext, stage_context: Context):
+        """Generator that yields (ts, fields) tuples."""
+        progress = StepProgressLogger(self.__class__.__name__, len(stage_context.order_books))
         for order_book in stage_context.order_books:
             if not stage_context.populate_dt_range.is_within(order_book.get_ts()):
                 continue
@@ -54,23 +61,27 @@ class PopulateMarketPriceStep(Step):
                 "spread_bps": market_price.spread_bps,
             }
 
+            yield (order_book.get_ts(), fields)
+            progress.update()
+        LOG.info(f"PopulateMarketPriceStep: Processed {progress.cnt} objects")
+
+    def populate_influxdb(self, pipeline_context: PipelineContext, stage_context: Context):
+        influx_writer = pipeline_context.influx_store.create_writer(ORDER_BOOK_DERIVED_BUCKET, no_retention=True)
+        count = 0
+        for ts, fields in self._populate(pipeline_context, stage_context):
             point = (
                 Point("MARKET_PRICE")
-                .tag("exchange_name", order_book.exchange_name.name)
-                .tag("symbol", order_book.symbol.name)
+                .tag("exchange_name", stage_context.market.exchange_name.name)
+                .tag("symbol", stage_context.market.symbol.name)
                 .tag("execution_size", self.execution_size_str)
-                .time(int(order_book.get_ts() * 1000), WritePrecision.MS)
+                .time(int(ts * 1000), WritePrecision.MS)
             )
             for k, v in fields.items():
                 point.field(k, v)
-
             influx_writer.add(point)
-            parquet_store.add(order_book.get_ts(), fields)
-            progress.update()
-
+            count += 1
         influx_writer.close()
-        parquet_store.close()
-        LOG.info(f"PopulateMarketPriceStep: Processed {progress.cnt} objects")
+        LOG.info(f"PopulateMarketPriceStep: Wrote {count} points to InfluxDB")
 
 
 class PopulateBookStateStep(Step):
@@ -88,10 +99,17 @@ class PopulateBookStateStep(Step):
         self.microprice_k = microprice_k
 
     def populate(self, pipeline_context: PipelineContext, stage_context: Context):
-        progress = StepProgressLogger(self.__class__.__name__, len(stage_context.order_books))
-
-        influx_writer = pipeline_context.influx_store.create_writer(ORDER_BOOK_DERIVED_BUCKET, no_retention=True)
         parquet_store = pipeline_context.parquet_store.create_single_market("BookState", stage_context.market)
+        count = 0
+        for ts, fields in self._populate(pipeline_context, stage_context):
+            parquet_store.add(ts, fields)
+            count += 1
+        parquet_store.close()
+        LOG.info(f"PopulateBookStateStep: Wrote {count} records to Parquet store")
+
+    def _populate(self, pipeline_context: PipelineContext, stage_context: Context):
+        """Generator that yields (ts, fields) tuples."""
+        progress = StepProgressLogger(self.__class__.__name__, len(stage_context.order_books))
         for order_book in stage_context.order_books:
             if not stage_context.populate_dt_range.is_within(order_book.get_ts()):
                 continue
@@ -120,22 +138,27 @@ class PopulateBookStateStep(Step):
                 value = intent.compute_microprice(order_book, k)
                 fields[f"microprice_k{k}"] = value
 
+            yield (order_book.get_ts(), fields)
+            progress.update()
+
+        LOG.info(f"PopulateBookStateStep: Processed {progress.cnt} objects")
+
+    def populate_influxdb(self, pipeline_context: PipelineContext, stage_context: Context):
+        influx_writer = pipeline_context.influx_store.create_writer(ORDER_BOOK_DERIVED_BUCKET, no_retention=True)
+        count = 0
+        for ts, fields in self._populate(pipeline_context, stage_context):
             point = (
                 Point("BOOK_STATE")
-                .tag("exchange_name", order_book.exchange_name.name)
-                .tag("symbol", order_book.symbol.name)
-                .time(int(order_book.get_ts() * 1000), WritePrecision.MS)
+                .tag("exchange_name", stage_context.market.exchange_name.name)
+                .tag("symbol", stage_context.market.symbol.name)
+                .time(int(ts * 1000), WritePrecision.MS)
             )
             for k, v in fields.items():
                 point.field(k, v)
-
             influx_writer.add(point)
-            parquet_store.add(order_book.get_ts(), fields)
-            progress.update()
-
+            count += 1
         influx_writer.close()
-        parquet_store.close()
-        LOG.info(f"PopulateOrderBookStep: Processed {progress.cnt} objects")
+        LOG.info(f"PopulateBookStateStep: Wrote {count} points to InfluxDB")
 
 
 class PopulateBookChangeStep(Step):
@@ -144,10 +167,17 @@ class PopulateBookChangeStep(Step):
         self.k_levels = k_levels
 
     def populate(self, pipeline_context: PipelineContext, stage_context: Context):
-        progress = StepProgressLogger(self.__class__.__name__, len(stage_context.order_books))
-
-        influx_writer = pipeline_context.influx_store.create_writer(ORDER_BOOK_DERIVED_BUCKET, no_retention=True)
         parquet_store = pipeline_context.parquet_store.create_single_market("BookChange", stage_context.market)
+        count = 0
+        for ts, write_fields, _ in self._populate(pipeline_context, stage_context):
+            parquet_store.add(ts, write_fields)
+            count += 1
+        parquet_store.close()
+        LOG.info(f"PopulateBookChangeStep: Wrote {count} records to Parquet store")
+
+    def _populate(self, pipeline_context: PipelineContext, stage_context: Context):
+        """Generator that yields (ts, write_fields, influx_points_data) tuples."""
+        progress = StepProgressLogger(self.__class__.__name__, len(stage_context.order_books))
         builder = BookChangeBuilder(self.k_levels)
         for order_book in stage_context.order_books:
             book_changes = builder.on_snapshot(order_book)
@@ -160,6 +190,7 @@ class PopulateBookChangeStep(Step):
             write_fields = {
                 "delta_sec": book_changes[0].delta_sec,
             }
+            influx_points_data = []
             for book_change in book_changes:
                 fields = {
                     "best_bid_reset": book_change.best_bid_reset,
@@ -173,25 +204,32 @@ class PopulateBookChangeStep(Step):
                     "refill_bid_rate": book_change.refill_bid_rate,
                     "refill_ask_rate": book_change.refill_ask_rate,
                 }
-                point = (
-                    Point("BOOK_CHANGE")
-                    .tag("exchange_name", order_book.exchange_name.name)
-                    .tag("symbol", order_book.symbol.name)
-                    .tag("k", str(book_change.k))
-                    .field("delta_sec", book_change.delta_sec)
-                    .time(int(order_book.get_ts() * 1000), WritePrecision.MS)
-                )
-                for k, v in fields.items():
-                    point.field(k, v)
-                influx_writer.add(point)
+                influx_points_data.append((book_change.k, book_change.delta_sec, fields))
 
                 for k, v in fields.items():
                     write_fields[f"{k}_k{book_change.k}"] = v
 
-            influx_writer.add(point)
-            parquet_store.add(order_book.get_ts(), write_fields)
+            yield (order_book.get_ts(), write_fields, influx_points_data)
             progress.update()
 
+        LOG.info(f"PopulateBookChangeStep: Processed {progress.cnt} objects")
+
+    def populate_influxdb(self, pipeline_context: PipelineContext, stage_context: Context):
+        influx_writer = pipeline_context.influx_store.create_writer(ORDER_BOOK_DERIVED_BUCKET, no_retention=True)
+        count = 0
+        for ts, _, influx_points_data in self._populate(pipeline_context, stage_context):
+            for k, delta_sec, fields in influx_points_data:
+                point = (
+                    Point("BOOK_CHANGE")
+                    .tag("exchange_name", stage_context.market.exchange_name.name)
+                    .tag("symbol", stage_context.market.symbol.name)
+                    .tag("k", str(k))
+                    .field("delta_sec", delta_sec)
+                    .time(int(ts * 1000), WritePrecision.MS)
+                )
+                for field_k, v in fields.items():
+                    point.field(field_k, v)
+                influx_writer.add(point)
+            count += 1
         influx_writer.close()
-        parquet_store.close()
-        LOG.info(f"PopulateBookChangeStep: Processed {progress.cnt} objects.")
+        LOG.info(f"PopulateBookChangeStep: Wrote {count} records to InfluxDB")
