@@ -87,8 +87,8 @@ def simulate_trading_strict(
     test_lookup["time"] = pd.to_datetime(test_lookup["time"])
 
     # Prepare labels for merge
-    labels_lookup = labels_df[["label", "pnl", "volatility_ema", "spread_pct_ema"]].reset_index()
-    labels_lookup.columns = ["time", "original_label", "pnl", "volatility_ema", "spread_pct_ema"]
+    labels_lookup = labels_df[["label", "long_pnl", "short_pnl", "volatility_ema", "spread_pct_ema"]].reset_index()
+    labels_lookup.columns = ["time", "original_label", "long_pnl", "short_pnl", "volatility_ema", "spread_pct_ema"]
 
     # Merge to get original labels and pnl for each test sample
     merged = pd.merge_asof(
@@ -166,9 +166,8 @@ def simulate_trading_strict(
             pd.Series(
                 {
                     "y_pred": pred,
-                    "original_label": row["original_label"],
-                    "pnl": row["pnl"],
-                    "spread_pct_ema": row["spread_pct_ema"],
+                    "long_pnl": row["long_pnl"],
+                    "short_pnl": row["short_pnl"],
                 }
             )
         )

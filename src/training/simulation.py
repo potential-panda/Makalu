@@ -85,15 +85,15 @@ def simulate_trading(
     - Predicted Short (0): Enter short position
     - Predicted NoEntry (1): Skip, no trade
 
-    PnL is calculated based on whether the prediction matches the actual label:
-    - Correct direction: Use actual PnL from labels
-    - Wrong direction: Inverse of actual PnL
-    - Trade on NoEntry period: Lose approximately half the spread
+    PnL is calculated using pre-computed long_pnl/short_pnl from triple barrier:
+    - Predicted Long: Use long_pnl (actual PnL of a long position at exit bar)
+    - Predicted Short: Use short_pnl (actual PnL of a short position at exit bar)
+    - Predicted NoEntry: 0
 
     Args:
         predictions: Array of predictions (0=Short, 1=NoEntry, 2=Long)
-        labels_df: DataFrame with columns ['label', 'pnl', 'volatility_ema', 'spread_pct_ema']
-                   where label uses original encoding (-1=Short, 0=NoEntry, 1=Long)
+        labels_df: DataFrame with columns ['label', 'long_pnl', 'short_pnl', 'volatility_ema', 'spread_pct_ema']
+                   where label uses encoding (0=Short, 1=Long, 2=Timeout)
         test_indices: DatetimeIndex of test samples to match with labels
         random_seed: Random seed for reproducible random baseline
 
@@ -105,8 +105,8 @@ def simulate_trading(
     test_lookup["time"] = pd.to_datetime(test_lookup["time"])
 
     # Prepare labels for merge
-    labels_lookup = labels_df[["label", "pnl", "volatility_ema", "spread_pct_ema"]].reset_index()
-    labels_lookup.columns = ["time", "original_label", "pnl", "volatility_ema", "spread_pct_ema"]
+    labels_lookup = labels_df[["label", "long_pnl", "short_pnl", "volatility_ema", "spread_pct_ema"]].reset_index()
+    labels_lookup.columns = ["time", "original_label", "long_pnl", "short_pnl", "volatility_ema", "spread_pct_ema"]
 
     # Merge to get original labels and pnl for each test sample
     merged = pd.merge_asof(
@@ -137,9 +137,8 @@ def simulate_trading(
             pd.Series(
                 {
                     "y_pred": row["y_pred_random"],
-                    "original_label": row["original_label"],
-                    "pnl": row["pnl"],
-                    "spread_pct_ema": row["spread_pct_ema"],
+                    "long_pnl": row["long_pnl"],
+                    "short_pnl": row["short_pnl"],
                 }
             )
         ),
@@ -170,55 +169,28 @@ def _calculate_sim_pnl(row: pd.Series) -> float:
     Calculate PnL for a simulated trade based on prediction.
 
     Prediction mapping: 0=Short, 1=NoEntry, 2=Long
-    Original label: -1=Short, 0=NoEntry, 1=Long
 
-    PnL in labels_df:
-    - Label 1 (Long win): PnL = bid(exit) - ask(entry) > 0
-    - Label -1 (Short win): PnL = bid(entry) - ask(exit) > 0
-    - Label 0 (Timeout): PnL = 0
+    Uses pre-computed long_pnl/short_pnl from triple barrier which already
+    account for bid-ask spread and actual price movement at the exit bar.
     """
     pred = row["y_pred"]
-    original_label = row["original_label"]
-    original_pnl = row["pnl"] if not pd.isna(row["pnl"]) else 0
-    spread_cost = row["spread_pct_ema"] * 0.5 if not pd.isna(row["spread_pct_ema"]) else 0.0001
 
-    # NoEntry prediction - no trade, no pnl
-    if pred == 1:
+    if pred == 1:  # NoEntry - no trade
         return 0.0
-
-    # Predicted Long (pred=2)
-    if pred == 2:
-        if original_label == 1:  # Actual was Long win - correct prediction
-            return original_pnl
-        elif original_label == -1:  # Actual was Short win - wrong direction
-            return -abs(original_pnl)  # We lose what the short would have gained
-        else:  # original_label == 0 (Timeout/NoEntry)
-            return -spread_cost  # Trade during low vol, lose spread
-
-    # Predicted Short (pred=0)
-    if pred == 0:
-        if original_label == -1:  # Actual was Short win - correct prediction
-            return original_pnl
-        elif original_label == 1:  # Actual was Long win - wrong direction
-            return -abs(original_pnl)  # We lose what the long would have gained
-        else:  # original_label == 0 (Timeout/NoEntry)
-            return -spread_cost  # Trade during low vol, lose spread
+    if pred == 2:  # Long
+        pnl = row["long_pnl"]
+        return pnl if not pd.isna(pnl) else 0.0
+    if pred == 0:  # Short
+        pnl = row["short_pnl"]
+        return pnl if not pd.isna(pnl) else 0.0
 
     return 0.0
 
 
 def _calculate_baseline_pnl(row: pd.Series) -> float:
     """Calculate PnL for always-long baseline strategy."""
-    original_label = row["original_label"]
-    original_pnl = row["pnl"] if not pd.isna(row["pnl"]) else 0
-    spread_cost = row["spread_pct_ema"] * 0.5 if not pd.isna(row["spread_pct_ema"]) else 0.0001
-
-    if original_label == 1:
-        return original_pnl
-    elif original_label == -1:
-        return -abs(original_pnl)
-    else:
-        return -spread_cost
+    pnl = row["long_pnl"]
+    return pnl if not pd.isna(pnl) else 0.0
 
 
 def plot_simulation_results(result: SimulationResult, window: int = 500) -> None:
