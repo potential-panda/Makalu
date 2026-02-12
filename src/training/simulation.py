@@ -22,6 +22,7 @@ class SimulationResult:
         win_rate: Win rate for trades taken (PnL > 0)
         baseline_pnl: Total PnL from always-long baseline
         random_pnl: Total PnL from random strategy baseline
+        confusion_pnl: 3x3 DataFrame of PnL sum grouped by (actual_label, predicted)
     """
 
     simulation_df: pd.DataFrame
@@ -33,6 +34,7 @@ class SimulationResult:
     win_rate: float
     baseline_pnl: float
     random_pnl: float
+    confusion_pnl: pd.DataFrame
 
     def summary(self) -> Dict:
         """Return a summary dictionary of the simulation results."""
@@ -46,6 +48,7 @@ class SimulationResult:
             "win_rate": self.win_rate,
             "baseline_pnl": self.baseline_pnl,
             "random_pnl": self.random_pnl,
+            "confusion_pnl": self.confusion_pnl.to_dict(),
         }
 
     def print_summary(self) -> None:
@@ -69,6 +72,12 @@ class SimulationResult:
 
         print("\nRandom Strategy Baseline:")
         print(f"  Total PnL: {self.random_pnl:.6f}")
+
+        print("\nConfusion Matrix PnL (rows=actual, cols=predicted):")
+        display_pnl = self.confusion_pnl.copy()
+        display_pnl.index = ["Actual Short", "Actual Long", "Actual Timeout"]
+        display_pnl.columns = ["Pred Short", "Pred NoEntry", "Pred Long"]
+        print(display_pnl.to_string(float_format=lambda x: f"{x:.6f}"))
 
 
 def simulate_trading(
@@ -151,6 +160,16 @@ def simulate_trading(
     trades_taken = trade_mask.sum()
     trades_skipped = (~trade_mask).sum()
 
+    # Confusion matrix PnL: rows=actual label, cols=predicted
+    label_order = [0, 1, 2]
+    confusion_pnl = merged.pivot_table(
+        values="sim_pnl",
+        index="original_label",
+        columns="y_pred",
+        aggfunc="sum",
+        fill_value=0.0,
+    ).reindex(index=label_order, columns=label_order, fill_value=0.0)
+
     return SimulationResult(
         simulation_df=merged,
         total_samples=len(merged),
@@ -161,6 +180,7 @@ def simulate_trading(
         win_rate=float((merged.loc[trade_mask, "sim_pnl"] > 0).mean()) if trades_taken > 0 else 0.0,
         baseline_pnl=float(merged["baseline_pnl"].sum()),
         random_pnl=float(merged["random_pnl"].sum()),
+        confusion_pnl=confusion_pnl,
     )
 
 
@@ -278,3 +298,37 @@ def plot_simulation_results(result: SimulationResult, window: int = 500) -> None
     # Print breakdown
     print("\nPnL Breakdown by Prediction Type:")
     print(pred_pnl.to_string())
+
+    # Figure 3: Confusion Matrix PnL heatmap
+    fig, ax = plt.subplots(figsize=(8, 6))
+    pnl_data = result.confusion_pnl.values
+
+    count_data = merged.pivot_table(
+        values="sim_pnl",
+        index="original_label",
+        columns="y_pred",
+        aggfunc="count",
+        fill_value=0,
+    ).reindex(index=[0, 1, 2], columns=[0, 1, 2], fill_value=0).values.astype(int)
+
+    vmax = max(abs(pnl_data.min()), abs(pnl_data.max())) or 1e-9
+    im = ax.imshow(pnl_data, cmap="RdYlGn", vmin=-vmax, vmax=vmax, aspect="auto")
+
+    actual_names = ["Short(0)", "Long(1)", "Timeout(2)"]
+    pred_names = ["Short(0)", "NoEntry(1)", "Long(2)"]
+    for i in range(3):
+        for j in range(3):
+            text = f"n={count_data[i, j]}\n{pnl_data[i, j]:.4f}"
+            color = "white" if abs(pnl_data[i, j]) > vmax * 0.6 else "black"
+            ax.text(j, i, text, ha="center", va="center", fontsize=9, color=color)
+
+    ax.set_xticks(range(3))
+    ax.set_yticks(range(3))
+    ax.set_xticklabels(pred_names)
+    ax.set_yticklabels(actual_names)
+    ax.set_xlabel("Predicted")
+    ax.set_ylabel("Actual Label")
+    ax.set_title("Confusion Matrix PnL (sum)")
+    plt.colorbar(im, ax=ax, label="Total PnL")
+    plt.tight_layout()
+    plt.show()
