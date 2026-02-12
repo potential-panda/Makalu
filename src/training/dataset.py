@@ -184,12 +184,12 @@ class Dataset:
         """
         Convert triple-barrier labels to binary classification.
 
-        Triple-barrier labels: 1=Win, -1=Loss, 0=Timeout
-        Binary labels: 1=Win, 0=Loss (Timeout dropped by default)
+        Triple-barrier labels: 0=Short, 1=Long, 2=Timeout
+        Binary labels: 1=Long, 0=Short (Timeout dropped by default)
 
         Args:
-            drop_timeout: If True, drop rows where label == 0 (Timeout).
-                         If False, treat Timeout as Loss (0).
+            drop_timeout: If True, drop rows where label == 2 (Timeout).
+                         If False, treat Timeout as Short (0).
 
         Returns:
             Self for method chaining
@@ -197,14 +197,14 @@ class Dataset:
         before_count = len(self._aligned_labels)
 
         if drop_timeout:
-            # Drop timeout labels (0)
-            mask = self._aligned_labels != 0
+            # Drop timeout labels (2)
+            mask = self._aligned_labels != 2
             self._aligned_features = self._aligned_features.loc[mask]
             self._aligned_labels = self._aligned_labels.loc[mask]
             dropped = before_count - len(self._aligned_labels)
-            LOG.info(f"Dropped {dropped:,} timeout labels (label=0)")
+            LOG.info(f"Dropped {dropped:,} timeout labels (label=2)")
 
-        # Convert -1 (Loss) to 0, keep 1 (Win) as 1
+        # Convert: 1 (Long) -> 1, 0 (Short) -> 0, 2 (Timeout if kept) -> 0
         self._aligned_labels = (self._aligned_labels == 1).astype(int)
 
         after_count = len(self._aligned_labels)
@@ -222,17 +222,17 @@ class Dataset:
         """
         Convert triple-barrier labels to multiclass format for LightGBM.
 
-        Triple-barrier labels: -1=Short, 0=NoEntry, 1=Long
-        Multiclass labels (LightGBM requires [0, num_class)):
-            0 = Short (was -1)
-            1 = NoEntry (was 0)
+        Triple-barrier labels: 0=Short, 1=Long, 2=Timeout
+        Multiclass labels (for training and simulation):
+            0 = Short (was 0)
+            1 = NoEntry (was 2, Timeout)
             2 = Long (was 1)
 
         Returns:
             Self for method chaining
         """
-        # Map: -1 -> 0, 0 -> 1, 1 -> 2
-        label_map = {-1: 0, 0: 1, 1: 2}
+        # Map: 0(Short)->0, 1(Long)->2, 2(Timeout)->1(NoEntry)
+        label_map = {0: 0, 1: 2, 2: 1}
         self._aligned_labels = self._aligned_labels.map(label_map).astype(int)
 
         counts = self._aligned_labels.value_counts().sort_index()

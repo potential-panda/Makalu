@@ -10,9 +10,9 @@ def plot_labels(labels: pd.Series, config: TripleBarrierConfig) -> None:
 
     # Create a mapping for human-readable labels
     label_map = {
-        1: f"Win (PT = {config.barrier_multiplier}x Vol)",
-        -1: f"Loss (SL = {config.barrier_multiplier}x Vol)",
-        0: f"Timeout ({config.timeout_sec}s)",
+        1: f"Long (PT = {config.barrier_multiplier}x Spread)",
+        0: f"Short (SL = {config.barrier_multiplier}x Spread)",
+        2: f"Timeout ({config.timeout_sec}s)",
     }
     label_counts.rename(index=label_map, inplace=True)
 

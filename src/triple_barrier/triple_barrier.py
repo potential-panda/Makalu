@@ -318,9 +318,11 @@ def calculate_volatility_and_spread(df: pd.DataFrame, config: TripleBarrierConfi
     df["volatility_ema"] = volatility_ema.reindex(df.index, method="ffill")
     df["spread_pct_ema"] = spread_pct_ema.reindex(df.index, method="ffill")
 
-    # Calculate barrier levels
-    df["pt_pct"] = config.barrier_multiplier * df["volatility_ema"]
-    df["sl_pct"] = config.barrier_multiplier * df["volatility_ema"]  # Use same multiplier for both
+    # Calculate barrier levels based on spread (transaction cost)
+    # This ensures barriers have direct economic meaning: profit target = k * spread
+    # Volatility then determines the probability of hitting these barriers
+    df["pt_pct"] = config.barrier_multiplier * df["spread_pct_ema"]
+    df["sl_pct"] = config.barrier_multiplier * df["spread_pct_ema"]
 
     # Drop rows with NaN values
     df.dropna(inplace=True)
