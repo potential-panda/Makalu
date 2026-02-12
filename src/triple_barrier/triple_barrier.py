@@ -6,9 +6,9 @@ using dynamic volatility-based barriers. The implementation is optimized
 with numba JIT compilation for performance.
 
 The triple-barrier method labels each potential trade entry as:
-- Win (1): Price hit profit-take barrier before timeout
-- Loss (-1): Price hit stop-loss barrier before timeout
-- Timeout (0): Neither barrier was hit within the timeout period
+- Short (0): Price hit stop-loss (lower) barrier before timeout
+- Long (1): Price hit profit-take (upper) barrier before timeout
+- Timeout (2): Neither barrier was hit within the timeout period
 
 Reference: "Advances in Financial Machine Learning" by Marcos López de Prado
 """
@@ -63,26 +63,26 @@ class LabelingResult:
     """Result container for triple-barrier labeling.
 
     Attributes:
-        labels_df: DataFrame with 'label' and 'pnl' columns indexed by timestamp
+        labels_df: DataFrame with 'label', 'long_pnl', and 'short_pnl' columns indexed by timestamp
         ambiguous_count: Number of cases where both barriers were hit in the same bar
         total_count: Total number of labels generated
-        win_count: Number of Win labels (1)
-        loss_count: Number of Loss labels (-1)
-        timeout_count: Number of Timeout labels (0)
+        long_count: Number of Long labels (1)
+        short_count: Number of Short labels (0)
+        timeout_count: Number of Timeout labels (2)
     """
 
     labels_df: pd.DataFrame
     ambiguous_count: int
     total_count: int
-    win_count: int
-    loss_count: int
+    long_count: int
+    short_count: int
     timeout_count: int
 
     @property
-    def win_rate(self) -> float:
-        """Win rate excluding timeouts."""
-        non_timeout = self.win_count + self.loss_count
-        return self.win_count / non_timeout if non_timeout > 0 else 0.0
+    def long_rate(self) -> float:
+        """Long rate excluding timeouts."""
+        non_timeout = self.long_count + self.short_count
+        return self.long_count / non_timeout if non_timeout > 0 else 0.0
 
     @property
     def timeout_rate(self) -> float:
@@ -90,17 +90,17 @@ class LabelingResult:
         return self.timeout_count / self.total_count if self.total_count > 0 else 0.0
 
     @property
-    def total_pnl(self) -> float:
-        """Total PnL across all trades."""
-        if "pnl" in self.labels_df.columns:
-            return self.labels_df["pnl"].sum()
+    def total_long_pnl(self) -> float:
+        """Total long PnL across all trades."""
+        if "long_pnl" in self.labels_df.columns:
+            return self.labels_df["long_pnl"].sum()
         return 0.0
 
     @property
-    def avg_pnl(self) -> float:
-        """Average PnL per trade."""
-        if "pnl" in self.labels_df.columns and self.total_count > 0:
-            return self.labels_df["pnl"].mean()
+    def avg_long_pnl(self) -> float:
+        """Average long PnL per trade."""
+        if "long_pnl" in self.labels_df.columns and self.total_count > 0:
+            return self.labels_df["long_pnl"].mean()
         return 0.0
 
 
@@ -117,17 +117,17 @@ def _compute_labels_numba(
     pt_pct: np.ndarray,
     sl_pct: np.ndarray,
     timeout_ns: int,
-) -> Tuple[np.ndarray, np.ndarray, int]:
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, int]:
     """
     Numba-optimized inner loop for triple-barrier label computation with PnL.
 
     Labels are determined using mid price for barrier checking.
-    PnL is calculated based on the label (trading direction):
-    - Label 1 (PT hit): LONG position - buy at ask(t), sell at bid(t+n)
-      PnL = bid(t+n) - ask(t)
-    - Label -1 (SL hit): SHORT position - sell at bid(t), buy at ask(t+n)
-      PnL = bid(t) - ask(t+n)
-    - Label 0 (Timeout): No trade, PnL = 0
+    PnL is calculated for both long and short positions at the exit bar:
+    - long_pnl  = bid(t+n) - ask(t)   (buy at ask, sell at bid)
+    - short_pnl = bid(t) - ask(t+n)   (sell at bid, buy at ask)
+
+    For barrier hits (label 0/1), exit bar is the bar where the barrier was hit.
+    For timeout (label 2), exit bar is the last bar within the timeout window.
 
     Args:
         timestamps: Array of timestamps as int64 nanoseconds
@@ -143,13 +143,15 @@ def _compute_labels_numba(
         timeout_ns: Timeout in nanoseconds
 
     Returns:
-        labels: Array of labels (1=Win, -1=Loss, 0=Timeout)
-        pnl: Array of PnL values
+        labels: Array of labels (0=Short, 1=Long, 2=Timeout)
+        long_pnl: Array of PnL for long position
+        short_pnl: Array of PnL for short position
         ambiguous_count: Number of cases where both barriers were hit in the same bar
     """
     n = len(timestamps)
-    labels = np.zeros(n, dtype=np.int8)
-    pnl = np.zeros(n, dtype=np.float64)
+    labels = np.full(n, 2, dtype=np.int8)  # Default to timeout (2)
+    long_pnl = np.zeros(n, dtype=np.float64)
+    short_pnl = np.zeros(n, dtype=np.float64)
     ambiguous_count = 0
 
     for i in range(n):
@@ -166,46 +168,48 @@ def _compute_labels_numba(
         upper_barrier = entry_mid * (1 + pt_level)
         lower_barrier = entry_mid * (1 - sl_level)
 
+        exit_j = -1  # Track exit bar
+
         # Search future bars for a barrier hit
         for j in range(i + 1, n):
             if timestamps[j] > timeout_ts:
-                # Timeout reached - label stays 0, pnl stays 0 (no trade)
                 break
+
+            exit_j = j
 
             hit_upper = high_prices[j] >= upper_barrier
             hit_lower = low_prices[j] <= lower_barrier
 
             if hit_upper and hit_lower:
                 # Both barriers hit in same bar - ambiguous case
-                # Conservatively mark as Loss (short position)
-                labels[i] = -1
-                # SHORT: sell at bid(t), buy at ask(t+n)
-                pnl[i] = bid_entry_prices[i] - ask_exit_prices[j]
+                # Conservatively mark as Short (lower barrier)
+                labels[i] = 0
                 ambiguous_count += 1
                 break
             elif hit_upper:
-                labels[i] = 1  # Profit Take (Win) - LONG position
-                # LONG: buy at ask(t), sell at bid(t+n)
-                pnl[i] = bid_exit_prices[j] - ask_entry_prices[i]
+                labels[i] = 1  # Long - upper barrier hit
                 break
             elif hit_lower:
-                labels[i] = -1  # Stop Loss (Loss) - SHORT position
-                # SHORT: sell at bid(t), buy at ask(t+n)
-                pnl[i] = bid_entry_prices[i] - ask_exit_prices[j]
+                labels[i] = 0  # Short - lower barrier hit
                 break
 
-    return labels, pnl, ambiguous_count
+        # Calculate long/short PnL at exit bar
+        if exit_j > i:
+            long_pnl[i] = bid_exit_prices[exit_j] - ask_entry_prices[i]
+            short_pnl[i] = bid_entry_prices[i] - ask_exit_prices[exit_j]
+
+    return labels, long_pnl, short_pnl, ambiguous_count
 
 
 def compute_labels(df: pd.DataFrame, config: TripleBarrierConfig) -> LabelingResult:
     """
-    Compute triple-barrier labels and estimated PnL using OHLC resampling.
+    Compute triple-barrier labels and PnL using OHLC resampling.
 
     Labels are determined using mid price for barrier checking.
-    PnL is calculated based on trade direction:
-    - Label 1 (PT hit): LONG - buy at ask(t), sell at bid(t+n). PnL = bid(t+n) - ask(t)
-    - Label -1 (SL hit): SHORT - sell at bid(t), buy at ask(t+n). PnL = bid(t) - ask(t+n)
-    - Label 0 (Timeout): No trade, PnL = 0
+    PnL is calculated for both long and short positions at the exit bar:
+    - Label 1 (Long): upper barrier hit.
+    - Label 0 (Short): lower barrier hit.
+    - Label 2 (Timeout): PnL calculated at the last bar within the timeout window.
 
     The DataFrame must have columns: 'mid', 'ask', 'bid', 'pt_pct', 'sl_pct'
     and be indexed by timestamp.
@@ -215,7 +219,7 @@ def compute_labels(df: pd.DataFrame, config: TripleBarrierConfig) -> LabelingRes
         config: TripleBarrierConfig with labeling parameters
 
     Returns:
-        LabelingResult with labels DataFrame (including 'label' and 'pnl' columns) and statistics
+        LabelingResult with labels DataFrame (including 'label', 'long_pnl', 'short_pnl') and statistics
     """
     timeout_delta = pd.Timedelta(seconds=config.timeout_sec)
 
@@ -248,7 +252,7 @@ def compute_labels(df: pd.DataFrame, config: TripleBarrierConfig) -> LabelingRes
     timeout_ns = int(timeout_delta.total_seconds() * 1e9)
 
     # Run numba-optimized computation
-    labels, pnl, ambiguous_count = _compute_labels_numba(
+    labels, long_pnl, short_pnl, ambiguous_count = _compute_labels_numba(
         timestamps,
         mid_prices,
         high_prices,
@@ -262,7 +266,10 @@ def compute_labels(df: pd.DataFrame, config: TripleBarrierConfig) -> LabelingRes
         timeout_ns,
     )
 
-    labels_df = pd.DataFrame({"label": labels, "pnl": pnl}, index=df_resampled.index)
+    labels_df = pd.DataFrame(
+        {"label": labels, "long_pnl": long_pnl, "short_pnl": short_pnl},
+        index=df_resampled.index,
+    )
 
     # Calculate statistics
     label_counts = pd.Series(labels).value_counts()
@@ -271,9 +278,9 @@ def compute_labels(df: pd.DataFrame, config: TripleBarrierConfig) -> LabelingRes
         labels_df=labels_df,
         ambiguous_count=ambiguous_count,
         total_count=len(labels),
-        win_count=int(label_counts.get(1, 0)),
-        loss_count=int(label_counts.get(-1, 0)),
-        timeout_count=int(label_counts.get(0, 0)),
+        long_count=int(label_counts.get(1, 0)),
+        short_count=int(label_counts.get(0, 0)),
+        timeout_count=int(label_counts.get(2, 0)),
     )
 
 
@@ -369,16 +376,16 @@ def generate_labels(df: pd.DataFrame, config: TripleBarrierConfig, exclude_edge:
             labels_df=result.labels_df,
             ambiguous_count=result.ambiguous_count,
             total_count=len(labels),
-            win_count=int(label_counts.get(1, 0)),
-            loss_count=int(label_counts.get(-1, 0)),
-            timeout_count=int(label_counts.get(0, 0)),
+            long_count=int(label_counts.get(1, 0)),
+            short_count=int(label_counts.get(0, 0)),
+            timeout_count=int(label_counts.get(2, 0)),
         )
 
     LOG.info(
         f"generate_labels: Generated {result.total_count} labels "
-        f"(Win: {result.win_count}, Loss: {result.loss_count}, Timeout: {result.timeout_count}, "
+        f"(Long: {result.long_count}, Short: {result.short_count}, Timeout: {result.timeout_count}, "
         f"Ambiguous: {result.ambiguous_count}) "
-        f"| Total PnL: {result.total_pnl:.4f}, Avg PnL: {result.avg_pnl:.6f}"
+        f"| Total Long PnL: {result.total_long_pnl:.4f}, Avg Long PnL: {result.avg_long_pnl:.6f}"
     )
 
     return result
