@@ -84,6 +84,8 @@ def simulate_trading(
     predictions: np.ndarray,
     labels_df: pd.DataFrame,
     test_indices: pd.DatetimeIndex,
+    probabilities: np.ndarray = None,
+    threshold: float = None,
     random_seed: int = 42,
 ) -> SimulationResult:
     """
@@ -104,6 +106,10 @@ def simulate_trading(
         labels_df: DataFrame with columns ['label', 'long_pnl', 'short_pnl', 'volatility_ema', 'spread_pct_ema']
                    where label uses encoding (0=Short, 1=Long, 2=Timeout)
         test_indices: DatetimeIndex of test samples to match with labels
+        probabilities: Optional (n_samples, 3) array of class probabilities from predict_proba.
+                       When provided with threshold, low-confidence trade predictions become NoEntry.
+        threshold: Minimum probability to follow the predicted direction.
+                   Predictions below this are overridden to NoEntry (1).
         random_seed: Random seed for reproducible random baseline
 
     Returns:
@@ -128,6 +134,13 @@ def simulate_trading(
 
     # Add predictions
     merged["y_pred"] = predictions
+
+    # Apply probability threshold: override low-confidence trade predictions to NoEntry
+    if probabilities is not None and threshold is not None:
+        pred_probs = probabilities[np.arange(len(predictions)), predictions]
+        merged["pred_prob"] = pred_probs
+        low_conf_trade = (pred_probs < threshold) & (merged["y_pred"] != 1)
+        merged.loc[low_conf_trade, "y_pred"] = 1
 
     # Calculate simulated PnL
     merged["sim_pnl"] = merged.apply(_calculate_sim_pnl, axis=1)

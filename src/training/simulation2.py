@@ -81,6 +81,8 @@ def simulate_trading_strict(
     allow_overlap: bool = False,
     tolerance: str = "1s",
     direction: str = "backward",
+    probabilities: np.ndarray = None,
+    threshold: float = None,
     random_seed: int = 42,
 ) -> SimulationResult:
     """
@@ -89,6 +91,7 @@ def simulate_trading_strict(
     Differences vs training.simulation.simulate_trading:
     - Uses merge_asof direction='backward' by default (no look-ahead)
     - Optionally blocks overlapping trades with a fixed hold period (timeout_sec)
+    - Supports probability threshold to filter low-confidence predictions
     """
     # Create lookup DataFrame for test indices
     test_lookup = pd.DataFrame({"time": test_indices}).reset_index(drop=True)
@@ -109,6 +112,13 @@ def simulate_trading_strict(
 
     # Add predictions
     merged["y_pred"] = predictions
+
+    # Apply probability threshold: override low-confidence trade predictions to NoEntry
+    if probabilities is not None and threshold is not None:
+        pred_probs = probabilities[np.arange(len(predictions)), predictions]
+        merged["pred_prob"] = pred_probs
+        low_conf_trade = (pred_probs < threshold) & (merged["y_pred"] != 1)
+        merged.loc[low_conf_trade, "y_pred"] = 1
 
     # Sort to ensure chronological processing
     merged = merged.sort_values("time").reset_index(drop=True)
