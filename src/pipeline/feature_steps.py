@@ -212,12 +212,14 @@ class AlignAndBuildFeaturesStep(Step):
     def _align_data_sources(self, stage_context: Context) -> Optional[pd.DataFrame]:
         """Align all data sources into a single DataFrame with DatetimeIndex.
 
-        Trade aggression data is forward-filled to carry forward the last known
-        trade metrics to timestamps where no trades occurred. This ensures
-        cross-feature interactions have valid data.
+        Sparse data sources are forward-filled to carry forward the last known
+        values to timestamps where data is missing:
+        - Trade aggression: trades are sparse events; ffill carries last known metrics
+        - Execution price: some order books lack depth for the execution size;
+          ffill uses last known execution price as best estimate
         """
         dfs_to_merge = []
-        trade_aggression_columns = []
+        ffill_columns = []
 
         # Process each data source
         for df, name in [
@@ -236,9 +238,9 @@ class AlignAndBuildFeaturesStep(Step):
                 if not df.index.is_monotonic_increasing:
                     df = df.sort_index()
 
-                # Track trade_aggression columns for forward-fill
-                if name == "trade_aggression":
-                    trade_aggression_columns = df.columns.tolist()
+                # Track columns that need forward-fill after outer join
+                if name in ("trade_aggression", "execution_price"):
+                    ffill_columns.extend(df.columns.tolist())
 
                 dfs_to_merge.append((df, name))
                 LOG.info(f"AlignAndBuildFeaturesStep: Loaded {name} with {len(df)} rows")
@@ -260,14 +262,12 @@ class AlignAndBuildFeaturesStep(Step):
         # Sort by index
         result = result.sort_index()
 
-        # Forward-fill trade aggression columns to carry forward last known values
-        # This is semantically correct: if the last trade imbalance was +0.5,
-        # that information remains valid until the next trade occurs
-        if trade_aggression_columns:
-            cols_to_ffill = [c for c in trade_aggression_columns if c in result.columns]
+        # Forward-fill sparse data source columns to carry forward last known values
+        if ffill_columns:
+            cols_to_ffill = [c for c in ffill_columns if c in result.columns]
             if cols_to_ffill:
                 result[cols_to_ffill] = result[cols_to_ffill].ffill()
-                LOG.info(f"AlignAndBuildFeaturesStep: Forward-filled {len(cols_to_ffill)} trade_aggression columns")
+                LOG.info(f"AlignAndBuildFeaturesStep: Forward-filled {len(cols_to_ffill)} columns (trade_aggression + execution_price)")
 
         return result
 
