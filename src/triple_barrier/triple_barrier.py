@@ -41,10 +41,10 @@ class TripleBarrierConfig:
             (e.g., 1.2 means volatility must be at least 1.2x the spread)
     """
 
-    barrier_multiplier: float = 2.0
+    barrier_multiplier: float = 1.0
     return_shift_sec: int = 30
     timeout_sec: int = 30
-    min_vol_spread_ratio: float = 2.0
+    min_vol_spread_ratio: float = 1.0
     volatility_lookback_sec: int = 900
     ema_span_sec: int = 60
     vol_resample_interval: str = "1s"

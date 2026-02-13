@@ -103,10 +103,33 @@ class LGBMTrainer:
 
         LOG.info(f"Training LightGBM {self.task} model with {len(self.feature_names)} features")
 
+        # Handle class weights if provided in params
+        sample_weight = None
+        if self.task == "classification" and "class_weight" in self.params:
+            class_weight = self.params.pop("class_weight")
+            if class_weight == "balanced":
+                # Calculate balanced weights
+                classes = np.unique(y_train)
+                weight_dict = {}
+                n_samples = len(y_train)
+                for cls in classes:
+                    weight_dict[cls] = n_samples / (len(classes) * np.sum(y_train == cls))
+                print(f"Calculated balanced class weights: {weight_dict}")
+                LOG.info(f"Calculated balanced class weights: {weight_dict}")
+            elif isinstance(class_weight, dict):
+                weight_dict = class_weight
+                LOG.info(f"Using manual class weights: {weight_dict}")
+            else:
+                raise ValueError("class_weight must be 'balanced' or a dictionary {class_label: weight}")
+
+            # Map class weights to every sample
+            sample_weight = pd.Series(y_train).map(weight_dict).values
+
         # Create LightGBM datasets
         train_data = lgb.Dataset(
             X_train,
             label=y_train,
+            weight=sample_weight,
             feature_name=self.feature_names,
             categorical_feature=categorical_features,
         )
