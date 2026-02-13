@@ -218,31 +218,6 @@ class Dataset:
 
         return self
 
-    def convert_to_multiclass(self) -> "Dataset":
-        """
-        Convert triple-barrier labels to multiclass format for LightGBM.
-
-        Triple-barrier labels: 0=Short, 1=Long, 2=Timeout
-        Multiclass labels (for training and simulation):
-            0 = Short (was 0)
-            1 = NoEntry (was 2, Timeout)
-            2 = Long (was 1)
-
-        Returns:
-            Self for method chaining
-        """
-        # Map: 0(Short)->0, 1(Long)->2, 2(Timeout)->1(NoEntry)
-        label_map = {0: 0, 1: 2, 2: 1}
-        self._aligned_labels = self._aligned_labels.map(label_map).astype(int)
-
-        counts = self._aligned_labels.value_counts().sort_index()
-        LOG.info(
-            f"Converted to multiclass: Short(0)={counts.get(0, 0):,}, "
-            f"NoEntry(1)={counts.get(1, 0):,}, Long(2)={counts.get(2, 0):,}"
-        )
-
-        return self
-
     def get_feature_columns(self) -> List[str]:
         """Get the list of feature columns to use for training."""
         if self.feature_columns:

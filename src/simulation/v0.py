@@ -15,8 +15,8 @@ class SimulationResult:
     Attributes:
         simulation_df: DataFrame with simulation details including predictions, labels, and PnL
         total_samples: Total number of samples in the simulation
-        trades_taken: Number of trades executed (predictions != NoEntry)
-        trades_skipped: Number of trades skipped (predictions == NoEntry)
+        trades_taken: Number of trades executed (predictions != Timeout)
+        trades_skipped: Number of trades skipped (predictions == Timeout)
         total_pnl: Total PnL from the model strategy
         avg_pnl_per_trade: Average PnL per trade taken
         win_rate: Win rate for trades taken (PnL > 0)
@@ -57,9 +57,9 @@ class SimulationResult:
         print("Trading Simulation Summary")
         print("=" * 60)
         print(f"\nTotal test samples: {self.total_samples:,}")
-        print(f"Trades taken (pred != NoEntry): {self.trades_taken:,} ({self.trades_taken/self.total_samples:.1%})")
+        print(f"Trades taken (pred != Timeout): {self.trades_taken:,} ({self.trades_taken/self.total_samples:.1%})")
         print(
-            f"Trades skipped (pred = NoEntry): {self.trades_skipped:,} ({self.trades_skipped/self.total_samples:.1%})"
+            f"Trades skipped (pred = Timeout): {self.trades_skipped:,} ({self.trades_skipped/self.total_samples:.1%})"
         )
 
         print("\nModel Strategy:")
@@ -76,7 +76,7 @@ class SimulationResult:
         print("\nConfusion Matrix PnL (rows=actual, cols=predicted):")
         display_pnl = self.confusion_pnl.copy()
         display_pnl.index = ["Actual Short", "Actual Long", "Actual Timeout"]
-        display_pnl.columns = ["Pred Short", "Pred NoEntry", "Pred Long"]
+        display_pnl.columns = ["Pred Short", "Pred Long", "Pred Timeout"]
         print(display_pnl.to_string(float_format=lambda x: f"{x:.6f}"))
 
 
@@ -92,24 +92,24 @@ def simulate_trading(
     Simulate trading using model predictions and compare against baselines.
 
     This function simulates trading based on multiclass predictions:
-    - Predicted Long (2): Enter long position
+    - Predicted Long (1): Enter long position
     - Predicted Short (0): Enter short position
-    - Predicted NoEntry (1): Skip, no trade
+    - Predicted Timeout (2): Skip, no trade
 
     PnL is calculated using pre-computed long_pnl/short_pnl from triple barrier:
     - Predicted Long: Use long_pnl (actual PnL of a long position at exit bar)
     - Predicted Short: Use short_pnl (actual PnL of a short position at exit bar)
-    - Predicted NoEntry: 0
+    - Predicted Timeout: 0
 
     Args:
-        predictions: Array of predictions (0=Short, 1=NoEntry, 2=Long)
+        predictions: Array of predictions (0=Short, 1=Long, 2=Timeout)
         labels_df: DataFrame with columns ['label', 'long_pnl', 'short_pnl', 'volatility_ema', 'spread_pct_ema']
                    where label uses encoding (0=Short, 1=Long, 2=Timeout)
         test_indices: DatetimeIndex of test samples to match with labels
         probabilities: Optional (n_samples, 3) array of class probabilities from predict_proba.
-                       When provided with threshold, low-confidence trade predictions become NoEntry.
+                       When provided with threshold, low-confidence trade predictions become Timeout.
         threshold: Minimum probability to follow the predicted direction.
-                   Predictions below this are overridden to NoEntry (1).
+                   Predictions below this are overridden to Timeout (2).
         random_seed: Random seed for reproducible random baseline
 
     Returns:
@@ -135,12 +135,14 @@ def simulate_trading(
     # Add predictions
     merged["y_pred"] = predictions
 
-    # Apply probability threshold: override low-confidence trade predictions to NoEntry
+    # Apply probability threshold: override low-confidence trade predictions to Timeout
+    if threshold is not None and probabilities is None:
+        raise ValueError("threshold requires probabilities (e.g. probabilities=model.predict_proba(X))")
     if probabilities is not None and threshold is not None:
         pred_probs = probabilities[np.arange(len(predictions)), predictions]
         merged["pred_prob"] = pred_probs
-        low_conf_trade = (pred_probs < threshold) & (merged["y_pred"] != 1)
-        merged.loc[low_conf_trade, "y_pred"] = 1
+        low_conf_trade = (pred_probs < threshold) & (merged["y_pred"] != 2)
+        merged.loc[low_conf_trade, "y_pred"] = 2
 
     # Calculate simulated PnL
     merged["sim_pnl"] = merged.apply(_calculate_sim_pnl, axis=1)
@@ -169,7 +171,7 @@ def simulate_trading(
     merged["cumulative_random"] = merged["random_pnl"].cumsum()
 
     # Calculate summary statistics
-    trade_mask = merged["y_pred"] != 1
+    trade_mask = merged["y_pred"] != 2
     trades_taken = trade_mask.sum()
     trades_skipped = (~trade_mask).sum()
 
@@ -201,16 +203,16 @@ def _calculate_sim_pnl(row: pd.Series) -> float:
     """
     Calculate PnL for a simulated trade based on prediction.
 
-    Prediction mapping: 0=Short, 1=NoEntry, 2=Long
+    Prediction mapping: 0=Short, 1=Long, 2=Timeout
 
     Uses pre-computed long_pnl/short_pnl from triple barrier which already
     account for bid-ask spread and actual price movement at the exit bar.
     """
     pred = row["y_pred"]
 
-    if pred == 1:  # NoEntry - no trade
+    if pred == 2:  # Timeout - no trade
         return 0.0
-    if pred == 2:  # Long
+    if pred == 1:  # Long
         pnl = row["long_pnl"]
         return pnl if not pd.isna(pnl) else 0.0
     if pred == 0:  # Short
@@ -261,13 +263,13 @@ def plot_simulation_results(result: SimulationResult, window: int = 500) -> None
 
     # Rolling win rate
     trade_pnl = merged["sim_pnl"].copy()
-    trade_pnl[merged["y_pred"] == 1] = np.nan  # Mask NoEntry predictions
+    trade_pnl[merged["y_pred"] == 2] = np.nan  # Mask Timeout predictions
     rolling_winrate = (trade_pnl > 0).rolling(window, min_periods=100).mean()
     ax2.plot(merged["time"], rolling_winrate, "g-", label="Win Rate (rolling)", linewidth=1)
     ax2.axhline(y=0.5, color="r", linestyle="--", alpha=0.5, label="50% baseline")
 
     # Trade frequency
-    trade_taken = (merged["y_pred"] != 1).astype(float)
+    trade_taken = (merged["y_pred"] != 2).astype(float)
     rolling_trade_freq = trade_taken.rolling(window, min_periods=100).mean()
     ax2_twin = ax2.twinx()
     ax2_twin.plot(merged["time"], rolling_trade_freq, "purple", label="Trade Frequency", alpha=0.5)
@@ -286,7 +288,7 @@ def plot_simulation_results(result: SimulationResult, window: int = 500) -> None
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
     # PnL distribution
-    trade_pnl_values = merged.loc[merged["y_pred"] != 1, "sim_pnl"]
+    trade_pnl_values = merged.loc[merged["y_pred"] != 2, "sim_pnl"]
     axes[0].hist(trade_pnl_values, bins=50, edgecolor="black", alpha=0.7)
     axes[0].axvline(x=0, color="r", linestyle="--", alpha=0.5)
     axes[0].axvline(x=trade_pnl_values.mean(), color="g", linestyle="-", label=f"Mean: {trade_pnl_values.mean():.6f}")
@@ -297,13 +299,13 @@ def plot_simulation_results(result: SimulationResult, window: int = 500) -> None
 
     # PnL by prediction type
     pred_pnl = merged.groupby("y_pred")["sim_pnl"].agg(["sum", "mean", "count"])
-    pred_pnl.index = ["Short", "NoEntry", "Long"]
+    pred_pnl.index = ["Short", "Long", "Timeout"]
     pred_pnl["sum"].plot(kind="bar", ax=axes[1], color=["red", "gray", "green"], edgecolor="black")
     axes[1].axhline(y=0, color="black", linestyle="-", alpha=0.3)
     axes[1].set_xlabel("Prediction Type")
     axes[1].set_ylabel("Total PnL")
     axes[1].set_title("Total PnL by Prediction Type")
-    axes[1].set_xticklabels(["Short", "NoEntry", "Long"], rotation=0)
+    axes[1].set_xticklabels(["Short", "Long", "Timeout"], rotation=0)
 
     plt.tight_layout()
     plt.show()
@@ -328,7 +330,7 @@ def plot_simulation_results(result: SimulationResult, window: int = 500) -> None
     im = ax.imshow(pnl_data, cmap="RdYlGn", vmin=-vmax, vmax=vmax, aspect="auto")
 
     actual_names = ["Short(0)", "Long(1)", "Timeout(2)"]
-    pred_names = ["Short(0)", "NoEntry(1)", "Long(2)"]
+    pred_names = ["Short(0)", "Long(1)", "Timeout(2)"]
     for i in range(3):
         for j in range(3):
             text = f"n={count_data[i, j]}\n{pnl_data[i, j]:.4f}"

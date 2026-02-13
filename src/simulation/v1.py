@@ -5,7 +5,7 @@ from typing import Dict, Optional
 import numpy as np
 import pandas as pd
 
-from training.simulation import _calculate_baseline_pnl, _calculate_sim_pnl
+from simulation.v0 import _calculate_baseline_pnl, _calculate_sim_pnl
 
 LOG = logging.getLogger(__name__)
 
@@ -48,9 +48,9 @@ class SimulationResult:
         print("Trading Simulation Summary (Strict)")
         print("=" * 60)
         print(f"\nTotal test samples: {self.total_samples:,}")
-        print(f"Trades taken (pred != NoEntry): {self.trades_taken:,} ({self.trades_taken/self.total_samples:.1%})")
+        print(f"Trades taken (pred != Timeout): {self.trades_taken:,} ({self.trades_taken/self.total_samples:.1%})")
         print(
-            f"Trades skipped (pred = NoEntry): {self.trades_skipped:,} ({self.trades_skipped/self.total_samples:.1%})"
+            f"Trades skipped (pred = Timeout): {self.trades_skipped:,} ({self.trades_skipped/self.total_samples:.1%})"
         )
         if self.trades_blocked > 0:
             print(f"Trades blocked (overlap): {self.trades_blocked:,}")
@@ -69,7 +69,7 @@ class SimulationResult:
         print("\nConfusion Matrix PnL (rows=actual, cols=predicted):")
         display_pnl = self.confusion_pnl.copy()
         display_pnl.index = ["Actual Short", "Actual Long", "Actual Timeout"]
-        display_pnl.columns = ["Pred Short", "Pred NoEntry", "Pred Long"]
+        display_pnl.columns = ["Pred Short", "Pred Long", "Pred Timeout"]
         print(display_pnl.to_string(float_format=lambda x: f"{x:.6f}"))
 
 
@@ -88,7 +88,7 @@ def simulate_trading_strict(
     """
     Simulate trading with leak-safe label alignment and optional non-overlapping trades.
 
-    Differences vs training.simulation.simulate_trading:
+    Differences vs simulation.v0.simulate_trading:
     - Uses merge_asof direction='backward' by default (no look-ahead)
     - Optionally blocks overlapping trades with a fixed hold period (timeout_sec)
     - Supports probability threshold to filter low-confidence predictions
@@ -113,12 +113,14 @@ def simulate_trading_strict(
     # Add predictions
     merged["y_pred"] = predictions
 
-    # Apply probability threshold: override low-confidence trade predictions to NoEntry
+    # Apply probability threshold: override low-confidence trade predictions to Timeout
+    if threshold is not None and probabilities is None:
+        raise ValueError("threshold requires probabilities (e.g. probabilities=model.predict_proba(X))")
     if probabilities is not None and threshold is not None:
         pred_probs = probabilities[np.arange(len(predictions)), predictions]
         merged["pred_prob"] = pred_probs
-        low_conf_trade = (pred_probs < threshold) & (merged["y_pred"] != 1)
-        merged.loc[low_conf_trade, "y_pred"] = 1
+        low_conf_trade = (pred_probs < threshold) & (merged["y_pred"] != 2)
+        merged.loc[low_conf_trade, "y_pred"] = 2
 
     # Sort to ensure chronological processing
     merged = merged.sort_values("time").reset_index(drop=True)
@@ -133,7 +135,7 @@ def simulate_trading_strict(
 
     for i, row in merged.iterrows():
         pred = row["y_pred"]
-        if pred == 1:
+        if pred == 2:
             continue
 
         ts = row["time"]
@@ -176,7 +178,7 @@ def simulate_trading_strict(
     for i, row in merged.iterrows():
         ts = row["time"]
         pred = row["y_pred_random"]
-        if pred == 1:
+        if pred == 2:
             continue
         if not allow_overlap and next_allowed_time is not None and ts < next_allowed_time:
             continue
@@ -198,7 +200,7 @@ def simulate_trading_strict(
     # Calculate summary statistics
     trades_taken = int(trade_taken.sum())
     trades_blocked = int(trade_blocked.sum())
-    trades_skipped = int((merged["y_pred"] == 1).sum())
+    trades_skipped = int((merged["y_pred"] == 2).sum())
 
     # Confusion matrix PnL: rows=actual label, cols=predicted
     label_order = [0, 1, 2]
@@ -283,14 +285,18 @@ def plot_simulation_results(result: SimulationResult, window: int = 500) -> None
     axes[0].set_title("PnL Distribution (Trades Only)")
     axes[0].legend()
 
-    pred_pnl = merged.groupby("y_pred")["sim_pnl"].agg(["sum", "mean", "count"])
-    pred_pnl.index = ["Short", "NoEntry", "Long"]
-    pred_pnl["sum"].plot(kind="bar", ax=axes[1], color=["red", "gray", "green"], edgecolor="black")
+    pred_pnl = (
+        merged.groupby("y_pred")["sim_pnl"]
+        .agg(["sum", "mean", "count"])
+        .reindex([0, 1, 2], fill_value=0)
+    )
+    pred_pnl.index = ["Short", "Long", "Timeout"]
+    pred_pnl["sum"].plot(kind="bar", ax=axes[1], color=["red", "green", "gray"], edgecolor="black")
     axes[1].axhline(y=0, color="black", linestyle="-", alpha=0.3)
     axes[1].set_xlabel("Prediction Type")
     axes[1].set_ylabel("Total PnL")
     axes[1].set_title("Total PnL by Prediction Type")
-    axes[1].set_xticklabels(["Short", "NoEntry", "Long"], rotation=0)
+    axes[1].set_xticklabels(["Short", "Long", "Timeout"], rotation=0)
 
     plt.tight_layout()
     plt.show()
@@ -314,7 +320,7 @@ def plot_simulation_results(result: SimulationResult, window: int = 500) -> None
     im = ax.imshow(pnl_data, cmap="RdYlGn", vmin=-vmax, vmax=vmax, aspect="auto")
 
     actual_names = ["Short(0)", "Long(1)", "Timeout(2)"]
-    pred_names = ["Short(0)", "NoEntry(1)", "Long(2)"]
+    pred_names = ["Short(0)", "Long(1)", "Timeout(2)"]
     for i in range(3):
         for j in range(3):
             text = f"n={count_data[i, j]}\n{pnl_data[i, j]:.4f}"

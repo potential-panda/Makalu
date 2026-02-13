@@ -212,14 +212,15 @@ class AlignAndBuildFeaturesStep(Step):
     def _align_data_sources(self, stage_context: Context) -> Optional[pd.DataFrame]:
         """Align all data sources into a single DataFrame with DatetimeIndex.
 
-        Sparse data sources are forward-filled to carry forward the last known
-        values to timestamps where data is missing:
-        - Trade aggression: trades are sparse events; ffill carries last known metrics
-        - Execution price: some order books lack depth for the execution size;
-          ffill uses last known execution price as best estimate
+        The outer join creates the union of timestamps from all sources.
+        Each source only has data at its own timestamps, so all columns are
+        forward-filled to carry forward the last known values:
+        - Trade aggression: trades are sparse events
+        - Order book state: snapshots at ~500ms intervals
+        - Book change: computed between consecutive snapshots
+        - Execution price: skipped when book lacks depth for execution size
         """
         dfs_to_merge = []
-        ffill_columns = []
 
         # Process each data source
         for df, name in [
@@ -237,10 +238,6 @@ class AlignAndBuildFeaturesStep(Step):
                 # Ensure sorted
                 if not df.index.is_monotonic_increasing:
                     df = df.sort_index()
-
-                # Track columns that need forward-fill after outer join
-                if name in ("trade_aggression", "execution_price"):
-                    ffill_columns.extend(df.columns.tolist())
 
                 dfs_to_merge.append((df, name))
                 LOG.info(f"AlignAndBuildFeaturesStep: Loaded {name} with {len(df)} rows")
@@ -262,12 +259,15 @@ class AlignAndBuildFeaturesStep(Step):
         # Sort by index
         result = result.sort_index()
 
-        # Forward-fill sparse data source columns to carry forward last known values
-        if ffill_columns:
-            cols_to_ffill = [c for c in ffill_columns if c in result.columns]
-            if cols_to_ffill:
-                result[cols_to_ffill] = result[cols_to_ffill].ffill()
-                LOG.info(f"AlignAndBuildFeaturesStep: Forward-filled {len(cols_to_ffill)} columns (trade_aggression + execution_price)")
+        # Forward-fill all columns to carry forward last known values.
+        # The outer join creates timestamps from all sources; at any given
+        # timestamp, sources that didn't emit data need their last known
+        # values carried forward.
+        with pd.option_context("future.no_silent_downcasting", True):
+            result = result.ffill()
+        # Explicitly infer better dtypes after filling
+        result = result.infer_objects(copy=False)
+        LOG.info(f"AlignAndBuildFeaturesStep: Forward-filled {len(result.columns)} columns across all sources")
 
         return result
 
@@ -719,7 +719,9 @@ class AlignAndBuildFeaturesStep(Step):
         df = df.dropna(thresh=threshold)
 
         # Forward-fill remaining NaN values (with limit)
-        df = df.ffill(limit=3)
+        with pd.option_context("future.no_silent_downcasting", True):
+            df = df.ffill(limit=3)
+        df = df.infer_objects(copy=False)
 
         LOG.info(f"AlignAndBuildFeaturesStep: After post-processing: {len(df)} rows, {len(df.columns)} columns")
 

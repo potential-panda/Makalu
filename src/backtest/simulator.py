@@ -32,8 +32,8 @@ class SimulatorConfig:
     feature_columns: list[str] = field(default_factory=list)
 
     # Prediction mapping: model output -> direction
-    # Default: 0=Short, 1=NoEntry, 2=Long
-    long_prediction: int = 2
+    # Default: 0=Short, 1=Long, 2=Timeout (no trade)
+    long_prediction: int = 1
     short_prediction: int = 0
 
 
@@ -47,7 +47,7 @@ class Simulator:
 
     Trading logic:
     - Only enter trades when volatility > spread * min_vol_spread_ratio
-    - Use ML model to predict direction (Long/Short/NoEntry)
+    - Use ML model to predict direction (Long/Short/Timeout)
     - Exit based on triple barrier (profit-take, stop-loss, timeout)
     """
 
@@ -185,7 +185,7 @@ class Simulator:
             direction = -1  # Short
             entry_price = gmo_orderbook.best_bid  # Sell at bid
         else:
-            return  # NoEntry
+            return  # Timeout / no trade
 
         # Enter position
         self._position_mgr.enter_position(

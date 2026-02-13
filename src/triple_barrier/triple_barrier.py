@@ -41,21 +41,26 @@ class TripleBarrierConfig:
             (e.g., 1.2 means volatility must be at least 1.2x the spread)
     """
 
-    barrier_multiplier: float = 0.7
+    barrier_multiplier: float = 2.0
     return_shift_sec: int = 30
     timeout_sec: int = 30
-    min_vol_spread_ratio: float = 1.2
-    volatility_lookback_sec: int = 1800
-    ema_span_sec: int = 600
+    min_vol_spread_ratio: float = 2.0
+    volatility_lookback_sec: int = 900
+    ema_span_sec: int = 60
     vol_resample_interval: str = "1s"
     label_resample_interval: str = "100ms"
 
     @property
     def param_id(self) -> str:
         """Generate a unique parameter ID string for storage."""
-        barrier_bps = int(self.barrier_multiplier * 100)
-        min_vol_spread_ratio_str = int(self.min_vol_spread_ratio * 10)
-        return f"tb_{barrier_bps}_{self.timeout_sec}_{self.return_shift_sec}_{min_vol_spread_ratio_str}"
+        params = [
+            int(self.barrier_multiplier * 100),
+            self.timeout_sec,
+            self.return_shift_sec,
+            int(self.min_vol_spread_ratio * 10),
+            self.volatility_lookback_sec,
+        ]
+        return f"tb_{'_'.join(map(str, params))}"
 
 
 @dataclass
