@@ -11,13 +11,12 @@ TARGET_COLUMN = "label"
 def setup():
     # Markets
     barrier_multiplier: float = 1.0
-    return_shift_sec: int = 30
-    timeout_sec: int = 30
+    return_shift_sec: int = 60
+    timeout_sec: int = 60
     min_vol_spread_ratio: float = 1.0
-    volatility_lookback_sec: int = 900
+    volatility_lookback_sec: int = 300
     ema_span_sec: int = 60
     vol_resample_interval: str = "1s"
-    label_resample_interval: str = "100ms"
 
     config = TripleBarrierConfig(
         barrier_multiplier=barrier_multiplier,
@@ -27,7 +26,6 @@ def setup():
         volatility_lookback_sec=volatility_lookback_sec,
         ema_span_sec=ema_span_sec,
         vol_resample_interval=vol_resample_interval,
-        label_resample_interval=label_resample_interval,
     )
     print(f"Feature market: {FEATURE_MARKET.id}")
     print(f"Label market:   {LABEL_MARKET.id}")

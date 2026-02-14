@@ -36,7 +36,6 @@ class TripleBarrierConfig:
         volatility_lookback_sec: Lookback window for volatility calculation in seconds
         ema_span_sec: EMA span for smoothing volatility and spread
         vol_resample_interval: Resample interval for volatility calculation (e.g., '1s')
-        label_resample_interval: Resample interval for label generation (e.g., '100ms')
         min_vol_spread_ratio: Minimum ratio of volatility to spread for structural profitability filter
             (e.g., 1.2 means volatility must be at least 1.2x the spread)
     """
@@ -48,7 +47,6 @@ class TripleBarrierConfig:
     volatility_lookback_sec: int = 900
     ema_span_sec: int = 60
     vol_resample_interval: str = "1s"
-    label_resample_interval: str = "100ms"
 
     @property
     def param_id(self) -> str:
@@ -113,36 +111,28 @@ class LabelingResult:
 def _compute_labels_numba(
     timestamps: np.ndarray,
     mid_prices: np.ndarray,
-    high_prices: np.ndarray,
-    low_prices: np.ndarray,
-    ask_entry_prices: np.ndarray,
-    bid_entry_prices: np.ndarray,
-    ask_exit_prices: np.ndarray,
-    bid_exit_prices: np.ndarray,
+    ask_prices: np.ndarray,
+    bid_prices: np.ndarray,
     pt_pct: np.ndarray,
     sl_pct: np.ndarray,
     timeout_ns: int,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, int]:
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
-    Numba-optimized inner loop for triple-barrier label computation with PnL.
+    Numba-optimized inner loop for tick-level triple-barrier label computation with PnL.
 
     Labels are determined using mid price for barrier checking.
-    PnL is calculated for both long and short positions at the exit bar:
+    PnL is calculated for both long and short positions at the exit tick:
     - long_pnl  = bid(t+n) - ask(t)   (buy at ask, sell at bid)
     - short_pnl = bid(t) - ask(t+n)   (sell at bid, buy at ask)
 
-    For barrier hits (label 0/1), exit bar is the bar where the barrier was hit.
-    For timeout (label 2), exit bar is the last bar within the timeout window.
+    For barrier hits (label 0/1), exit tick is the tick where the barrier was hit.
+    For timeout (label 2), exit tick is the last tick within the timeout window.
 
     Args:
         timestamps: Array of timestamps as int64 nanoseconds
-        mid_prices: Entry prices for barrier calculation (mid_first in each bar)
-        high_prices: Maximum mid prices in each bar (for profit-take check)
-        low_prices: Minimum mid prices in each bar (for stop-loss check)
-        ask_entry_prices: ASK prices at entry (ask_first)
-        bid_entry_prices: BID prices at entry (bid_first)
-        ask_exit_prices: ASK prices at exit (ask_last)
-        bid_exit_prices: BID prices at exit (bid_last)
+        mid_prices: Mid prices at each tick
+        ask_prices: ASK prices at each tick
+        bid_prices: BID prices at each tick
         pt_pct: Profit-take percentage for each entry
         sl_pct: Stop-loss percentage for each entry
         timeout_ns: Timeout in nanoseconds
@@ -151,13 +141,11 @@ def _compute_labels_numba(
         labels: Array of labels (0=Short, 1=Long, 2=Timeout)
         long_pnl: Array of PnL for long position
         short_pnl: Array of PnL for short position
-        ambiguous_count: Number of cases where both barriers were hit in the same bar
     """
     n = len(timestamps)
     labels = np.full(n, 2, dtype=np.int8)  # Default to timeout (2)
     long_pnl = np.zeros(n, dtype=np.float64)
     short_pnl = np.zeros(n, dtype=np.float64)
-    ambiguous_count = 0
 
     for i in range(n):
         entry_mid = mid_prices[i]
@@ -173,48 +161,39 @@ def _compute_labels_numba(
         upper_barrier = entry_mid * (1 + pt_level)
         lower_barrier = entry_mid * (1 - sl_level)
 
-        exit_j = -1  # Track exit bar
+        exit_j = -1  # Track exit tick
 
-        # Search future bars for a barrier hit
+        # Search future ticks for a barrier hit
         for j in range(i + 1, n):
             if timestamps[j] > timeout_ts:
                 break
 
             exit_j = j
 
-            hit_upper = high_prices[j] >= upper_barrier
-            hit_lower = low_prices[j] <= lower_barrier
-
-            if hit_upper and hit_lower:
-                # Both barriers hit in same bar - ambiguous case
-                # Conservatively mark as Short (lower barrier)
-                labels[i] = 0
-                ambiguous_count += 1
-                break
-            elif hit_upper:
+            if mid_prices[j] >= upper_barrier:
                 labels[i] = 1  # Long - upper barrier hit
                 break
-            elif hit_lower:
+            elif mid_prices[j] <= lower_barrier:
                 labels[i] = 0  # Short - lower barrier hit
                 break
 
-        # Calculate long/short PnL at exit bar
+        # Calculate long/short PnL at exit tick
         if exit_j > i:
-            long_pnl[i] = bid_exit_prices[exit_j] - ask_entry_prices[i]
-            short_pnl[i] = bid_entry_prices[i] - ask_exit_prices[exit_j]
+            long_pnl[i] = bid_prices[exit_j] - ask_prices[i]
+            short_pnl[i] = bid_prices[i] - ask_prices[exit_j]
 
-    return labels, long_pnl, short_pnl, ambiguous_count
+    return labels, long_pnl, short_pnl
 
 
 def compute_labels(df: pd.DataFrame, config: TripleBarrierConfig) -> LabelingResult:
     """
-    Compute triple-barrier labels and PnL using OHLC resampling.
+    Compute triple-barrier labels and PnL at tick level.
 
     Labels are determined using mid price for barrier checking.
-    PnL is calculated for both long and short positions at the exit bar:
+    PnL is calculated for both long and short positions at the exit tick:
     - Label 1 (Long): upper barrier hit.
     - Label 0 (Short): lower barrier hit.
-    - Label 2 (Timeout): PnL calculated at the last bar within the timeout window.
+    - Label 2 (Timeout): PnL calculated at the last tick within the timeout window.
 
     The DataFrame must have columns: 'mid', 'ask', 'bid', 'pt_pct', 'sl_pct'
     and be indexed by timestamp.
@@ -226,46 +205,22 @@ def compute_labels(df: pd.DataFrame, config: TripleBarrierConfig) -> LabelingRes
     Returns:
         LabelingResult with labels DataFrame (including 'label', 'long_pnl', 'short_pnl') and statistics
     """
-    timeout_delta = pd.Timedelta(seconds=config.timeout_sec)
-
-    # Aggregate to resampled bars
-    # - mid: first/max/min for barrier checking
-    # - ask/bid first: Entry prices
-    # - ask/bid last: Exit prices
-    aggregations = {
-        "mid": ["first", "max", "min"],
-        "ask": ["first", "last"],
-        "bid": ["first", "last"],
-        "pt_pct": "first",
-        "sl_pct": "first",
-    }
-
-    df_resampled = df.resample(config.label_resample_interval).agg(aggregations).dropna()
-    df_resampled.columns = ["_".join(col).strip() for col in df_resampled.columns.values]
+    timeout_ns = int(pd.Timedelta(seconds=config.timeout_sec).total_seconds() * 1e9)
 
     # Convert to numpy arrays for numba
-    timestamps = df_resampled.index.values.astype("datetime64[ns]").astype(np.int64)
-    mid_prices = df_resampled["mid_first"].values.astype(np.float64)
-    high_prices = df_resampled["mid_max"].values.astype(np.float64)
-    low_prices = df_resampled["mid_min"].values.astype(np.float64)
-    ask_entry_prices = df_resampled["ask_first"].values.astype(np.float64)
-    bid_entry_prices = df_resampled["bid_first"].values.astype(np.float64)
-    ask_exit_prices = df_resampled["ask_last"].values.astype(np.float64)
-    bid_exit_prices = df_resampled["bid_last"].values.astype(np.float64)
-    pt_pct = df_resampled["pt_pct_first"].values.astype(np.float64)
-    sl_pct = df_resampled["sl_pct_first"].values.astype(np.float64)
-    timeout_ns = int(timeout_delta.total_seconds() * 1e9)
+    timestamps = df.index.values.astype("datetime64[ns]").astype(np.int64)
+    mid_prices = df["mid"].values.astype(np.float64)
+    ask_prices = df["ask"].values.astype(np.float64)
+    bid_prices = df["bid"].values.astype(np.float64)
+    pt_pct = df["pt_pct"].values.astype(np.float64)
+    sl_pct = df["sl_pct"].values.astype(np.float64)
 
     # Run numba-optimized computation
-    labels, long_pnl, short_pnl, ambiguous_count = _compute_labels_numba(
+    labels, long_pnl, short_pnl = _compute_labels_numba(
         timestamps,
         mid_prices,
-        high_prices,
-        low_prices,
-        ask_entry_prices,
-        bid_entry_prices,
-        ask_exit_prices,
-        bid_exit_prices,
+        ask_prices,
+        bid_prices,
         pt_pct,
         sl_pct,
         timeout_ns,
@@ -273,7 +228,7 @@ def compute_labels(df: pd.DataFrame, config: TripleBarrierConfig) -> LabelingRes
 
     labels_df = pd.DataFrame(
         {"label": labels, "long_pnl": long_pnl, "short_pnl": short_pnl},
-        index=df_resampled.index,
+        index=df.index,
     )
 
     # Calculate statistics
@@ -281,7 +236,7 @@ def compute_labels(df: pd.DataFrame, config: TripleBarrierConfig) -> LabelingRes
 
     return LabelingResult(
         labels_df=labels_df,
-        ambiguous_count=ambiguous_count,
+        ambiguous_count=0,
         total_count=len(labels),
         long_count=int(label_counts.get(1, 0)),
         short_count=int(label_counts.get(0, 0)),
