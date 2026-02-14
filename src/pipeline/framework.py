@@ -83,7 +83,9 @@ class Stage(ABC):
 
 
 class Pipeline:
-    def __init__(self, market_data_store: MarketDataStore, parquet_store: ParquetStore, influx_store: InfluxdbStore):
+    def __init__(
+        self, market_data_store: MarketDataStore, parquet_store: ParquetStore, influx_store: InfluxdbStore = None
+    ):
         self._context = PipelineContext(market_data_store, parquet_store, influx_store)
         self._stages: List[Stage] = []
 
