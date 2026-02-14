@@ -26,9 +26,10 @@ class Context(StageContext):
 
 
 class PopulateMarketPriceStep(Step):
-    def __init__(self, execution_size_str: str):
+    def __init__(self, execution_size_str: str, max_spread_bps: float = 10.0):
         super().__init__()
         self.execution_size_str = execution_size_str
+        self.max_spread_bps = max_spread_bps
 
     def populate(self, pipeline_context: PipelineContext, stage_context: Context):
         parquet_store = pipeline_context.parquet_store.create_execution_price(
@@ -44,6 +45,7 @@ class PopulateMarketPriceStep(Step):
 
     def _populate(self, pipeline_context: PipelineContext, stage_context: Context):
         """Generator that yields (ts, fields) tuples."""
+        skip_count = 0
         progress = StepProgressLogger(self.__class__.__name__, len(stage_context.order_books))
         for order_book in stage_context.order_books:
             if not stage_context.populate_dt_range.is_within(order_book.get_ts()):
@@ -51,6 +53,9 @@ class PopulateMarketPriceStep(Step):
 
             market_price = order_book.market_price(float(self.execution_size_str))
             if not market_price:
+                continue
+            if market_price.spread_bps > self.max_spread_bps:
+                skip_count += 1
                 continue
 
             fields = {
@@ -63,7 +68,7 @@ class PopulateMarketPriceStep(Step):
 
             yield (order_book.get_ts(), fields)
             progress.update()
-        LOG.info(f"PopulateMarketPriceStep: Processed {progress.cnt} objects")
+        LOG.info(f"PopulateMarketPriceStep: Processed {progress.cnt} objects, skipped {skip_count} objects")
 
     def populate_influxdb(self, pipeline_context: PipelineContext, stage_context: Context):
         influx_writer = pipeline_context.influx_store.create_writer(ORDER_BOOK_DERIVED_BUCKET, no_retention=True)
@@ -91,12 +96,14 @@ class PopulateBookStateStep(Step):
         weighted_imbalance_k: List[int],
         depth_imbalance_rate: List[float],
         microprice_k: List[int],
+        max_spread_bps: float = 10.0,
     ):
         super().__init__()
         self.volume_imbalance_k = volume_imbalance_k
         self.weighted_imbalance_k = weighted_imbalance_k
         self.depth_imbalance_rate = depth_imbalance_rate
         self.microprice_k = microprice_k
+        self.max_spread_bps = max_spread_bps
 
     def populate(self, pipeline_context: PipelineContext, stage_context: Context):
         parquet_store = pipeline_context.parquet_store.create_single_market("BookState", stage_context.market)
@@ -109,9 +116,16 @@ class PopulateBookStateStep(Step):
 
     def _populate(self, pipeline_context: PipelineContext, stage_context: Context):
         """Generator that yields (ts, fields) tuples."""
+        skip_count = 0
         progress = StepProgressLogger(self.__class__.__name__, len(stage_context.order_books))
         for order_book in stage_context.order_books:
             if not stage_context.populate_dt_range.is_within(order_book.get_ts()):
+                continue
+            if not order_book.best_bid or not order_book.best_ask:
+                skip_count += 1
+                continue
+            if order_book.spread_bps > self.max_spread_bps:
+                skip_count += 1
                 continue
 
             fields = {
@@ -141,7 +155,7 @@ class PopulateBookStateStep(Step):
             yield (order_book.get_ts(), fields)
             progress.update()
 
-        LOG.info(f"PopulateBookStateStep: Processed {progress.cnt} objects")
+        LOG.info(f"PopulateBookStateStep: Processed {progress.cnt} objects and skipped {skip_count} objects")
 
     def populate_influxdb(self, pipeline_context: PipelineContext, stage_context: Context):
         influx_writer = pipeline_context.influx_store.create_writer(ORDER_BOOK_DERIVED_BUCKET, no_retention=True)
@@ -162,9 +176,10 @@ class PopulateBookStateStep(Step):
 
 
 class PopulateBookChangeStep(Step):
-    def __init__(self, k_levels: List[int]):
+    def __init__(self, k_levels: List[int], max_spread_bps: float = 10.0):
         super().__init__()
         self.k_levels = k_levels
+        self.max_spread_bps = max_spread_bps
 
     def populate(self, pipeline_context: PipelineContext, stage_context: Context):
         parquet_store = pipeline_context.parquet_store.create_single_market("BookChange", stage_context.market)
@@ -185,6 +200,8 @@ class PopulateBookChangeStep(Step):
                 continue
 
             if not stage_context.populate_dt_range.is_within(order_book.get_ts()):
+                continue
+            if order_book.spread_bps > self.max_spread_bps:
                 continue
 
             write_fields = {
