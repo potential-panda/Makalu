@@ -36,14 +36,11 @@ class TripleBarrierConfig:
         volatility_lookback_sec: Lookback window for volatility calculation in seconds
         ema_span_sec: EMA span for smoothing volatility and spread
         vol_resample_interval: Resample interval for volatility calculation (e.g., '1s')
-        min_vol_spread_ratio: Minimum ratio of volatility to spread for structural profitability filter
-            (e.g., 1.2 means volatility must be at least 1.2x the spread)
     """
 
     barrier_multiplier: float = 1.0
     return_shift_sec: int = 30
     timeout_sec: int = 30
-    min_vol_spread_ratio: float = 1.0
     volatility_lookback_sec: int = 900
     ema_span_sec: int = 60
     vol_resample_interval: str = "1s"
@@ -55,7 +52,6 @@ class TripleBarrierConfig:
             int(self.barrier_multiplier * 100),
             self.timeout_sec,
             self.return_shift_sec,
-            int(self.min_vol_spread_ratio * 10),
             self.volatility_lookback_sec,
         ]
         return f"tb_{'_'.join(map(str, params))}"
@@ -290,32 +286,6 @@ def calculate_volatility_and_spread(df: pd.DataFrame, config: TripleBarrierConfi
     return df
 
 
-def filter_by_vol_spread_ratio(df: pd.DataFrame, config: TripleBarrierConfig) -> pd.DataFrame:
-    """
-    Filter DataFrame to keep only rows where volatility exceeds spread by the configured ratio.
-
-    This ensures we only generate labels for periods with favorable structural conditions,
-    where the potential profit margin exceeds transaction cost.
-
-    Args:
-        df: DataFrame with 'volatility_ema' and 'spread_pct_ema' columns
-        config: TripleBarrierConfig with min_vol_spread_ratio parameter
-
-    Returns:
-        Filtered DataFrame
-    """
-    original_count = len(df)
-    df = df[df["volatility_ema"] > df["spread_pct_ema"] * config.min_vol_spread_ratio].copy()
-    filtered_count = len(df)
-
-    LOG.info(
-        f"filter_by_vol_spread_ratio: {original_count} -> {filtered_count} rows "
-        f"(removed {original_count - filtered_count} rows, ratio={config.min_vol_spread_ratio})"
-    )
-
-    return df
-
-
 def generate_labels(df: pd.DataFrame, config: TripleBarrierConfig, exclude_edge: bool = True) -> LabelingResult:
     df = ts_index(df)
 
@@ -351,3 +321,29 @@ def generate_labels(df: pd.DataFrame, config: TripleBarrierConfig, exclude_edge:
     )
 
     return result
+
+
+def filter_by_vol_spread_ratio(df: pd.DataFrame, min_vol_spread_ratio: float) -> pd.DataFrame:
+    """
+    Filter DataFrame to keep only rows where volatility exceeds spread by the configured ratio.
+
+    This ensures we only generate labels for periods with favorable structural conditions,
+    where the potential profit margin exceeds transaction cost.
+
+    Args:
+        df: DataFrame with 'volatility_ema' and 'spread_pct_ema' columns
+        config: TripleBarrierConfig with min_vol_spread_ratio parameter
+
+    Returns:
+        Filtered DataFrame
+    """
+    original_count = len(df)
+    df = df[df["volatility_ema"] > df["spread_pct_ema"] * min_vol_spread_ratio].copy()
+    filtered_count = len(df)
+
+    LOG.info(
+        f"filter_by_vol_spread_ratio: {original_count} -> {filtered_count} rows "
+        f"(removed {original_count - filtered_count} rows, ratio={min_vol_spread_ratio})"
+    )
+
+    return df

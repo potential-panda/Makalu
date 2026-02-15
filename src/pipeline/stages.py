@@ -7,6 +7,8 @@ from qate.core.model import Market
 from qate.store.market_data_store import partition_market_events
 from qate.util.dt_range import DtRange
 
+from lead_lag.lead_lag import prepare_returns
+
 from .feature_steps import Context as FeatureContext
 from .framework import PipelineContext, Stage, StageContext
 from .lead_lag_steps import Context as LeadLagContext
@@ -93,22 +95,6 @@ class TradeDerivedStage(Stage):
         )
 
 
-class LeadLagStage(Stage):
-    def __init__(self, market_lead: Market, market_lag: Market, execution_size_str: str):
-        super().__init__()
-        self.market_lead = market_lead
-        self.market_lag = market_lag
-        self.execution_size_str = execution_size_str
-
-    def before(self, dt_range: DtRange, pipeline_context: PipelineContext) -> StageContext:
-        return LeadLagContext(
-            dt_range,
-            self.market_lead,
-            self.market_lag,
-            self.execution_size_str,
-        )
-
-
 class FeatureStage(Stage):
     def __init__(self, market: Market, execution_size_str: str):
         super().__init__()
@@ -161,4 +147,40 @@ class LabelingStage(Stage):
             self.market,
             self.execution_size_str,
             df,
+        )
+
+
+class LeadLagStage(Stage):
+    def __init__(self, market_lead: Market, market_lag: Market, execution_size_str: str):
+        super().__init__()
+        self.market_lead = market_lead
+        self.market_lag = market_lag
+        self.execution_size_str = execution_size_str
+
+    def before(self, dt_range: DtRange, pipeline_context: PipelineContext) -> StageContext:
+        read_range = DtRange(dt_range.start_dt - timedelta(hours=8), dt_range.end_dt)
+
+        df_lead = pipeline_context.parquet_store.create_execution_price(
+            self.market_lead,
+            self.execution_size_str,
+        ).read(read_range)
+        df_lag = pipeline_context.parquet_store.create_execution_price(
+            self.market_lag,
+            self.execution_size_str,
+        ).read(read_range)
+
+        LOG.info(
+            f"LeadLagStep: Loaded {len(df_lead)} prices for {self.market_lead.id},"
+            f" {len(df_lag)} for {self.market_lag.id}"
+        )
+
+        ret_timestamps, lead_returns, lag_returns = prepare_returns(df_lead, df_lag, resample_interval="100ms")
+
+        return LeadLagContext(
+            dt_range,
+            self.market_lead,
+            self.market_lag,
+            ret_timestamps,
+            lead_returns,
+            lag_returns,
         )

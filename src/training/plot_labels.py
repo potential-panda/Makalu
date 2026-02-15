@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 
-from triple_barrier.triple_barrier import TripleBarrierConfig
+from labeling.triple_barrier import TripleBarrierConfig
 
 
 def plot_labels(labels: pd.Series, config: TripleBarrierConfig) -> None:

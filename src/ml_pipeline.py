@@ -6,9 +6,7 @@ from qate.env import sys_env
 from qate.env.env import Env, EnvName
 from qate.util.dt_range import DtRange
 
-from pipeline.framework import Pipeline
-from pipeline.stages import FeatureStage, LabelStage
-from pipeline.steps import (
+from pipeline import (
     FEATURE_DATA_BUCKET,
     AlignAndBuildFeaturesStep,
     PnlLabelStep,
@@ -16,6 +14,8 @@ from pipeline.steps import (
     QueryOrderBookStateStep,
     QueryTradeAggressionStep,
 )
+from pipeline.framework import Pipeline
+from pipeline.stages import FeatureStage, LabelStage
 
 from .pipeline.market_pair import LEAD_LAG_PAIRS, find_pair_key
 

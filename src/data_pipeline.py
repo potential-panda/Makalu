@@ -9,7 +9,9 @@ from qate.store.market_data_store import MarketDataStore
 from qate.store.parquet_store import ParquetStore
 from qate.util.dt_range import DtRange
 
-from pipeline.feature_steps import AlignAndBuildFeaturesStep
+from labeling.triple_barrier import TripleBarrierConfig
+from lead_lag.lead_lag import LEAD_LAG_CONFIG_MID, LEAD_LAG_CONFIG_NEARHFT
+from pipeline.feature_steps import AlignAndBuildFeaturesStep, FeatureTarget
 from pipeline.framework import Pipeline
 from pipeline.lead_lag_steps import LeadLagStep
 from pipeline.market_pair import EXECUTION_SIZE, LEAD_LAG_PAIRS, find_pair_key
@@ -32,7 +34,6 @@ from pipeline.trade_derived_steps import (
     PopulateRangeBarStep,
 )
 from pipeline.triple_barrier_steps import GenerateLabelsStep
-from triple_barrier.triple_barrier import TripleBarrierConfig
 
 LOG = getLogger(__name__)
 ENV_NAME = EnvName.MARIO_MARIO
@@ -48,11 +49,27 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
 
     if "TradeDerived" in run_stages:
         pipeline.stage(
+            TradeDerivedStage(market_lead).step(
+                PopulateAggressionStep(
+                    windows_sec=[
+                        1,
+                        3,
+                        5,
+                        # 15,
+                        # 30,
+                        # 60,
+                        # 120,
+                    ]
+                )
+            )  # Aggression metrics
+        )
+
+    if "TradeChart" in run_stages:
+        pipeline.stage(
             TradeDerivedStage(market_lead)
             .step(PopulateCandleBarStep(interval_seconds=60))  # 1-minute candle bars
             .step(PopulateHeikinAshiBarStep(interval_seconds=60))  # 1-minute Heikin Ashi bars
             .step(PopulateRangeBarStep(box_size_rate=0.001))  # 0.1% range bars (example)
-            .step(PopulateAggressionStep(windows_sec=[1, 3, 5]))  # Aggression metrics
         )
 
     if "OrderBookDerived" in run_stages:
@@ -61,25 +78,46 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
             .step(PopulateMarketPriceStep(EXECUTION_SIZE.get(market_lead.symbol)))
             .step(
                 PopulateBookStateStep(
-                    volume_imbalance_k=[1, 3, 5, 10],
-                    weighted_imbalance_k=[1, 3, 5, 10],
-                    depth_imbalance_rate=[0.0001, 0.0002, 0.0005, 0.001],
-                    microprice_k=[1, 3, 5, 10],
+                    volume_imbalance_k=[1, 3, 5, 10, 20],
+                    weighted_imbalance_k=[1, 3, 5, 10, 20],
+                    depth_imbalance_rate=None,
+                    microprice_k=[1, 3, 5, 10, 20],
                 )
             )
-            .step(PopulateBookChangeStep(k_levels=[1, 3, 5, 10]))
-        ).stage(OrderBookDerivedStage(market_lag).step(PopulateMarketPriceStep(EXECUTION_SIZE.get(market_lag.symbol))))
+            .step(PopulateBookChangeStep(k_levels=[1, 3, 5, 10, 20]))
+        )
+        pipeline.stage(
+            OrderBookDerivedStage(market_lag).step(PopulateMarketPriceStep(EXECUTION_SIZE.get(market_lag.symbol)))
+        )
 
     if "LeadLag" in run_stages:
         pipeline.stage(
             LeadLagStage(market_lead, market_lag, EXECUTION_SIZE.get(market_lag.symbol))
-            .step(LeadLagStep(window_size_sec=3600 * 2, window_step_sec=3600))
-            .step(LeadLagStep(window_size_sec=3600 * 4, window_step_sec=3600))
+            .step(LeadLagStep(config=LEAD_LAG_CONFIG_NEARHFT))
+            .step(LeadLagStep(config=LEAD_LAG_CONFIG_MID))
         )
 
-    if "Feature" in run_stages:
+    if "Feature_NearHFT" in run_stages:
         pipeline.stage(
-            FeatureStage(market_lead, EXECUTION_SIZE.get(market_lead.symbol)).step(AlignAndBuildFeaturesStep())
+            FeatureStage(market_lead, EXECUTION_SIZE.get(market_lead.symbol)).step(
+                AlignAndBuildFeaturesStep(
+                    target=FeatureTarget.NEAR_HFT,
+                    trade_aggression_windows=["1s", "3s", "5s"],
+                    order_book_depth_levels=[1, 3, 5, 10],
+                )
+            )
+        )
+
+    if "Feature_Mid" in run_stages:
+        pipeline.stage(
+            FeatureStage(market_lead, EXECUTION_SIZE.get(market_lead.symbol)).step(
+                AlignAndBuildFeaturesStep(
+                    target=FeatureTarget.MID,
+                    trade_aggression_windows=["30s", "60s", "120s"],
+                    order_book_depth_levels=[5, 10, 20],
+                    trend_windows=[30, 60, 120],
+                )
+            )
         )
 
     if "Label" in run_stages:
@@ -115,7 +153,7 @@ def main():
         "--stages",
         nargs="*",
         type=str,
-        default=["TradeDerived", "OrderBookDerived", "LeadLag", "Feature", "Label"],
+        default=["TradeDerived", "OrderBookDerived", "LeadLag", "Feature_30", "Feature_120", "Label"],
         help="Optional list of stages",
     )
     args = parser.parse_args()

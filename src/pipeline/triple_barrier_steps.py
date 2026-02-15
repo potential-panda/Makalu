@@ -19,7 +19,7 @@ import pandas as pd
 from influxdb_client import Point
 from qate.core.model import Market
 
-from triple_barrier.triple_barrier import (
+from labeling.triple_barrier import (
     TripleBarrierConfig,
     calculate_volatility_and_spread,
     compute_labels,

@@ -9,7 +9,7 @@ from qate.store.market_data_store import MarketDataStore
 from qate.store.parquet_store import ParquetStore
 from qate.util.dt_range import DtRange
 
-CHUNK_SIZE = 7
+CHUNK_SIZE = 3
 LOG = getLogger(__name__)
 
 

@@ -101,9 +101,15 @@ class PopulateBookStateStep(Step):
         super().__init__()
         self.volume_imbalance_k = volume_imbalance_k
         self.weighted_imbalance_k = weighted_imbalance_k
-        self.depth_imbalance_rate = depth_imbalance_rate
+        self.depth_imbalance_rate = depth_imbalance_rate if depth_imbalance_rate else []
         self.microprice_k = microprice_k
         self.max_spread_bps = max_spread_bps
+        # Precompute max k across all k-based metrics for prefix sum caching
+        self._max_k = max(
+            max(volume_imbalance_k, default=0),
+            max(weighted_imbalance_k, default=0),
+            max(microprice_k, default=0),
+        )
 
     def populate(self, pipeline_context: PipelineContext, stage_context: Context):
         parquet_store = pipeline_context.parquet_store.create_single_market("BookState", stage_context.market)
@@ -135,13 +141,14 @@ class PopulateBookStateStep(Step):
                 "best_spread": order_book.spread,
                 "best_spread_bps": order_book.spread_bps,
             }
+
+            cache = intent.OrderBookMetricsCache(order_book, self._max_k)
+
             for k in self.volume_imbalance_k:
-                value = intent.compute_volume_imbalance(order_book, k)
-                fields[f"vol_imb_k{k}"] = value
+                fields[f"vol_imb_k{k}"] = cache.volume_imbalance(k)
 
             for k in self.weighted_imbalance_k:
-                value = intent.compute_weighted_imbalance(order_book, k)
-                fields[f"weighted_imb_k{k}"] = value
+                fields[f"weighted_imb_k{k}"] = cache.weighted_imbalance(k)
 
             for rate in self.depth_imbalance_rate:
                 value = intent.compute_depth_imbalance(order_book, rate)
@@ -149,8 +156,7 @@ class PopulateBookStateStep(Step):
                 fields[f"depth_imb_{rate_bps}bps"] = value
 
             for k in self.microprice_k:
-                value = intent.compute_microprice(order_book, k)
-                fields[f"microprice_k{k}"] = value
+                fields[f"microprice_k{k}"] = cache.microprice(k)
 
             yield (order_book.get_ts(), fields)
             progress.update()

@@ -1,6 +1,17 @@
 from qate.core.model import ExchangeName, Market
 from qate.core.symbol import Symbol
 
+MIN_EXECUTION_SIZE = {
+    Symbol.BTC_JPY: "0.001",
+    Symbol.ETH_JPY: "0.05",
+    Symbol.XRP_JPY: "50",
+    Symbol.SOL_JPY: "0.3",
+    Symbol.BTC_USDT: "0.001",
+    Symbol.ETH_USDT: "0.05",
+    Symbol.XRP_USDT: "50",
+    Symbol.SOL_USDT: "0.3",
+}
+
 EXECUTION_SIZE = {
     Symbol.BTC_JPY: "0.002",
     Symbol.ETH_JPY: "0.1",
