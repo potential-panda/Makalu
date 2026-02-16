@@ -50,7 +50,7 @@ def _build_trade_features_for_window(
     features[f"ta_size_asymmetry_norm{suffix}"] = compute_imbalance(avg_buy_size, avg_sell_size)
 
     for roll_window in rolling_windows:
-        roll_suffix = f"_{roll_window.replace('min', 'm')}"
+        roll_suffix = f"_{roll_window}"
         features[f"ta_avg_size_zscore{suffix}{roll_suffix}"] = compute_zscore(avg_size, roll_window)
         features[f"ta_avg_size_pct{suffix}{roll_suffix}"] = compute_percentile(avg_size, roll_window)
         features[f"ta_qty_per_sec_zscore{suffix}{roll_suffix}"] = compute_zscore(qty_per_sec, roll_window)

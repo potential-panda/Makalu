@@ -30,7 +30,7 @@ def build_execution_price_features(
     features["ep_slippage_total_bps"] = slippage_total_bps
 
     for roll_window in rolling_windows:
-        roll_suffix = f"_{roll_window.replace('min', 'm')}"
+        roll_suffix = f"_{roll_window}"
         features[f"ep_slippage_zscore{roll_suffix}"] = compute_zscore(slippage_total_bps, roll_window)
         features[f"ep_slippage_pct{roll_suffix}"] = compute_percentile(slippage_total_bps, roll_window)
 

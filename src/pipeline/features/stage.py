@@ -48,6 +48,7 @@ class FeatureStage(Stage):
         return Context(
             populate_dt_range=dt_range,
             market=self.market,
+            target=self.target,
             source_df=source_df,
             features={},
         )

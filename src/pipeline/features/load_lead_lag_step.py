@@ -22,7 +22,7 @@ class LoadLeadLagStep(Step):
         store = ParquetStore(sys_env.get_parquet_root_dir())
         market_lead = stage_context.market
         ll_store = store.create_lead_lag(market_lead, self.market_lag, self.config.param_id())
-        df = ll_store.read(stage_context.dt_range)
+        df = ll_store.read(stage_context.populate_dt_range)
 
         if df.empty:
             LOG.warning(f"LoadLeadLagStep: No data found for {market_lead.id}-{self.market_lag.id}")

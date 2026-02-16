@@ -50,7 +50,7 @@ def _build_book_change_features_for_k(
     total_activity = total_pull_rate + total_refill_rate
 
     for roll_window in rolling_windows:
-        roll_suffix = f"_{roll_window.replace('min', 'm')}"
+        roll_suffix = f"_{roll_window}"
         features[f"bc_total_pull_zscore{suffix}{roll_suffix}"] = compute_zscore(total_pull_rate, roll_window)
         features[f"bc_total_activity_zscore{suffix}{roll_suffix}"] = compute_zscore(total_activity, roll_window)
         features[f"bc_total_activity_pct{suffix}{roll_suffix}"] = compute_percentile(total_activity, roll_window)

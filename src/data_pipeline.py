@@ -111,15 +111,15 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
     if "Feature_" + FeatureTarget.NEAR_HFT in run_stages:
         pipeline.stage(
             FeatureStage(market_lead, EXECUTION_SIZE.get(market_lead.symbol), target=FeatureTarget.NEAR_HFT)
-            .step(TradeAggressionFeatureStep(windows=["5s", "10s", "30s"], rolling_windows=["30s", "1min", "5min"]))
+            .step(TradeAggressionFeatureStep(windows=["5s", "10s", "30s"], rolling_windows=["30s", "60s", "300s"]))
             .step(OrderBookStateFeatureStep(depth_levels=[1, 3, 5, 10]))
-            .step(BookChangeFeatureStep(depth_levels=[1, 3, 5, 10], rolling_windows=["30s", "1min", "5min"]))
-            .step(ExecutionPriceFeatureStep(rolling_windows=["30s", "1min", "5min"]))
+            .step(BookChangeFeatureStep(depth_levels=[1, 3, 5, 10], rolling_windows=["30s", "60s", "300s"]))
+            .step(ExecutionPriceFeatureStep(rolling_windows=["30s", "60s", "300s"]))
             .step(
                 CrossInteractionsFeatureStep(
                     windows=["5s", "10s", "30s"],
                     depth_levels=[1, 3, 5, 10],
-                    base_roll_window="1min",
+                    base_roll_window="60s",
                 )
             )
             .step(VolatilityFeatureStep(windows=["5s", "10s", "30s", "60s"]))
@@ -131,16 +131,16 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
         pipeline.stage(
             FeatureStage(market_lead, EXECUTION_SIZE.get(market_lead.symbol), target=FeatureTarget.MID)
             .step(
-                TradeAggressionFeatureStep(windows=["30s", "60s", "180s"], rolling_windows=["2min", "5min", "10min"])
+                TradeAggressionFeatureStep(windows=["30s", "60s", "180s"], rolling_windows=["120s", "300s", "600s"])
             )
             .step(OrderBookStateFeatureStep(depth_levels=[5, 10, 20]))
-            .step(BookChangeFeatureStep(depth_levels=[5, 10, 20], rolling_windows=["2min", "5min", "10min"]))
-            .step(ExecutionPriceFeatureStep(rolling_windows=["2min", "5min", "10min"]))
+            .step(BookChangeFeatureStep(depth_levels=[5, 10, 20], rolling_windows=["120s", "300s", "600s"]))
+            .step(ExecutionPriceFeatureStep(rolling_windows=["120s", "300s", "600s"]))
             .step(
                 CrossInteractionsFeatureStep(
                     windows=["30s", "60s", "180s"],
                     depth_levels=[5, 10, 20],
-                    base_roll_window="5min",
+                    base_roll_window="300s",
                 )
             )
             .step(TrendFeatureStep(windows=["30s", "60s", "180s", "600s"]))

@@ -129,7 +129,7 @@ def _build_trade_exec_interactions(
     vwap_first = source_df[f"vwap_{w1}"]
     mid = source_df["mid"]
 
-    roll_suffix = f"_{base_roll_window.replace('min', 'm')}"
+    roll_suffix = f"_{base_roll_window}"
     trades_per_sec_pct_first = features[f"ta_trades_per_sec_pct_{w1}{roll_suffix}"]
     slippage_pct = features[f"ep_slippage_pct{roll_suffix}"]
 
@@ -158,7 +158,7 @@ def _build_multiway_interactions(
     absorption_bid = features["cf_absorption_bid"]
     absorption_ask = features["cf_absorption_ask"]
 
-    roll_suffix = f"_{base_roll_window.replace('min', 'm')}"
+    roll_suffix = f"_{base_roll_window}"
     trades_per_sec_pct_w1 = features[f"ta_trades_per_sec_pct_{w1}{roll_suffix}"]
     total_activity_pct_k1 = features[f"bc_total_activity_pct_k{k1}{roll_suffix}"]
     spread_bps = source_df["spread_bps"]
