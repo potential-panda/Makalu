@@ -61,17 +61,7 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
     if "TradeDerived" in run_stages:
         pipeline.stage(
             TradeDerivedStage(market_lead).step(
-                PopulateAggressionStep(
-                    windows_sec=[
-                        1,
-                        3,
-                        5,
-                        10,
-                        # 30,
-                        # 60,
-                        # 120,
-                    ]
-                )
+                PopulateAggressionStep(windows_sec=[1, 3, 5, 10, 30, 60, 120])
             )  # Aggression metrics
         )
 

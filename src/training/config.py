@@ -14,9 +14,9 @@ TARGET_COLUMN = "label"
 
 
 def setup():
-    barrier_multiplier: float = 2.0
-    return_shift_sec: int = 30
-    timeout_sec: int = 30
+    barrier_multiplier: float = 3.0
+    return_shift_sec: int = 60
+    timeout_sec: int = 60
     volatility_lookback_sec: int = 180
     ema_span_sec: int = 60
     vol_resample_interval: str = "1s"
