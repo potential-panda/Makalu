@@ -252,6 +252,8 @@ def compute_sliding_windows(
                 # Normalization (spec §6)
                 norm_lag = opt_lag_ms / config.max_lag_ms if config.max_lag_ms > 0 else 0.0
                 norm_stability = float(np.log1p(stability))
+                # Keep units consistent with ll_opt_lag_ms (normalized [0, 1]).
+                norm_drift = drift / config.max_lag_ms if config.max_lag_ms > 0 else 0.0
 
                 fields[f"ll_corr_at_zero{suffix}"] = float(np.clip(corr_at_zero, -1.0, 1.0))
                 fields[f"ll_max_corr{suffix}"] = float(np.clip(max_corr, -1.0, 1.0))
@@ -259,7 +261,7 @@ def compute_sliding_windows(
                 fields[f"ll_alpha_gain{suffix}"] = alpha_gain
                 fields[f"ll_alpha_gain_log{suffix}"] = float(np.log1p(alpha_gain))
                 fields[f"ll_lag_stability{suffix}"] = norm_stability
-                fields[f"ll_drift{suffix}"] = drift
+                fields[f"ll_drift{suffix}"] = float(np.clip(norm_drift, -1.0, 1.0))
 
         if fields:
             yield window_end_ts, fields
