@@ -1,10 +1,10 @@
 import logging
 from typing import List
 
-from context import Context
-
 from feature_engineering.volatility import build_volatility_features
 from pipeline.framework import PipelineContext, Step
+
+from .context import Context
 
 LOG = logging.getLogger(__name__)
 

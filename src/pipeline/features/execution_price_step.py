@@ -1,10 +1,10 @@
 import logging
 from typing import List
 
-from context import Context
-
 from feature_engineering.execution_price import build_execution_price_features
 from pipeline.framework import PipelineContext, Step
+
+from .context import Context
 
 LOG = logging.getLogger(__name__)
 

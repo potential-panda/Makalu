@@ -1,10 +1,10 @@
 import logging
 from typing import List
 
-from context import Context
-
 from feature_engineering.interactions import build_cross_feature_interactions
 from pipeline.framework import PipelineContext, Step
+
+from .context import Context
 
 LOG = logging.getLogger(__name__)
 

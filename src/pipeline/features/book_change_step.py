@@ -1,10 +1,10 @@
 import logging
 from typing import List
 
-from context import Context
-
 from feature_engineering.book_change import build_book_change_features
 from pipeline.framework import PipelineContext, Step
+
+from .context import Context
 
 LOG = logging.getLogger(__name__)
 

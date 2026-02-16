@@ -15,6 +15,7 @@ from pipeline.features import (
     BookChangeFeatureStep,
     CrossInteractionsFeatureStep,
     ExecutionPriceFeatureStep,
+    LoadLeadLagStep,
     OrderBookStateFeatureStep,
     PostprocessAndSaveStep,
     TradeAggressionFeatureStep,
@@ -122,6 +123,7 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
                 )
             )
             .step(VolatilityFeatureStep(windows=["5s", "10s", "30s", "60s"]))
+            .step(LoadLeadLagStep(market_lag, LEAD_LAG_CONFIG_NEARHFT))
             .step(PostprocessAndSaveStep())
         )
 
@@ -143,6 +145,7 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
             )
             .step(TrendFeatureStep(windows=["30s", "60s", "180s", "600s"]))
             .step(VolatilityFeatureStep(windows=["30s", "60s", "180s", "600s"]))
+            .step(LoadLeadLagStep(market_lag, LEAD_LAG_CONFIG_MID))
             .step(PostprocessAndSaveStep())
         )
 

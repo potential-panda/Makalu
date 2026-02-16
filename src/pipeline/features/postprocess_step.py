@@ -2,9 +2,10 @@ import logging
 
 import numpy as np
 import pandas as pd
-from context import Context
 
 from pipeline.framework import PipelineContext, Step
+
+from .context import Context
 
 LOG = logging.getLogger(__name__)
 
@@ -59,4 +60,5 @@ class PostprocessAndSaveStep(Step):
         )
 
     def populate_influxdb(self, pipeline_context: PipelineContext, stage_context: Context):
+        pass
         pass
