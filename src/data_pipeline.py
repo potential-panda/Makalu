@@ -112,7 +112,7 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
         pipeline.stage(
             FeatureStage(market_lead, EXECUTION_SIZE.get(market_lead.symbol), target=FeatureTarget.NEAR_HFT)
             .step(TradeAggressionFeatureStep(windows=["5s", "10s", "30s"], rolling_windows=["30s", "60s", "300s"]))
-            .step(OrderBookStateFeatureStep(depth_levels=[1, 3, 5, 10]))
+            .step(OrderBookStateFeatureStep(depth_levels=[1, 3, 5, 10], windows=["5s", "10s", "30s"]))
             .step(BookChangeFeatureStep(depth_levels=[1, 3, 5, 10], rolling_windows=["30s", "60s", "300s"]))
             .step(ExecutionPriceFeatureStep(rolling_windows=["30s", "60s", "300s"]))
             .step(
@@ -133,7 +133,7 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
             .step(
                 TradeAggressionFeatureStep(windows=["30s", "60s", "180s"], rolling_windows=["120s", "300s", "600s"])
             )
-            .step(OrderBookStateFeatureStep(depth_levels=[5, 10, 20]))
+            .step(OrderBookStateFeatureStep(depth_levels=[5, 10, 20], windows=["30s", "60s", "180s"]))
             .step(BookChangeFeatureStep(depth_levels=[5, 10, 20], rolling_windows=["120s", "300s", "600s"]))
             .step(ExecutionPriceFeatureStep(rolling_windows=["120s", "300s", "600s"]))
             .step(

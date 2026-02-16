@@ -8,7 +8,9 @@ from .utils import EPS, compute_bps_offset
 LOG = logging.getLogger(__name__)
 
 
-def build_order_book_state_features(source_df: pd.DataFrame, features: Dict[str, pd.Series], depth_levels: List[int]):
+def build_order_book_state_features(
+    source_df: pd.DataFrame, features: Dict[str, pd.Series], depth_levels: List[int], windows: List[str]
+):
     """Build all order book state features (Section 2)."""
     LOG.info("Building order book state features...")
 
@@ -17,10 +19,10 @@ def build_order_book_state_features(source_df: pd.DataFrame, features: Dict[str,
         microprice = source_df[f"microprice_k{k}"]
         features[f"bs_microprice_offset_bps_k{k}"] = compute_bps_offset(microprice, best_mid)
 
-    # Use first, 5th and 10th depth levels for gradient/divergence if available
+    # Use first, middle and last depth levels for gradient/divergence
     k1 = depth_levels[0]
-    k_mid = depth_levels[min(2, len(depth_levels) - 1)]  # k5 equivalent
-    k_deep = depth_levels[-1]  # k10 equivalent
+    k_mid = depth_levels[len(depth_levels) // 2]
+    k_deep = depth_levels[-1]
 
     vol_imb_k1 = source_df[f"vol_imb_k{k1}"]
     vol_imb_kmid = source_df[f"vol_imb_k{k_mid}"]
@@ -33,15 +35,14 @@ def build_order_book_state_features(source_df: pd.DataFrame, features: Dict[str,
     microprice_offset_bps_k1 = features[f"bs_microprice_offset_bps_k{k1}"]
     features["bs_microprice_offset_norm"] = microprice_offset_bps_k1 / (spread_bps + EPS)
 
-    _build_order_book_rolling_aggregates(source_df, features, depth_levels)
+    _build_order_book_rolling_aggregates(source_df, features, depth_levels, windows)
 
 
 def _build_order_book_rolling_aggregates(
-    source_df: pd.DataFrame, features: Dict[str, pd.Series], depth_levels: List[int]
+    source_df: pd.DataFrame, features: Dict[str, pd.Series], depth_levels: List[int], windows: List[str]
 ):
-    windows = {"1s": "1s", "3s": "3s", "5s": "5s"}
     k1 = depth_levels[0]
-    k_mid = depth_levels[min(2, len(depth_levels) - 1)]
+    k_mid = depth_levels[len(depth_levels) // 2]
 
     features_to_roll = {
         "spread_bps": source_df["spread_bps"],
@@ -50,7 +51,7 @@ def _build_order_book_rolling_aggregates(
         f"microprice_offset_bps_k{k1}": features[f"bs_microprice_offset_bps_k{k1}"],
     }
     for name, series in features_to_roll.items():
-        for window_name, window_size in windows.items():
-            rolling_op = series.rolling(window_size, closed="left")
-            features[f"bs_{name}_mean_{window_name}"] = rolling_op.mean()
-            features[f"bs_{name}_std_{window_name}"] = rolling_op.std()
+        for window in windows:
+            rolling_op = series.rolling(window, closed="left")
+            features[f"bs_{name}_mean_{window}"] = rolling_op.mean()
+            features[f"bs_{name}_std_{window}"] = rolling_op.std()
