@@ -2,6 +2,7 @@
 Dataset module for loading and aligning features and labels.
 """
 
+import gc
 import logging
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
@@ -12,6 +13,20 @@ from qate.store.parquet_store import ParquetStore
 from qate.util.dt_range import DtRange
 
 LOG = logging.getLogger(__name__)
+
+
+def _downcast_float64(df: pd.DataFrame) -> pd.DataFrame:
+    """Downcast float64 columns to float32 to halve memory usage.
+
+    LightGBM bins features into 256 buckets, so float64 precision is wasted.
+    """
+    f64_cols = df.select_dtypes(include=["float64"]).columns
+    if len(f64_cols) > 0:
+        before_mb = df.memory_usage(deep=True).sum() / 1e6
+        df[f64_cols] = df[f64_cols].astype(np.float32)
+        after_mb = df.memory_usage(deep=True).sum() / 1e6
+        LOG.info(f"Downcast float64->float32: {before_mb:.0f} MB -> {after_mb:.0f} MB ({len(f64_cols)} columns)")
+    return df
 
 
 @dataclass
@@ -111,6 +126,11 @@ class Dataset:
         features_reset = self.features_df.reset_index(names="_time")
         labels_reset = self.labels_df[label_columns].reset_index(names="_time")
 
+        # --- Fix #2: Free raw data before merge to reduce peak memory ---
+        self.features_df = None
+        self.labels_df = None
+        gc.collect()
+
         # Use merge_asof to find nearest label for each feature timestamp
         merged = pd.merge_asof(
             features_reset,
@@ -119,6 +139,8 @@ class Dataset:
             tolerance=pd.Timedelta(tolerance),
             direction=direction,
         )
+        del features_reset, labels_reset
+        gc.collect()
 
         # Set time back as index
         merged = merged.set_index("_time")
@@ -133,13 +155,18 @@ class Dataset:
         # Extract aligned features and labels
         # Keep additional label columns in features for post-alignment filtering
         columns_to_drop = [self.target_column]
-        self._aligned_features = merged.drop(columns=columns_to_drop).copy()
+        self._aligned_features = merged.drop(columns=columns_to_drop)
         self._aligned_labels = merged[self.target_column].copy()
+        del merged
+        gc.collect()
 
         # Drop rows with NaN in target (no matching label found)
         valid_mask = ~self._aligned_labels.isna()
         self._aligned_features = self._aligned_features.loc[valid_mask]
         self._aligned_labels = self._aligned_labels.loc[valid_mask]
+
+        # --- Fix #1: Downcast to float32 after alignment ---
+        self._aligned_features = _downcast_float64(self._aligned_features)
 
         LOG.info(f"Aligned data: {len(self._aligned_features)} rows (after dropping unmatched)")
 
@@ -220,9 +247,7 @@ class Dataset:
 
     def get_feature_columns(self) -> List[str]:
         """Get the list of feature columns to use for training."""
-        if self.feature_columns:
-            return self.feature_columns
-        return list(self.features_df.columns)
+        return self.feature_columns
 
     def get_aligned_data(self) -> Tuple[pd.DataFrame, pd.Series]:
         """
@@ -230,7 +255,17 @@ class Dataset:
 
         Returns:
             Tuple of (features DataFrame, labels Series)
+
+        Raises:
+            ValueError: If aligned data has been freed (e.g. after leak_safe_preprocess).
         """
+        if self._aligned_features is None:
+            raise ValueError(
+                "Aligned data has been freed to save memory. "
+                "Use get_train_data() / get_test_data() instead, "
+                "or call align() again before get_aligned_data()."
+            )
+
         feature_cols = self.get_feature_columns()
         available_cols = [c for c in feature_cols if c in self._aligned_features.columns]
 
@@ -272,10 +307,10 @@ class Dataset:
         # Calculate split point
         split_idx = int(len(X) * (1 - test_size))
 
-        self.X_train = X.iloc[:split_idx].copy()
-        self.X_test = X.iloc[split_idx:].copy()
-        self.y_train = y.iloc[:split_idx].copy()
-        self.y_test = y.iloc[split_idx:].copy()
+        self.X_train = X.iloc[:split_idx]
+        self.X_test = X.iloc[split_idx:]
+        self.y_train = y.iloc[:split_idx]
+        self.y_test = y.iloc[split_idx:]
 
         LOG.info(f"Train set: {len(self.X_train)} rows, Test set: {len(self.X_test)} rows")
 
@@ -311,6 +346,11 @@ class Dataset:
 
         # 1. Split
         self.train_test_split(test_size=test_size, shuffle=False)
+
+        # --- Fix #3: Free aligned data; train/test now own the only references ---
+        self._aligned_features = None
+        self._aligned_labels = None
+        gc.collect()
 
         # 2. Identify columns to drop (Train stats only)
         na_fractions = self.X_train.isna().mean()
