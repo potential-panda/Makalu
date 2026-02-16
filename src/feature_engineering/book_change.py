@@ -5,7 +5,6 @@ import pandas as pd
 
 from .utils import (
     EPS,
-    ROLLING_WINDOWS,
     compute_imbalance,
     compute_imbalance_abs,
     compute_percentile,

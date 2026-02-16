@@ -1,14 +1,16 @@
 import logging
-from typing import Dict
+from typing import Dict, List
 
 import pandas as pd
 
-from .utils import EPS, ROLLING_WINDOWS, compute_percentile, compute_zscore
+from .utils import EPS, compute_percentile, compute_zscore
 
 LOG = logging.getLogger(__name__)
 
 
-def build_execution_price_features(source_df: pd.DataFrame, features: Dict[str, pd.Series], rolling_windows: List[str]):
+def build_execution_price_features(
+    source_df: pd.DataFrame, features: Dict[str, pd.Series], rolling_windows: List[str]
+):
     """Build all execution price features (Section 4)."""
     LOG.info("Building execution price features...")
 

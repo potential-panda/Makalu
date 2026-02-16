@@ -3,10 +3,6 @@ import pandas as pd
 # Small epsilon to avoid division by zero
 EPS = 1e-9
 
-# Rolling windows for z-score and percentile calculations
-ROLLING_WINDOWS = ["1min", "3min", "5min"]
-DEFAULT_ROLLING_WINDOW = "1min"
-
 
 def safe_divide(numerator: pd.Series, denominator: pd.Series) -> pd.Series:
     """Safe division with epsilon to avoid division by zero."""
@@ -30,7 +26,7 @@ def compute_imbalance_abs(a: pd.Series, b: pd.Series) -> pd.Series:
     return (a - b) / (a.abs() + b.abs() + EPS)
 
 
-def compute_zscore(series: pd.Series, window: str = DEFAULT_ROLLING_WINDOW) -> pd.Series:
+def compute_zscore(series: pd.Series, window: str) -> pd.Series:
     """
     Compute rolling z-score: (x - mean) / std.
     Returns values typically in range [-3, 3].
@@ -40,7 +36,7 @@ def compute_zscore(series: pd.Series, window: str = DEFAULT_ROLLING_WINDOW) -> p
     return (series - rolling_mean) / (rolling_std + EPS)
 
 
-def compute_percentile(series: pd.Series, window: str = DEFAULT_ROLLING_WINDOW) -> pd.Series:
+def compute_percentile(series: pd.Series, window: str) -> pd.Series:
     """
     Compute rolling percentile rank.
     Returns values in range [0, 1].

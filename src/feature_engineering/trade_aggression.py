@@ -4,13 +4,7 @@ from typing import Dict, List
 import numpy as np
 import pandas as pd
 
-from .utils import (
-    EPS,
-    ROLLING_WINDOWS,
-    compute_imbalance,
-    compute_percentile,
-    compute_zscore,
-)
+from .utils import EPS, compute_imbalance, compute_percentile, compute_zscore
 
 LOG = logging.getLogger(__name__)
 
