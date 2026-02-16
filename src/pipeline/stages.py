@@ -9,7 +9,6 @@ from qate.util.dt_range import DtRange
 
 from lead_lag.lead_lag import prepare_returns
 
-from .feature_steps import Context as FeatureContext
 from .framework import PipelineContext, Stage, StageContext
 from .lead_lag_steps import Context as LeadLagContext
 from .market_data_steps import Context as MarketDataContext
@@ -92,39 +91,6 @@ class TradeDerivedStage(Stage):
             dt_range,
             self.market,
             trades,
-        )
-
-
-class FeatureStage(Stage):
-    def __init__(self, market: Market, execution_size_str: str):
-        super().__init__()
-        self.market = market
-        self.execution_size_str = execution_size_str
-
-    def before(self, dt_range: DtRange, pipeline_context: PipelineContext) -> StageContext:
-        compute_dt_range = DtRange(dt_range.start_dt - timedelta(hours=1), dt_range.end_dt)
-        parquet_store = pipeline_context.parquet_store.create_execution_price(self.market, self.execution_size_str)
-        execution_price_df = parquet_store.read(compute_dt_range)
-
-        # Query trade aggression data
-        parquet_store = pipeline_context.parquet_store.create_single_market("TradeAggression", self.market)
-        trade_aggression_df = parquet_store.read(compute_dt_range)
-
-        # Query order book state data
-        parquet_store = pipeline_context.parquet_store.create_single_market("BookState", self.market)
-        order_book_state_df = parquet_store.read(compute_dt_range)
-
-        # Query book change data
-        parquet_store = pipeline_context.parquet_store.create_single_market("BookChange", self.market)
-        book_change_df = parquet_store.read(compute_dt_range)
-
-        return FeatureContext(
-            dt_range,
-            self.market,
-            execution_price_df,
-            trade_aggression_df,
-            order_book_state_df,
-            book_change_df,
         )
 
 

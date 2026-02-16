@@ -16,19 +16,21 @@ LOG = logging.getLogger(__name__)
 
 
 def build_trade_aggression_features(
-    source_df: pd.DataFrame, features: Dict[str, pd.Series], trade_windows: List[str]
+    source_df: pd.DataFrame, features: Dict[str, pd.Series], trade_windows: List[str], rolling_windows: List[str]
 ) -> None:
     """Build all trade aggression features (Section 1)."""
     LOG.info("Building trade aggression features...")
 
     for window in trade_windows:
-        _build_trade_features_for_window(source_df, features, window)
+        _build_trade_features_for_window(source_df, features, window, rolling_windows)
 
     # Cross-window features
     _build_cross_window_features(features, trade_windows)
 
 
-def _build_trade_features_for_window(source_df: pd.DataFrame, features: Dict[str, pd.Series], window: str) -> None:
+def _build_trade_features_for_window(
+    source_df: pd.DataFrame, features: Dict[str, pd.Series], window: str, rolling_windows: List[str]
+) -> None:
     suffix = f"_{window}"
 
     buy_qty = source_df[f"buy_qty{suffix}"]
@@ -53,7 +55,7 @@ def _build_trade_features_for_window(source_df: pd.DataFrame, features: Dict[str
 
     features[f"ta_size_asymmetry_norm{suffix}"] = compute_imbalance(avg_buy_size, avg_sell_size)
 
-    for roll_window in ROLLING_WINDOWS:
+    for roll_window in rolling_windows:
         roll_suffix = f"_{roll_window.replace('min', 'm')}"
         features[f"ta_avg_size_zscore{suffix}{roll_suffix}"] = compute_zscore(avg_size, roll_window)
         features[f"ta_avg_size_pct{suffix}{roll_suffix}"] = compute_percentile(avg_size, roll_window)

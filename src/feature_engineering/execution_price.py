@@ -8,7 +8,7 @@ from .utils import EPS, ROLLING_WINDOWS, compute_percentile, compute_zscore
 LOG = logging.getLogger(__name__)
 
 
-def build_execution_price_features(source_df: pd.DataFrame, features: Dict[str, pd.Series]):
+def build_execution_price_features(source_df: pd.DataFrame, features: Dict[str, pd.Series], rolling_windows: List[str]):
     """Build all execution price features (Section 4)."""
     LOG.info("Building execution price features...")
 
@@ -27,7 +27,7 @@ def build_execution_price_features(source_df: pd.DataFrame, features: Dict[str, 
     slippage_total_bps = slippage_bid_bps + slippage_ask_bps
     features["ep_slippage_total_bps"] = slippage_total_bps
 
-    for roll_window in ROLLING_WINDOWS:
+    for roll_window in rolling_windows:
         roll_suffix = f"_{roll_window.replace('min', 'm')}"
         features[f"ep_slippage_zscore{roll_suffix}"] = compute_zscore(slippage_total_bps, roll_window)
         features[f"ep_slippage_pct{roll_suffix}"] = compute_percentile(slippage_total_bps, roll_window)

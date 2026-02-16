@@ -11,7 +11,18 @@ from qate.util.dt_range import DtRange
 
 from labeling.triple_barrier import TripleBarrierConfig
 from lead_lag.lead_lag import LEAD_LAG_CONFIG_MID, LEAD_LAG_CONFIG_NEARHFT
-from pipeline.feature_steps import AlignAndBuildFeaturesStep, FeatureTarget
+from pipeline.features import (
+    BookChangeFeatureStep,
+    CrossInteractionsFeatureStep,
+    ExecutionPriceFeatureStep,
+    OrderBookStateFeatureStep,
+    PostprocessAndSaveStep,
+    TradeAggressionFeatureStep,
+    TrendFeatureStep,
+    VolatilityFeatureStep,
+)
+from pipeline.features.stage import FeatureStage
+from pipeline.features.target import FeatureTarget
 from pipeline.framework import Pipeline
 from pipeline.lead_lag_steps import LeadLagStep
 from pipeline.market_pair import EXECUTION_SIZE, LEAD_LAG_PAIRS, find_pair_key
@@ -21,7 +32,6 @@ from pipeline.order_book_derived_steps import (
     PopulateMarketPriceStep,
 )
 from pipeline.stages import (
-    FeatureStage,
     LabelingStage,
     LeadLagStage,
     OrderBookDerivedStage,
@@ -97,27 +107,43 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
             .step(LeadLagStep(config=LEAD_LAG_CONFIG_MID))
         )
 
-    if "Feature_NearHFT" in run_stages:
+    if "Feature_" + FeatureTarget.NEAR_HFT in run_stages:
         pipeline.stage(
-            FeatureStage(market_lead, EXECUTION_SIZE.get(market_lead.symbol)).step(
-                AlignAndBuildFeaturesStep(
-                    target=FeatureTarget.NEAR_HFT,
-                    trade_aggression_windows=["1s", "3s", "5s"],
-                    order_book_depth_levels=[1, 3, 5, 10],
+            FeatureStage(market_lead, EXECUTION_SIZE.get(market_lead.symbol), target=FeatureTarget.NEAR_HFT)
+            .step(TradeAggressionFeatureStep(windows=["5s", "10s", "30s"], rolling_windows=["30s", "1min", "5min"]))
+            .step(OrderBookStateFeatureStep(depth_levels=[1, 3, 5, 10]))
+            .step(BookChangeFeatureStep(depth_levels=[1, 3, 5, 10], rolling_windows=["30s", "1min", "5min"]))
+            .step(ExecutionPriceFeatureStep(rolling_windows=["30s", "1min", "5min"]))
+            .step(
+                CrossInteractionsFeatureStep(
+                    windows=["5s", "10s", "30s"],
+                    depth_levels=[1, 3, 5, 10],
+                    base_roll_window="1min",
                 )
             )
+            .step(VolatilityFeatureStep(windows=["5s", "10s", "30s", "60s"]))
+            .step(PostprocessAndSaveStep())
         )
 
-    if "Feature_Mid" in run_stages:
+    if "Feature_" + FeatureTarget.MID in run_stages:
         pipeline.stage(
-            FeatureStage(market_lead, EXECUTION_SIZE.get(market_lead.symbol)).step(
-                AlignAndBuildFeaturesStep(
-                    target=FeatureTarget.MID,
-                    trade_aggression_windows=["30s", "60s", "120s"],
-                    order_book_depth_levels=[5, 10, 20],
-                    trend_windows=[30, 60, 120],
+            FeatureStage(market_lead, EXECUTION_SIZE.get(market_lead.symbol), target=FeatureTarget.MID)
+            .step(
+                TradeAggressionFeatureStep(windows=["30s", "60s", "180s"], rolling_windows=["2min", "5min", "10min"])
+            )
+            .step(OrderBookStateFeatureStep(depth_levels=[5, 10, 20]))
+            .step(BookChangeFeatureStep(depth_levels=[5, 10, 20], rolling_windows=["2min", "5min", "10min"]))
+            .step(ExecutionPriceFeatureStep(rolling_windows=["2min", "5min", "10min"]))
+            .step(
+                CrossInteractionsFeatureStep(
+                    windows=["30s", "60s", "180s"],
+                    depth_levels=[5, 10, 20],
+                    base_roll_window="5min",
                 )
             )
+            .step(TrendFeatureStep(windows=["30s", "60s", "180s", "600s"]))
+            .step(VolatilityFeatureStep(windows=["30s", "60s", "180s", "600s"]))
+            .step(PostprocessAndSaveStep())
         )
 
     if "Label" in run_stages:
@@ -144,6 +170,17 @@ def run_pipeline(args):
     LOG.info("Data pipeline finished.")
 
 
+ALL_STEPS = [
+    "TradeDerived",
+    "TradeChart",
+    "OrderBookDerived",
+    "LeadLag",
+    "Feature_" + FeatureTarget.NEAR_HFT,  # Feature_NearHFT
+    "Feature_" + FeatureTarget.MID,  # Feature_MID
+    "Label",
+]
+
+
 def main():
     parser = argparse.ArgumentParser(description="Data pipeline CLI for processing market data.")
     parser.add_argument("--market", required=True, help="Market in format EXCHANGE:SYMBOL (e.g., BINANCE:BTC_USDT)")
@@ -153,7 +190,7 @@ def main():
         "--stages",
         nargs="*",
         type=str,
-        default=["TradeDerived", "OrderBookDerived", "LeadLag", "Feature_30", "Feature_120", "Label"],
+        default=ALL_STEPS,
         help="Optional list of stages",
     )
     args = parser.parse_args()

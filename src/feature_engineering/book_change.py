@@ -15,18 +15,22 @@ from .utils import (
 LOG = logging.getLogger(__name__)
 
 
-def build_book_change_features(source_df: pd.DataFrame, features: Dict[str, pd.Series], depth_levels: List[int]):
+def build_book_change_features(
+    source_df: pd.DataFrame, features: Dict[str, pd.Series], depth_levels: List[int], rolling_windows: List[str]
+):
     """Build all book change features (Section 3)."""
     LOG.info("Building book change features...")
 
     for k in depth_levels:
-        _build_book_change_features_for_k(source_df, features, k)
+        _build_book_change_features_for_k(source_df, features, k, rolling_windows)
 
     # Cross-k features (gradient between shallow and deep)
     _build_book_change_cross_k_features(features, depth_levels)
 
 
-def _build_book_change_features_for_k(source_df: pd.DataFrame, features: Dict[str, pd.Series], k: int):
+def _build_book_change_features_for_k(
+    source_df: pd.DataFrame, features: Dict[str, pd.Series], k: int, rolling_windows: List[str]
+):
     suffix = f"_k{k}"
 
     delta_depth_bid = source_df[f"delta_depth_bid{suffix}"]
@@ -46,7 +50,7 @@ def _build_book_change_features_for_k(source_df: pd.DataFrame, features: Dict[st
 
     total_activity = total_pull_rate + total_refill_rate
 
-    for roll_window in ROLLING_WINDOWS:
+    for roll_window in rolling_windows:
         roll_suffix = f"_{roll_window.replace('min', 'm')}"
         features[f"bc_total_pull_zscore{suffix}{roll_suffix}"] = compute_zscore(total_pull_rate, roll_window)
         features[f"bc_total_activity_zscore{suffix}{roll_suffix}"] = compute_zscore(total_activity, roll_window)

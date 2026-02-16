@@ -10,7 +10,11 @@ LOG = logging.getLogger(__name__)
 
 
 def build_cross_feature_interactions(
-    source_df: pd.DataFrame, features: Dict[str, pd.Series], trade_windows: List[str], depth_levels: List[int]
+    source_df: pd.DataFrame,
+    features: Dict[str, pd.Series],
+    trade_windows: List[str],
+    depth_levels: List[int],
+    base_roll_window: str,
 ):
     """Build all cross-feature interaction features (Section 5)."""
     LOG.info("Building cross-feature interactions...")
@@ -19,8 +23,8 @@ def build_cross_feature_interactions(
     _build_trade_change_interactions(features, trade_windows, depth_levels)
     _build_book_change_interactions(source_df, features, depth_levels)
     _build_book_exec_interactions(source_df, features, depth_levels)
-    _build_trade_exec_interactions(source_df, features, trade_windows)
-    _build_multiway_interactions(source_df, features, trade_windows, depth_levels)
+    _build_trade_exec_interactions(source_df, features, trade_windows, base_roll_window)
+    _build_multiway_interactions(source_df, features, trade_windows, depth_levels, base_roll_window)
 
 
 def _build_trade_book_interactions(
@@ -119,13 +123,15 @@ def _build_book_exec_interactions(source_df: pd.DataFrame, features: Dict[str, p
 
 
 def _build_trade_exec_interactions(
-    source_df: pd.DataFrame, features: Dict[str, pd.Series], trade_windows: List[str]
+    source_df: pd.DataFrame, features: Dict[str, pd.Series], trade_windows: List[str], base_roll_window: str
 ) -> None:
     w1 = trade_windows[0]
     vwap_first = source_df[f"vwap_{w1}"]
     mid = source_df["mid"]
-    trades_per_sec_pct_first = features[f"ta_trades_per_sec_pct_{w1}_1m"]
-    slippage_pct = features["ep_slippage_pct_1m"]
+
+    roll_suffix = f"_{base_roll_window.replace('min', 'm')}"
+    trades_per_sec_pct_first = features[f"ta_trades_per_sec_pct_{w1}{roll_suffix}"]
+    slippage_pct = features[f"ep_slippage_pct{roll_suffix}"]
 
     features["cf_efficient_trading"] = ((trades_per_sec_pct_first > 0.7) & (slippage_pct < 0.3)).astype(int)
     features["cf_stressed_trading"] = ((trades_per_sec_pct_first > 0.7) & (slippage_pct > 0.7)).astype(int)
@@ -134,7 +140,11 @@ def _build_trade_exec_interactions(
 
 
 def _build_multiway_interactions(
-    source_df: pd.DataFrame, features: Dict[str, pd.Series], trade_windows: List[str], depth_levels: List[int]
+    source_df: pd.DataFrame,
+    features: Dict[str, pd.Series],
+    trade_windows: List[str],
+    depth_levels: List[int],
+    base_roll_window: str,
 ) -> None:
     w1 = trade_windows[0]
     k1 = depth_levels[0]
@@ -147,8 +157,10 @@ def _build_multiway_interactions(
     trade_consuming_bids = features["cf_trade_consuming_bids"]
     absorption_bid = features["cf_absorption_bid"]
     absorption_ask = features["cf_absorption_ask"]
-    trades_per_sec_pct_w1 = features[f"ta_trades_per_sec_pct_{w1}_1m"]
-    total_activity_pct_k1 = features[f"bc_total_activity_pct_k{k1}_1m"]
+
+    roll_suffix = f"_{base_roll_window.replace('min', 'm')}"
+    trades_per_sec_pct_w1 = features[f"ta_trades_per_sec_pct_{w1}{roll_suffix}"]
+    total_activity_pct_k1 = features[f"bc_total_activity_pct_k{k1}{roll_suffix}"]
     spread_bps = source_df["spread_bps"]
     depth_quality = features["ep_depth_quality"]
 
