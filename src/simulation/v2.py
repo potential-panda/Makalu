@@ -11,7 +11,7 @@ Prediction encoding: 0=Short, 1=Long, 2=Timeout (skip)
 
 import logging
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import Dict
 
 import numpy as np
 import pandas as pd
@@ -75,16 +75,16 @@ class SimulationResult:
                 pct = count / self.trades_taken * 100
                 print(f"  {reason}: {count:,} ({pct:.1f}%)")
 
-        print("\nModel Strategy:")
-        print(f"  Total PnL: {self.total_pnl:.6f}")
-        print(f"  Avg PnL per trade: {self.avg_pnl_per_trade:.8f}")
+        print("\nModel Strategy (PnL in BPS):")
+        print(f"  Total PnL: {self.total_pnl:.2f} bps")
+        print(f"  Avg PnL per trade: {self.avg_pnl_per_trade:.2f} bps")
         print(f"  Win rate: {self.win_rate:.2%}")
 
         print("\nAlways-Long Baseline:")
-        print(f"  Total PnL: {self.baseline_pnl:.6f}")
+        print(f"  Total PnL: {self.baseline_pnl:.2f} bps")
 
         print("\nRandom Strategy Baseline:")
-        print(f"  Total PnL: {self.random_pnl:.6f}")
+        print(f"  Total PnL: {self.random_pnl:.2f} bps")
 
 
 # ---------------------------------------------------------------------------
@@ -98,28 +98,26 @@ def _simulate_one_trade(
     bids: np.ndarray,
     asks: np.ndarray,
     mids: np.ndarray,
+    spread_pct_ema: np.ndarray,
     price_times_ns: np.ndarray,
     timeout_ns: int,
-    pt_pct: float,
-    sl_pct: float,
+    pt_multiplier: float,
+    sl_multiplier: float,
+    fee_bps: float,
 ) -> tuple:
     """
     Simulate a single trade by walking forward through price data.
 
-    Args:
-        direction: 0=Short, 1=Long
-        entry_pos: index in price arrays for trade entry
-        bids/asks/mids: price arrays
-        price_times_ns: timestamps as int64 nanoseconds
-        timeout_ns: timeout in nanoseconds
-        pt_pct: profit-take threshold as fraction of entry mid
-        sl_pct: stop-loss threshold as fraction of entry mid
-
     Returns:
-        (pnl, exit_reason) where exit_reason is "pt", "sl", or "timeout"
+        (pnl_bps, exit_reason, exit_pos)
     """
     entry_mid = mids[entry_pos]
+    entry_spread_pct = spread_pct_ema[entry_pos]
     deadline_ns = price_times_ns[entry_pos] + timeout_ns
+
+    # Dynamic barriers based on current spread
+    pt_pct = pt_multiplier * entry_spread_pct
+    sl_pct = sl_multiplier * entry_spread_pct
 
     # Scan range: ticks from entry+1 up to and including deadline
     end_pos = min(
@@ -130,7 +128,9 @@ def _simulate_one_trade(
 
     if start >= end_pos:
         # No forward ticks; immediate exit at spread cost
-        return bids[entry_pos] - asks[entry_pos], "timeout"
+        pnl_abs = bids[entry_pos] - asks[entry_pos]
+        pnl_bps = (pnl_abs / (entry_mid + 1e-12)) * 10000 - (2 * fee_bps)
+        return pnl_bps, "timeout", entry_pos
 
     window = mids[start:end_pos]
 
@@ -147,7 +147,7 @@ def _simulate_one_trade(
         pt_mask = window <= pt_level
         sl_mask = window >= sl_level
 
-    # Find first barrier hit (argmax on bool gives first True index)
+    # Find first barrier hit
     pt_idx = int(np.argmax(pt_mask)) if pt_mask.any() else len(window)
     sl_idx = int(np.argmax(sl_mask)) if sl_mask.any() else len(window)
 
@@ -162,11 +162,12 @@ def _simulate_one_trade(
         reason = "timeout"
 
     if direction == 1:
-        pnl = bids[exit_pos] - entry_price
+        pnl_abs = bids[exit_pos] - entry_price
     else:
-        pnl = entry_price - asks[exit_pos]
+        pnl_abs = entry_price - asks[exit_pos]
 
-    return pnl, reason
+    pnl_bps = (pnl_abs / (entry_mid + 1e-12)) * 10000 - (2 * fee_bps)
+    return pnl_bps, reason, exit_pos
 
 
 def _run_trades(
@@ -175,15 +176,17 @@ def _run_trades(
     bids: np.ndarray,
     asks: np.ndarray,
     mids: np.ndarray,
+    spread_pct_ema: np.ndarray,
     price_times_ns: np.ndarray,
     timeout_ns: int,
-    hold_ns: int,
-    pt_pct: float,
-    sl_pct: float,
+    pt_multiplier: float,
+    sl_multiplier: float,
+    fee_bps: float,
+    entry_latency_ticks: int,
     allow_overlap: bool,
 ) -> tuple:
     """
-    Run simulation for an array of trade entries (chronologically sorted).
+    Run simulation for an array of trade entries.
 
     Returns:
         (pnl, exit_reasons, trade_taken, trade_blocked)
@@ -200,10 +203,10 @@ def _run_trades(
 
     for i in range(n):
         d = int(directions[i])
-        if d == 2:  # Timeout / skip
+        if d == 2:
             continue
 
-        pos = int(entry_positions[i])
+        pos = int(entry_positions[i]) + entry_latency_ticks
         if pos < 0 or pos >= n_prices:
             continue
 
@@ -213,15 +216,24 @@ def _run_trades(
             continue
 
         taken[i] = True
-        p, r = _simulate_one_trade(
-            d, pos, bids, asks, mids, price_times_ns,
-            timeout_ns, pt_pct, sl_pct,
+        p, r, ex_pos = _simulate_one_trade(
+            d,
+            pos,
+            bids,
+            asks,
+            mids,
+            spread_pct_ema,
+            price_times_ns,
+            timeout_ns,
+            pt_multiplier,
+            sl_multiplier,
+            fee_bps,
         )
         pnl[i] = p
         exit_reasons[i] = r
 
         if not allow_overlap:
-            next_allowed_ns = t_ns + hold_ns
+            next_allowed_ns = price_times_ns[ex_pos]
 
     return pnl, exit_reasons, taken, blocked
 
@@ -235,9 +247,11 @@ def simulate_trading(
     predictions: np.ndarray,
     price_df: pd.DataFrame,
     test_indices: pd.DatetimeIndex,
-    pt_pct: float,
-    sl_pct: float,
+    pt_multiplier: float,
+    sl_multiplier: float,
     timeout_sec: int = 30,
+    fee_bps: float = 0.0,
+    entry_latency_ticks: int = 1,
     allow_overlap: bool = False,
     min_vol_spread_ratio: float = None,
     probabilities: np.ndarray = None,
@@ -247,47 +261,33 @@ def simulate_trading(
     """
     Simulate trading by walking forward through execution price data.
 
-    For each trade prediction the simulation enters at the current bid/ask,
-    then scans forward tick-by-tick until a profit-take barrier, stop-loss
-    barrier, or timeout is hit.  PnL is computed from actual entry/exit
-    prices (Long: buy@ask sell@bid, Short: sell@bid buy@ask).
-
     Prediction encoding: 0=Short, 1=Long, 2=Timeout (skip)
+    PnL is reported in Basis Points (BPS).
+    Barriers are dynamic: pt_pct = pt_multiplier * spread_pct_ema
 
     Args:
         predictions: Array of predictions (0=Short, 1=Long, 2=Timeout).
-        price_df: Execution prices with DatetimeIndex and columns: bid, ask, mid.
-                  Optionally volatility_ema, spread_pct_ema for vol/spread filter.
+        price_df: Execution prices with DatetimeIndex and columns: bid, ask, mid, spread_pct_ema.
         test_indices: Timestamps of each prediction.
-        pt_pct: Profit-take barrier as fraction of mid (e.g. 0.0005 for 5 bps).
-        sl_pct: Stop-loss barrier as fraction of mid.
+        pt_multiplier: Multiplier for spread_pct_ema to set profit-take barrier.
+        sl_multiplier: Multiplier for spread_pct_ema to set stop-loss barrier.
         timeout_sec: Maximum hold time in seconds.
+        fee_bps: Exchange commission per side in basis points (e.g. 2.0).
+        entry_latency_ticks: Number of ticks to delay entry after signal.
         allow_overlap: If False, block trades that overlap with active positions.
-        min_vol_spread_ratio: Skip trades where volatility_ema / spread_pct_ema
-                              is below this ratio.
-        probabilities: Optional (n, 3) class probabilities for threshold filter.
+        min_vol_spread_ratio: Volatility-to-spread filter.
+        probabilities: Optional class probabilities for threshold filter.
         threshold: Minimum predicted-class probability to take a trade.
         random_seed: Seed for reproducible random baseline.
-
-    Returns:
-        SimulationResult with simulation DataFrame and summary statistics.
     """
     # --- Validate ---
     if threshold is not None and probabilities is None:
-        raise ValueError(
-            "threshold requires probabilities (e.g. probabilities=model.predict_proba(X))"
-        )
-    for col in ("bid", "ask", "mid"):
+        raise ValueError("threshold requires probabilities")
+    for col in ("bid", "ask", "mid", "spread_pct_ema"):
         if col not in price_df.columns:
             raise ValueError(f"price_df must have '{col}' column")
-    if min_vol_spread_ratio is not None:
-        for col in ("volatility_ema", "spread_pct_ema"):
-            if col not in price_df.columns:
-                raise ValueError(
-                    f"min_vol_spread_ratio requires '{col}' column in price_df"
-                )
 
-    # --- Pre-extract numpy arrays for fast access ---
+    # --- Pre-extract numpy arrays ---
     if not price_df.index.is_monotonic_increasing:
         price_df = price_df.sort_index()
 
@@ -295,39 +295,37 @@ def simulate_trading(
     bids = price_df["bid"].values.astype(np.float64)
     asks = price_df["ask"].values.astype(np.float64)
     mids = price_df["mid"].values.astype(np.float64)
+    spread_pct_ema = price_df["spread_pct_ema"].values.astype(np.float64)
 
     timeout_ns = int(timeout_sec * 1_000_000_000)
-    hold_ns = timeout_ns
 
-    # --- Map test_indices → positions in price_df ---
+    # --- Map test_indices → positions ---
     test_times = pd.DatetimeIndex(test_indices)
     test_times_ns = test_times.astype(np.int64)
-    # Last price entry at or before each test time
     entry_positions = np.searchsorted(price_times_ns, test_times_ns, side="right") - 1
 
     n = len(predictions)
+    merged = pd.DataFrame(
+        {
+            "time": test_times,
+            "y_pred": predictions.copy(),
+            "entry_pos": entry_positions,
+            "trade_filtered": False,
+        }
+    )
 
-    # --- Build working DataFrame ---
-    merged = pd.DataFrame({
-        "time": test_times,
-        "y_pred": predictions.copy(),
-        "entry_pos": entry_positions,
-        "trade_filtered": False,
-    })
-
-    # --- Probability threshold ---
+    # --- Threshold / Vol Filter ---
     if probabilities is not None and threshold is not None:
         pred_probs = probabilities[np.arange(n), predictions]
-        merged["pred_prob"] = pred_probs
         low_conf = (pred_probs < threshold) & (merged["y_pred"] != 2)
         merged.loc[low_conf, "y_pred"] = 2
 
-    # --- Vol / spread filter ---
     if min_vol_spread_ratio is not None:
         vol_ema = price_df["volatility_ema"].values
-        spread_ema = price_df["spread_pct_ema"].values
-        valid_pos = np.clip(entry_positions, 0, len(vol_ema) - 1)
-        ratio = vol_ema[valid_pos] / (spread_ema[valid_pos] + 1e-12)
+        # spread_ema is already checked/used
+        ratio = vol_ema[np.clip(entry_positions, 0, len(vol_ema) - 1)] / (
+            spread_pct_ema[np.clip(entry_positions, 0, len(spread_pct_ema) - 1)] + 1e-12
+        )
         below = (ratio < min_vol_spread_ratio) & (merged["y_pred"].values != 2)
         merged.loc[below, "trade_filtered"] = True
         merged.loc[below, "y_pred"] = 2
@@ -339,9 +337,19 @@ def simulate_trading(
 
     # --- Model strategy ---
     sim_pnl, exit_reasons, trade_taken, trade_blocked = _run_trades(
-        sorted_directions, sorted_positions,
-        bids, asks, mids, price_times_ns,
-        timeout_ns, hold_ns, pt_pct, sl_pct, allow_overlap,
+        sorted_directions,
+        sorted_positions,
+        bids,
+        asks,
+        mids,
+        spread_pct_ema,
+        price_times_ns,
+        timeout_ns,
+        pt_multiplier,
+        sl_multiplier,
+        fee_bps,
+        entry_latency_ticks,
+        allow_overlap,
     )
     merged["sim_pnl"] = sim_pnl
     merged["exit_reason"] = exit_reasons
@@ -349,48 +357,63 @@ def simulate_trading(
     merged["trade_blocked"] = trade_blocked
     merged["cumulative_pnl"] = sim_pnl.cumsum()
 
-    # --- Always-long baseline (same overlap rules) ---
+    # --- Always-long baseline ---
     baseline_dirs = np.full(n, 1, dtype=int)
     baseline_pnl_arr, _, _, _ = _run_trades(
-        baseline_dirs, sorted_positions,
-        bids, asks, mids, price_times_ns,
-        timeout_ns, hold_ns, pt_pct, sl_pct, allow_overlap,
+        baseline_dirs,
+        sorted_positions,
+        bids,
+        asks,
+        mids,
+        spread_pct_ema,
+        price_times_ns,
+        timeout_ns,
+        pt_multiplier,
+        sl_multiplier,
+        fee_bps,
+        entry_latency_ticks,
+        allow_overlap,
     )
     merged["baseline_pnl"] = baseline_pnl_arr
     merged["cumulative_baseline"] = baseline_pnl_arr.cumsum()
 
-    # --- Random strategy baseline (same overlap rules) ---
+    # --- Random strategy baseline ---
     np.random.seed(random_seed)
     random_dirs = np.random.choice([0, 1, 2], size=n, p=[1 / 3, 1 / 3, 1 / 3])
-    merged["y_pred_random"] = random_dirs
     random_pnl_arr, _, _, _ = _run_trades(
-        random_dirs, sorted_positions,
-        bids, asks, mids, price_times_ns,
-        timeout_ns, hold_ns, pt_pct, sl_pct, allow_overlap,
+        random_dirs,
+        sorted_positions,
+        bids,
+        asks,
+        mids,
+        spread_pct_ema,
+        price_times_ns,
+        timeout_ns,
+        pt_multiplier,
+        sl_multiplier,
+        fee_bps,
+        entry_latency_ticks,
+        allow_overlap,
     )
     merged["random_pnl"] = random_pnl_arr
     merged["cumulative_random"] = random_pnl_arr.cumsum()
 
     # --- Summary statistics ---
     trades_taken_count = int(trade_taken.sum())
-    trades_blocked_count = int(trade_blocked.sum())
-    trades_skipped_count = int((sorted_directions == 2).sum())
-    trades_filtered_count = int(merged["trade_filtered"].sum())
+    taken_pnl = sim_pnl[trade_taken]
 
     exit_reason_counts: Dict[str, int] = {}
     if trades_taken_count > 0:
         for r in exit_reasons[trade_taken]:
             exit_reason_counts[r] = exit_reason_counts.get(r, 0) + 1
 
-    taken_pnl = sim_pnl[trade_taken]
-
     return SimulationResult(
         simulation_df=merged,
         total_samples=n,
         trades_taken=trades_taken_count,
-        trades_skipped=trades_skipped_count,
-        trades_blocked=trades_blocked_count,
-        trades_filtered=trades_filtered_count,
+        trades_skipped=int((sorted_directions == 2).sum()),
+        trades_blocked=int(trade_blocked.sum()),
+        trades_filtered=int(merged["trade_filtered"].sum()),
         total_pnl=float(sim_pnl.sum()),
         avg_pnl_per_trade=float(taken_pnl.mean()) if trades_taken_count > 0 else 0.0,
         win_rate=float((taken_pnl > 0).mean()) if trades_taken_count > 0 else 0.0,
@@ -449,7 +472,9 @@ def plot_simulation_results(result: SimulationResult, window: int = 500) -> None
     axes[0].axvline(x=0, color="r", linestyle="--", alpha=0.5)
     if len(trade_pnl_values) > 0:
         axes[0].axvline(
-            x=trade_pnl_values.mean(), color="g", linestyle="-",
+            x=trade_pnl_values.mean(),
+            color="g",
+            linestyle="-",
             label=f"Mean: {trade_pnl_values.mean():.6f}",
         )
     axes[0].set_xlabel("PnL per Trade")
@@ -457,11 +482,7 @@ def plot_simulation_results(result: SimulationResult, window: int = 500) -> None
     axes[0].set_title("PnL Distribution (Trades Only)")
     axes[0].legend()
 
-    pred_pnl = (
-        merged.groupby("y_pred")["sim_pnl"]
-        .agg(["sum", "mean", "count"])
-        .reindex([0, 1, 2], fill_value=0)
-    )
+    pred_pnl = merged.groupby("y_pred")["sim_pnl"].agg(["sum", "mean", "count"]).reindex([0, 1, 2], fill_value=0)
     pred_pnl.index = ["Short", "Long", "Timeout"]
     pred_pnl["sum"].plot(kind="bar", ax=axes[1], color=["red", "green", "gray"], edgecolor="black")
     axes[1].axhline(y=0, color="black", linestyle="-", alpha=0.3)
@@ -488,8 +509,10 @@ def plot_simulation_results(result: SimulationResult, window: int = 500) -> None
         )
 
         reason_stats["count"].plot(
-            kind="bar", ax=axes[0],
-            color=["green", "red", "orange"], edgecolor="black",
+            kind="bar",
+            ax=axes[0],
+            color=["green", "red", "orange"],
+            edgecolor="black",
         )
         axes[0].set_xlabel("Exit Reason")
         axes[0].set_ylabel("Count")
@@ -497,8 +520,10 @@ def plot_simulation_results(result: SimulationResult, window: int = 500) -> None
         axes[0].set_xticklabels(["PT", "SL", "Timeout"], rotation=0)
 
         reason_stats["mean"].plot(
-            kind="bar", ax=axes[1],
-            color=["green", "red", "orange"], edgecolor="black",
+            kind="bar",
+            ax=axes[1],
+            color=["green", "red", "orange"],
+            edgecolor="black",
         )
         axes[1].axhline(y=0, color="black", linestyle="-", alpha=0.3)
         axes[1].set_xlabel("Exit Reason")
