@@ -36,6 +36,10 @@ class LeadLagConfig:
     # Stride (in seconds) between consecutive sliding window positions.
     # Controls output frequency — one row of features is emitted per stride.
     window_step_sec: int
+    # Number of recent windows used to compute ll_lag_stability (rolling std of opt_lag).
+    # Multiple values produce one ll_lag_stability_lb{N} feature column per entry,
+    # enabling multi-scale stability analysis.
+    stability_lookbacks: list[int]
     resample_interval: str = "100ms"
 
     def __post_init__(self):
@@ -58,7 +62,10 @@ class LeadLagConfig:
         lags_str = f"{self.search_lags_ms.start}_{self.search_lags_ms.stop}_{self.search_lags_ms.step}"
         spans_str = "_".join(str(s) for s in self.decay_spans_sec)
         windows_str = "_".join(str(w) for w in self.windows_sec)
-        return f"l{lags_str}_s{spans_str}_w{windows_str}_wsz{self.window_size_sec}_wst{self.window_step_sec}"
+        lb_str = "_".join(str(lb) for lb in self.stability_lookbacks)
+        return (
+            f"l{lags_str}_s{spans_str}_w{windows_str}_wsz{self.window_size_sec}_wst{self.window_step_sec}_lb{lb_str}"
+        )
 
 
 # target to hold positions for 20s-30s
@@ -69,6 +76,7 @@ LEAD_LAG_CONFIG_NEARHFT = LeadLagConfig(
     windows_sec=[10, 20, 30, 60],
     window_size_sec=600,
     window_step_sec=1,
+    stability_lookbacks=[10],
 )
 
 # target to hold positions for 120s-180s
@@ -78,6 +86,7 @@ LEAD_LAG_CONFIG_MID = LeadLagConfig(
     windows_sec=[60, 120, 180, 300],
     window_size_sec=3600,
     window_step_sec=30,
+    stability_lookbacks=[10],
 )
 
 
@@ -110,6 +119,19 @@ def prepare_returns(
 
     df_lead = df_lead.resample(resample_interval).last().ffill().dropna()
     df_lag = df_lag.resample(resample_interval).last().ffill().dropna()
+
+    LOG.info(
+        f"df_lead: shape={df_lead.shape},"
+        f" dtype={df_lead.index.dtype},"
+        f" range=[{df_lead.index.min()} .. {df_lead.index.max()}]"
+    )
+    LOG.info(
+        f"df_lag: shape={df_lag.shape},"
+        f" dtype={df_lag.index.dtype},"
+        f" range=[{df_lag.index.min()} .. {df_lag.index.max()}]"
+    )
+    LOG.info(f"df_lead head:\n{df_lead.head()}")
+    LOG.info(f"df_lag head:\n{df_lag.head()}")
 
     LOG.info(f"prepare_returns: after resampling: {len(df_lead)} lead, {len(df_lag)} lag")
 
@@ -176,7 +198,8 @@ def compute_sliding_windows(
     step_steps = int(config.window_step_sec / resample_sec)
 
     # Track opt_lag history per (window_sec, span) for stability/drift.
-    # Capped at 100 entries to prevent memory growth.
+    # Sized to cover the largest stability lookback plus drift lookback headroom.
+    _hist_maxlen = max(max(config.stability_lookbacks) + 10, 100)
     opt_lag_history: dict[tuple[int, int], deque[float]] = {}
 
     start_idx = 0
@@ -230,28 +253,20 @@ def compute_sliding_windows(
                 # Track history for stability / drift
                 hist_key = (window_sec, span_sec)
                 if hist_key not in opt_lag_history:
-                    opt_lag_history[hist_key] = deque(maxlen=100)
+                    opt_lag_history[hist_key] = deque(maxlen=_hist_maxlen)
                 opt_lag_history[hist_key].append(opt_lag_ms)
                 history = opt_lag_history[hist_key]
-
-                # Stability: rolling std (10-period)
-                if len(history) >= 2:
-                    # slice of deque is a list
-                    recent_hist = list(history)[-10:]
-                    stability = float(np.std(recent_hist))
-                else:
-                    stability = 0.0
+                history_list = list(history)
 
                 # Drift: delta from previous or recent history
                 drift_lookback = max(1, int(5.0 / (config.window_step_sec or 1)))
-                if len(history) > drift_lookback:
-                    drift = opt_lag_ms - history[-drift_lookback - 1]
+                if len(history_list) > drift_lookback:
+                    drift = opt_lag_ms - history_list[-drift_lookback - 1]
                 else:
                     drift = 0.0
 
                 # Normalization (spec §6)
                 norm_lag = opt_lag_ms / config.max_lag_ms if config.max_lag_ms > 0 else 0.0
-                norm_stability = float(np.log1p(stability))
                 # Keep units consistent with ll_opt_lag_ms (normalized [0, 1]).
                 norm_drift = drift / config.max_lag_ms if config.max_lag_ms > 0 else 0.0
 
@@ -260,8 +275,16 @@ def compute_sliding_windows(
                 fields[f"ll_opt_lag_ms{suffix}"] = norm_lag
                 fields[f"ll_alpha_gain{suffix}"] = alpha_gain
                 fields[f"ll_alpha_gain_log{suffix}"] = float(np.log1p(alpha_gain))
-                fields[f"ll_lag_stability{suffix}"] = norm_stability
                 fields[f"ll_drift{suffix}"] = float(np.clip(norm_drift, -1.0, 1.0))
+
+                # Stability: rolling std over each configured lookback window
+                for lb in config.stability_lookbacks:
+                    if len(history_list) >= 2:
+                        recent_hist = history_list[-lb:]
+                        stability = float(np.std(recent_hist))
+                    else:
+                        stability = 0.0
+                    fields[f"ll_lag_stability_lb{lb}{suffix}"] = float(np.log1p(stability))
 
         if fields:
             yield window_end_ts, fields

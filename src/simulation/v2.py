@@ -246,16 +246,15 @@ def _run_trades(
 def simulate_trading(
     predictions: np.ndarray,
     price_df: pd.DataFrame,
-    test_indices: pd.DatetimeIndex,
     pt_multiplier: float,
     sl_multiplier: float,
-    timeout_sec: int = 30,
+    timeout_sec: int,
+    probabilities: np.ndarray,
+    threshold: float,
     fee_bps: float = 0.0,
     entry_latency_ticks: int = 1,
     allow_overlap: bool = False,
     min_vol_spread_ratio: float = None,
-    probabilities: np.ndarray = None,
-    threshold: float = None,
     random_seed: int = 42,
 ) -> SimulationResult:
     """
@@ -268,7 +267,8 @@ def simulate_trading(
     Args:
         predictions: Array of predictions (0=Short, 1=Long, 2=Timeout).
         price_df: Execution prices with DatetimeIndex and columns: bid, ask, mid, spread_pct_ema.
-        test_indices: Timestamps of each prediction.
+                  Must be pre-aligned to predictions (same index, same order).
+                  If it contains a 'label' column, it will be included as 'original_label' in the result.
         pt_multiplier: Multiplier for spread_pct_ema to set profit-take barrier.
         sl_multiplier: Multiplier for spread_pct_ema to set stop-loss barrier.
         timeout_sec: Maximum hold time in seconds.
@@ -298,11 +298,8 @@ def simulate_trading(
     spread_pct_ema = price_df["spread_pct_ema"].values.astype(np.float64)
 
     timeout_ns = int(timeout_sec * 1_000_000_000)
-
-    # --- Map test_indices → positions ---
-    test_times = pd.DatetimeIndex(test_indices)
-    test_times_ns = test_times.astype(np.int64)
-    entry_positions = np.searchsorted(price_times_ns, test_times_ns, side="right") - 1
+    test_times = price_df.index
+    entry_positions = np.arange(len(test_times), dtype=np.int64)
 
     n = len(predictions)
     merged = pd.DataFrame(
@@ -311,6 +308,7 @@ def simulate_trading(
             "y_pred": predictions.copy(),
             "entry_pos": entry_positions,
             "trade_filtered": False,
+            "original_label": price_df["label"].values,
         }
     )
 

@@ -9,8 +9,6 @@ from typing import List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-from qate.store.parquet_store import ParquetStore
-from qate.util.dt_range import DtRange
 
 LOG = logging.getLogger(__name__)
 
@@ -51,87 +49,55 @@ class Dataset:
 
     # Aligned data
     _aligned_features: Optional[pd.DataFrame] = None
-    _aligned_labels: Optional[pd.Series] = None
+    _aligned_labels: Optional[pd.DataFrame] = None  # all label columns as DataFrame
+
+    @staticmethod
+    def _prepare_df(df: pd.DataFrame) -> pd.DataFrame:
+        """Convert ts column to DatetimeIndex and sort by time."""
+        if "ts" in df.columns:
+            df = df.copy()
+            df.index = pd.to_datetime(df["ts"], unit="s")
+            df = df.drop(columns=["ts"])
+        return df.sort_index()
 
     def __post_init__(self):
-        """Initialize feature columns if not provided."""
+        """Prepare DataFrames (convert ts -> DatetimeIndex), initialise feature columns, and align."""
+        self.features_df = Dataset._prepare_df(self.features_df)
+        self.labels_df = Dataset._prepare_df(self.labels_df)
         if not self.feature_columns:
             self.feature_columns = list(self.features_df.columns)
+        self._align()
 
-    @classmethod
-    def load(
-        cls,
-        feature_market,
-        label_market,
-        parquet_store: ParquetStore,
-        target_column: str,
-        dt_range: DtRange,
-        label_param_id: Optional[str] = None,
-    ) -> "Dataset":
-        feature_store = parquet_store.create_feature(feature_market)
-        if label_param_id:
-            label_store = parquet_store.create_label("TripleBarrierLabel", label_market, label_param_id)
-        else:
-            label_store = parquet_store.create_label("TripleBarrierLabel", label_market)
-        features_df = feature_store.read(dt_range)
-        labels_df = label_store.read(dt_range)
-
-        LOG.info(f"Loaded {len(features_df)} feature rows with {len(features_df.columns)} columns")
-        LOG.info(f"Loaded {len(labels_df)} label rows with {len(labels_df.columns)} columns")
-
-        dataset = cls(
-            features_df=features_df,
-            labels_df=labels_df,
-            target_column=target_column,
-        )
-
-        # Auto-align on load
-        dataset.align()
-
-        return dataset
-
-    def align(
+    def _align(
         self,
         tolerance: str = "1s",
         direction: str = "backward",
-        include_label_columns: Optional[List[str]] = None,
     ) -> "Dataset":
         """
         Align labels to features by finding the nearest label for each feature timestamp.
 
-        Uses merge_asof to match each feature row with its closest label row,
-        keeping all feature rows. This handles cases where features and labels
-        are generated at different intervals or slightly different timestamps.
+        Uses merge_asof to match each feature row with its closest label row.
+        _aligned_features holds all feature columns; _aligned_labels holds all label columns.
 
         Args:
             tolerance: Maximum time difference for matching (e.g., '1s', '100ms', '5s').
-                      Labels further than this from a feature timestamp won't match.
             direction: Direction for matching - 'nearest', 'backward', 'forward'.
-                      'nearest' finds closest label, 'backward' avoids look-ahead bias.
-            include_label_columns: Additional columns from labels_df to include in aligned data.
-                      Useful for post-alignment filtering (e.g., volatility_ema, spread_pct_ema).
 
         Returns:
             Self for method chaining
         """
         LOG.info(f"Aligning labels to features using merge_asof (tolerance={tolerance}, direction={direction})")
 
-        # Determine which columns to include from labels_df
-        label_columns = [self.target_column]
-        if include_label_columns:
-            label_columns.extend([c for c in include_label_columns if c in self.labels_df.columns])
+        feature_col_names = list(self.features_df.columns)
+        label_col_names = list(self.labels_df.columns)
 
-        # Prepare DataFrames for merge_asof (needs 'on' column, not index)
-        # Use a consistent column name '_time' for the merge key
         features_reset = self.features_df.reset_index(names="_time")
-        labels_reset = self.labels_df[label_columns].reset_index(names="_time")
+        labels_reset = self.labels_df.reset_index(names="_time")
 
-        # --- Fix #2: Free raw data before merge to reduce peak memory ---
         self.features_df = None
         self.labels_df = None
         gc.collect()
 
-        # Use merge_asof to find nearest label for each feature timestamp
         merged = pd.merge_asof(
             features_reset,
             labels_reset,
@@ -142,9 +108,8 @@ class Dataset:
         del features_reset, labels_reset
         gc.collect()
 
-        # Set time back as index
         merged = merged.set_index("_time")
-        merged.index.name = None  # Remove the temporary name
+        merged.index.name = None
 
         LOG.info(
             f"Merge result: {len(merged)} rows, "
@@ -152,32 +117,28 @@ class Dataset:
             f"{merged[self.target_column].isna().sum()} without labels"
         )
 
-        # Extract aligned features and labels
-        # Keep additional label columns in features for post-alignment filtering
-        columns_to_drop = [self.target_column]
-        self._aligned_features = merged.drop(columns=columns_to_drop)
-        self._aligned_labels = merged[self.target_column].copy()
+        self._aligned_features = merged[feature_col_names].copy()
+        self._aligned_labels = merged[label_col_names].copy()
         del merged
         gc.collect()
 
         # Drop rows with NaN in target (no matching label found)
-        valid_mask = ~self._aligned_labels.isna()
+        valid_mask = ~self._aligned_labels[self.target_column].isna()
         self._aligned_features = self._aligned_features.loc[valid_mask]
         self._aligned_labels = self._aligned_labels.loc[valid_mask]
 
-        # --- Fix #1: Downcast to float32 after alignment ---
         self._aligned_features = _downcast_float64(self._aligned_features)
 
         LOG.info(f"Aligned data: {len(self._aligned_features)} rows (after dropping unmatched)")
 
         return self
 
-    def filter_by_vol_spread(self, min_ratio: float = 1.2) -> "Dataset":
+    def filter_by_vol_spread(self, min_ratio: float) -> "Dataset":
         """
         Filter aligned data to keep only rows where volatility exceeds spread by the given ratio.
 
-        This ensures we only train on periods with favorable structural conditions for trading.
-        Must be called after align() with include_label_columns=['volatility_ema', 'spread_pct_ema'].
+        Requires volatility_ema and spread_pct_ema to be present in _aligned_labels
+        (they are included automatically via align() since all label columns are kept).
 
         Args:
             min_ratio: Minimum ratio of volatility to spread (e.g., 1.2 means vol must be 1.2x spread)
@@ -187,8 +148,7 @@ class Dataset:
         """
         before_count = len(self._aligned_features)
 
-        # Apply filter
-        filter_mask = self._aligned_features["volatility_ema"] > self._aligned_features["spread_pct_ema"] * min_ratio
+        filter_mask = self._aligned_labels["volatility_ema"] > self._aligned_labels["spread_pct_ema"] * min_ratio
         self._aligned_features = self._aligned_features.loc[filter_mask]
         self._aligned_labels = self._aligned_labels.loc[filter_mask]
 
@@ -198,11 +158,6 @@ class Dataset:
         LOG.info(
             f"Vol/Spread filter (ratio={min_ratio}): "
             f"{before_count:,} -> {after_count:,} rows (removed {removed:,}, {removed/before_count*100:.1f}%)"
-        )
-
-        # Remove the filter columns from features (not needed for training)
-        self._aligned_features = self._aligned_features.drop(
-            columns=["volatility_ema", "spread_pct_ema"], errors="ignore"
         )
 
         return self
@@ -225,17 +180,17 @@ class Dataset:
 
         if drop_timeout:
             # Drop timeout labels (2)
-            mask = self._aligned_labels != 2
+            mask = self._aligned_labels[self.target_column] != 2
             self._aligned_features = self._aligned_features.loc[mask]
             self._aligned_labels = self._aligned_labels.loc[mask]
             dropped = before_count - len(self._aligned_labels)
             LOG.info(f"Dropped {dropped:,} timeout labels (label=2)")
 
         # Convert: 1 (Long) -> 1, 0 (Short) -> 0, 2 (Timeout if kept) -> 0
-        self._aligned_labels = (self._aligned_labels == 1).astype(int)
+        self._aligned_labels[self.target_column] = (self._aligned_labels[self.target_column] == 1).astype(int)
 
         after_count = len(self._aligned_labels)
-        win_count = self._aligned_labels.sum()
+        win_count = self._aligned_labels[self.target_column].sum()
         loss_count = after_count - win_count
 
         LOG.info(
@@ -251,10 +206,10 @@ class Dataset:
 
     def get_aligned_data(self) -> Tuple[pd.DataFrame, pd.Series]:
         """
-        Get aligned features and labels.
+        Get aligned features and target labels.
 
         Returns:
-            Tuple of (features DataFrame, labels Series)
+            Tuple of (features DataFrame, target Series)
 
         Raises:
             ValueError: If aligned data has been freed (e.g. after leak_safe_preprocess).
@@ -266,14 +221,7 @@ class Dataset:
                 "or call align() again before get_aligned_data()."
             )
 
-        feature_cols = self.get_feature_columns()
-        available_cols = [c for c in feature_cols if c in self._aligned_features.columns]
-
-        if len(available_cols) < len(feature_cols):
-            missing = set(feature_cols) - set(available_cols)
-            LOG.warning(f"Some feature columns not found: {missing}")
-
-        return self._aligned_features[available_cols], self._aligned_labels
+        return self._aligned_features, self._aligned_labels[self.target_column]
 
     def train_test_split(
         self,
@@ -341,9 +289,6 @@ class Dataset:
         3. Drop those columns from both.
         4. Fill NA in Train and Test independently.
         """
-        if self._aligned_features is None:
-            self.align()
-
         # 1. Split
         self.train_test_split(test_size=test_size, shuffle=False)
 
@@ -401,9 +346,6 @@ class Dataset:
         Returns:
             Self for method chaining
         """
-        if self._aligned_features is None:
-            self.align()
-
         na_fractions = self._aligned_features.isna().mean()
         cols_to_drop = na_fractions[na_fractions > threshold].index.tolist()
 
@@ -427,9 +369,6 @@ class Dataset:
         Returns:
             Self for method chaining
         """
-        if self._aligned_features is None:
-            self.align()
-
         if method == "ffill":
             self._aligned_features = self._aligned_features.ffill()
         elif method == "bfill":

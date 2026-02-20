@@ -76,41 +76,30 @@ class SimulationResult:
 def simulate_trading_strict(
     predictions: np.ndarray,
     labels_df: pd.DataFrame,
-    test_indices: pd.DatetimeIndex,
+    target_column: str,
     timeout_sec: int = 30,
     allow_overlap: bool = False,
-    tolerance: str = "1s",
-    direction: str = "backward",
     probabilities: np.ndarray = None,
     threshold: float = None,
     random_seed: int = 42,
 ) -> SimulationResult:
     """
-    Simulate trading with leak-safe label alignment and optional non-overlapping trades.
+    Simulate trading. labels_df must be pre-aligned to predictions (same index, same order).
 
-    Differences vs simulation.v0.simulate_trading:
-    - Uses merge_asof direction='backward' by default (no look-ahead)
-    - Optionally blocks overlapping trades with a fixed hold period (timeout_sec)
-    - Supports probability threshold to filter low-confidence predictions
+    Args:
+        predictions: Prediction array (0=Short, 1=Long, 2=Timeout), aligned to labels_df.
+        labels_df: DataFrame indexed by test timestamps with columns: target_column, long_pnl, short_pnl.
+        target_column: Name of the label column in labels_df.
+        timeout_sec: Maximum hold time used for overlap blocking.
+        allow_overlap: If False, block trades that overlap with active positions.
+        probabilities: Optional class probability matrix for threshold filtering.
+        threshold: Minimum predicted-class probability to take a trade.
+        random_seed: Seed for random baseline.
     """
-    # Create lookup DataFrame for test indices
-    test_lookup = pd.DataFrame({"time": test_indices}).reset_index(drop=True)
-    test_lookup["time"] = pd.to_datetime(test_lookup["time"])
-
-    # Prepare labels for merge
-    labels_lookup = labels_df[["label", "long_pnl", "short_pnl", "volatility_ema", "spread_pct_ema"]].reset_index()
-    labels_lookup.columns = ["time", "original_label", "long_pnl", "short_pnl", "volatility_ema", "spread_pct_ema"]
-
-    # Merge to get original labels and pnl for each test sample
-    merged = pd.merge_asof(
-        test_lookup,
-        labels_lookup,
-        on="time",
-        tolerance=pd.Timedelta(tolerance),
-        direction=direction,
-    )
-
-    # Add predictions
+    # Build merged DataFrame directly — labels are pre-aligned, no merge needed
+    merged = labels_df[[target_column, "long_pnl", "short_pnl"]].copy()
+    merged = merged.rename(columns={target_column: "original_label"})
+    merged["time"] = merged.index
     merged["y_pred"] = predictions
 
     # Apply probability threshold: override low-confidence trade predictions to Timeout

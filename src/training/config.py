@@ -15,10 +15,10 @@ TARGET_COLUMN = "label"
 
 def setup():
     barrier_multiplier: float = 3.0
-    return_shift_sec: int = 60
-    timeout_sec: int = 60
-    volatility_lookback_sec: int = 180
-    ema_span_sec: int = 60
+    return_shift_sec: int = 90
+    timeout_sec: int = 90
+    volatility_lookback_sec: int = 300
+    ema_span_sec: int = 90
     vol_resample_interval: str = "1s"
 
     config = TripleBarrierConfig(

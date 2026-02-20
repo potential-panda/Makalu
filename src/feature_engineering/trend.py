@@ -27,6 +27,10 @@ def build_trend_features(source_df: pd.DataFrame, features: Dict[str, pd.Series]
     """Build price trend and momentum features (Section 6)."""
     LOG.info("Building trend features...")
     mid = source_df["mid"]
+    if mid.index.duplicated().any():
+        n_dupes = mid.index.duplicated().sum()
+        LOG.warning(f"build_trend_features: {n_dupes} duplicate timestamps in source_df, deduplicating (keep=last)")
+        mid = mid[~mid.index.duplicated(keep="last")]
 
     for w in trend_windows:
         lookback = f"{w}"
