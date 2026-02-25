@@ -267,7 +267,8 @@ def calculate_volatility_and_spread(df: pd.DataFrame, config: TripleBarrierConfi
     spread_pct = spread_resampled / mid_resampled
 
     # Apply EMA smoothing
-    volatility_ema = volatility.ewm(span=config.ema_span_sec, adjust=False).mean()
+    volatility_ema = volatility
+    # volatility_ema = volatility.ewm(span=config.ema_span_sec, adjust=False).mean()
     spread_pct_ema = spread_pct.ewm(span=config.ema_span_sec, adjust=False).mean()
 
     # Reindex back to original tick-level index

@@ -31,9 +31,12 @@ Usage:
 from .dataset import Dataset
 from .model import LGBMTrainer
 from .evaluator import Evaluator
+from .metrics import trading_precision_fpr_metric, soft_trading_precision_fpr_metric
 
 __all__ = [
     "Dataset",
     "LGBMTrainer",
     "Evaluator",
+    "trading_precision_fpr_metric",
+    "soft_trading_precision_fpr_metric",
 ]

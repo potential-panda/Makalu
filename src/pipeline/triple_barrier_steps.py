@@ -61,11 +61,10 @@ class GenerateLabelsStep(Step):
         if df is None or df.empty:
             return
         parquet_store = pipeline_context.parquet_store.create_label(
-            "TripleBarrierLabel",
             stage_context.market,
             self.config.param_id,
         )
-        parquet_store.add_dataframe(df.copy(), ts_column=None)
+        parquet_store.add_dataframe(df, ts_column=None)
         parquet_store.close()
         LOG.info(f"GenerateLabelsStep: Saved {len(df)} labels to Parquet (param_id={self.config.param_id})")
 

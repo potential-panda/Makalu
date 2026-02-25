@@ -7,8 +7,10 @@ from qate.core.model import Market
 from qate.store.market_data_store import partition_market_events
 from qate.util.dt_range import DtRange
 
+from labeling.triple_barrier import ts_index
 from lead_lag.lead_lag import prepare_returns
 
+from .execution_price_derived_steps import Context as ExecutionPriceDerivedContext
 from .framework import PipelineContext, Stage, StageContext
 from .lead_lag_steps import Context as LeadLagContext
 from .market_data_steps import Context as MarketDataContext
@@ -149,4 +151,28 @@ class LeadLagStage(Stage):
             ret_timestamps,
             lead_returns,
             lag_returns,
+        )
+
+
+class ExecutionPriceDerivedStage(Stage):
+    def __init__(self, market: Market, execution_size_str: str):
+        super().__init__()
+        self.market = market
+        self.execution_size_str = execution_size_str
+
+    def before(self, dt_range: DtRange, pipeline_context: PipelineContext) -> StageContext:
+        parquet_store = pipeline_context.parquet_store.create_execution_price(
+            self.market,
+            self.execution_size_str,
+        )
+        read_range = DtRange(dt_range.start_dt - timedelta(hours=8), dt_range.end_dt)
+        df = parquet_store.read(read_range)
+        df = df.sort_index()
+        df = ts_index(df)
+
+        return ExecutionPriceDerivedContext(
+            dt_range,
+            self.market,
+            self.execution_size_str,
+            df,
         )

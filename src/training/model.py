@@ -81,6 +81,7 @@ class LGBMTrainer:
         X_val: Optional[Union[pd.DataFrame, np.ndarray]] = None,
         y_val: Optional[Union[pd.Series, np.ndarray]] = None,
         categorical_features: Optional[List[str]] = None,
+        feval: Optional[Any] = None,
     ) -> "LGBMTrainer":
         """
         Train the LightGBM model.
@@ -91,6 +92,7 @@ class LGBMTrainer:
             X_val: Optional validation features for early stopping
             y_val: Optional validation labels for early stopping
             categorical_features: List of categorical feature names
+            feval: Optional custom evaluation function
 
         Returns:
             Self for method chaining
@@ -167,6 +169,7 @@ class LGBMTrainer:
             valid_sets=valid_sets,
             valid_names=valid_names,
             callbacks=callbacks,
+            feval=feval,
         )
 
         # Store training history

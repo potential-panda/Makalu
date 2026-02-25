@@ -9,8 +9,10 @@ from qate.store.market_data_store import MarketDataStore
 from qate.store.parquet_store import ParquetStore
 from qate.util.dt_range import DtRange
 
+from feature_engineering.volatility import VolSpreadConfig
 from labeling.triple_barrier import TripleBarrierConfig
 from lead_lag.lead_lag import LEAD_LAG_CONFIG_MID, LEAD_LAG_CONFIG_NEARHFT
+from pipeline.execution_price_derived_steps import VolSpreadStep
 from pipeline.features import (
     BookChangeFeatureStep,
     CrossInteractionsFeatureStep,
@@ -20,7 +22,6 @@ from pipeline.features import (
     PostprocessAndSaveStep,
     TradeAggressionFeatureStep,
     TrendFeatureStep,
-    VolatilityFeatureStep,
 )
 from pipeline.features.stage import FeatureStage
 from pipeline.features.target import FeatureTarget
@@ -33,6 +34,7 @@ from pipeline.order_book_derived_steps import (
     PopulateMarketPriceStep,
 )
 from pipeline.stages import (
+    ExecutionPriceDerivedStage,
     LabelingStage,
     LeadLagStage,
     OrderBookDerivedStage,
@@ -75,8 +77,43 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
 
     if "OrderBookDerived" in run_stages:
         pipeline.stage(
+            OrderBookDerivedStage(market_lead).step(PopulateMarketPriceStep(EXECUTION_SIZE.get(market_lead.symbol)))
+        )
+        pipeline.stage(
+            OrderBookDerivedStage(market_lag).step(PopulateMarketPriceStep(EXECUTION_SIZE.get(market_lag.symbol)))
+        )
+
+    if "ExectuionPriceDerived" in run_stages:
+        # pipeline.stage(
+        #     ExecutionPriceDerivedStage(market_lead, EXECUTION_SIZE.get(market_lead.symbol))
+        #     .step(VolSpreadStep(VolSpreadConfig(60, 60, 60)))
+        #     .step(VolSpreadStep(VolSpreadConfig(60, 180, 180)))
+        #     .step(VolSpreadStep(VolSpreadConfig(60, 300, 300)))
+        #     .step(VolSpreadStep(VolSpreadConfig(60, 600, 600)))
+        #     .step(VolSpreadStep(VolSpreadConfig(60, 900, 900)))
+        # )
+        pipeline.stage(
+            ExecutionPriceDerivedStage(market_lag, EXECUTION_SIZE.get(market_lag.symbol))
+            .step(VolSpreadStep(VolSpreadConfig(60, 60, 60)))
+            .step(VolSpreadStep(VolSpreadConfig(60, 180, 180)))
+            .step(VolSpreadStep(VolSpreadConfig(60, 300, 300)))
+            .step(VolSpreadStep(VolSpreadConfig(60, 600, 600)))
+            .step(VolSpreadStep(VolSpreadConfig(60, 900, 900)))
+            .step(VolSpreadStep(VolSpreadConfig(180, 60, 60)))
+            .step(VolSpreadStep(VolSpreadConfig(180, 180, 180)))
+            .step(VolSpreadStep(VolSpreadConfig(180, 300, 300)))
+            .step(VolSpreadStep(VolSpreadConfig(180, 600, 600)))
+            .step(VolSpreadStep(VolSpreadConfig(180, 900, 900)))
+            .step(VolSpreadStep(VolSpreadConfig(300, 60, 60)))
+            .step(VolSpreadStep(VolSpreadConfig(300, 180, 180)))
+            .step(VolSpreadStep(VolSpreadConfig(300, 300, 300)))
+            .step(VolSpreadStep(VolSpreadConfig(300, 600, 600)))
+            .step(VolSpreadStep(VolSpreadConfig(300, 900, 900)))
+        )
+
+    if "OrderBookDerivedHeavy" in run_stages:
+        pipeline.stage(
             OrderBookDerivedStage(market_lead)
-            .step(PopulateMarketPriceStep(EXECUTION_SIZE.get(market_lead.symbol)))
             .step(
                 PopulateBookStateStep(
                     volume_imbalance_k=[1, 3, 5, 10, 20],
@@ -86,9 +123,6 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
                 )
             )
             .step(PopulateBookChangeStep(k_levels=[1, 3, 5, 10, 20]))
-        )
-        pipeline.stage(
-            OrderBookDerivedStage(market_lag).step(PopulateMarketPriceStep(EXECUTION_SIZE.get(market_lag.symbol)))
         )
 
     if "LeadLag" in run_stages:
@@ -112,7 +146,7 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
                     base_roll_window="60s",
                 )
             )
-            .step(VolatilityFeatureStep(windows=["5s", "10s", "30s", "60s"]))
+            # .step(VolatilityFeatureStep(windows=["5s", "10s", "30s", "60s"]))
             .step(LoadLeadLagStep(market_lag, LEAD_LAG_CONFIG_NEARHFT))
             .step(PostprocessAndSaveStep())
         )
@@ -132,7 +166,7 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
                 )
             )
             .step(TrendFeatureStep(windows=["30s", "60s", "180s", "600s"]))
-            .step(VolatilityFeatureStep(windows=["30s", "60s", "180s", "600s"]))
+            # .step(VolatilityFeatureStep(windows=["30s", "60s", "180s", "600s"]))
             .step(LoadLeadLagStep(market_lag, LEAD_LAG_CONFIG_MID))
             .step(PostprocessAndSaveStep())
         )

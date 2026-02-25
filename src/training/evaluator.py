@@ -26,6 +26,8 @@ from sklearn.metrics import (
 
 from .model import LGBMTrainer
 
+from .metrics import calculate_trading_metrics
+
 LOG = logging.getLogger(__name__)
 
 
@@ -110,23 +112,45 @@ class Evaluator:
         """Evaluate classification model."""
         # Get predictions
         y_prob = self.model.predict_proba(X)
-        y_pred = (y_prob >= self.threshold).astype(int)
         y_true = np.array(y)
+        
+        # Check if multi-class (y_prob is 2D with > 1 column)
+        is_multiclass = len(y_prob.shape) > 1 and y_prob.shape[1] > 1
+        
+        if is_multiclass:
+            y_pred = np.argmax(y_prob, axis=1)
+            # For multi-class, precision/recall/f1 need 'macro', 'micro' or 'weighted'
+            average = "macro"
+        else:
+            y_pred = (y_prob >= self.threshold).astype(int)
+            average = "binary"
 
-        # Calculate metrics
+        # Calculate standard metrics
         metrics = {
             "accuracy": accuracy_score(y_true, y_pred),
-            "precision": precision_score(y_true, y_pred, zero_division=0),
-            "recall": recall_score(y_true, y_pred, zero_division=0),
-            "f1": f1_score(y_true, y_pred, zero_division=0),
-            "log_loss": log_loss(y_true, y_prob),
+            "precision": float(precision_score(y_true, y_pred, average=average, zero_division=0)),
+            "recall": float(recall_score(y_true, y_pred, average=average, zero_division=0)),
+            "f1": float(f1_score(y_true, y_pred, average=average, zero_division=0)),
+            "log_loss": float(log_loss(y_true, y_prob)),
         }
 
-        # ROC AUC (only if both classes present)
-        if len(np.unique(y_true)) > 1:
-            metrics["roc_auc"] = roc_auc_score(y_true, y_prob)
+        # Trading metrics (specifically for 3-class: long, short, timeout)
+        if is_multiclass and y_prob.shape[1] == 3:
+            trading_metrics = calculate_trading_metrics(y_true, y_prob)
+            metrics.update(trading_metrics)
+
+        # ROC AUC
+        if is_multiclass:
+            # Multi-class ROC AUC
+            try:
+                metrics["roc_auc"] = float(roc_auc_score(y_true, y_prob, multi_class="ovr", average="macro"))
+            except ValueError:
+                metrics["roc_auc"] = np.nan
         else:
-            metrics["roc_auc"] = np.nan
+            if len(np.unique(y_true)) > 1:
+                metrics["roc_auc"] = float(roc_auc_score(y_true, y_prob))
+            else:
+                metrics["roc_auc"] = np.nan
 
         # Confusion matrix
         cm = confusion_matrix(y_true, y_pred)
@@ -134,19 +158,17 @@ class Evaluator:
         # Classification report
         report = classification_report(y_true, y_pred, zero_division=0)
 
-        # ROC curve
-        if len(np.unique(y_true)) > 1:
+        # ROC curve (Binary only for now)
+        roc = None
+        if not is_multiclass and len(np.unique(y_true)) > 1:
             fpr, tpr, thresholds = roc_curve(y_true, y_prob)
             roc = {"fpr": fpr, "tpr": tpr, "thresholds": thresholds}
-        else:
-            roc = None
 
-        # Precision-Recall curve
-        if len(np.unique(y_true)) > 1:
+        # Precision-Recall curve (Binary only for now)
+        pr = None
+        if not is_multiclass and len(np.unique(y_true)) > 1:
             precision, recall, thresholds = precision_recall_curve(y_true, y_prob)
             pr = {"precision": precision, "recall": recall, "thresholds": thresholds}
-        else:
-            pr = None
 
         result = EvaluationResult(
             metrics=metrics,
@@ -164,6 +186,8 @@ class Evaluator:
             f"Classification evaluation: accuracy={metrics['accuracy']:.4f}, "
             f"f1={metrics['f1']:.4f}, roc_auc={metrics['roc_auc']:.4f}"
         )
+        if "trading_score" in metrics:
+            LOG.info(f"Trading Score: {metrics['trading_score']:.4f}")
 
         return result
 

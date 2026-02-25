@@ -1,4 +1,5 @@
 import logging
+from dataclasses import dataclass
 from typing import Dict, List
 
 import pandas as pd
@@ -6,6 +7,24 @@ import pandas as pd
 from .utils import EPS
 
 LOG = logging.getLogger(__name__)
+
+
+@dataclass
+class VolSpreadConfig:
+    return_shift_sec: int
+    lookback_sec: int
+    ema_span_sec: int
+    resample_interval: str = "1s"
+
+    @property
+    def param_id(self) -> str:
+        params = [
+            self.return_shift_sec,
+            self.lookback_sec,
+            self.ema_span_sec,
+            self.resample_interval,
+        ]
+        return f"vs_{'_'.join(map(str, params))}"
 
 
 def build_volatility_features(source_df: pd.DataFrame, features: Dict[str, pd.Series], windows: List[str]) -> None:
