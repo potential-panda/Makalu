@@ -89,6 +89,15 @@ LEAD_LAG_CONFIG_MID = LeadLagConfig(
     stability_lookbacks=[10],
 )
 
+LEAD_LAG_CONFIG_FAR = LeadLagConfig(
+    search_lags_ms=range(0, 5100, 100),
+    decay_spans_sec=[120, 300, 600],
+    windows_sec=[300, 600, 900, 1200],
+    window_size_sec=3600 * 4,
+    window_step_sec=180,
+    stability_lookbacks=[10],
+)
+
 
 def prepare_returns(
     df_lead: pd.DataFrame,
@@ -130,10 +139,8 @@ def prepare_returns(
         f" dtype={df_lag.index.dtype},"
         f" range=[{df_lag.index.min()} .. {df_lag.index.max()}]"
     )
-    LOG.info(f"df_lead head:\n{df_lead.head()}")
-    LOG.info(f"df_lag head:\n{df_lag.head()}")
-
-    LOG.info(f"prepare_returns: after resampling: {len(df_lead)} lead, {len(df_lag)} lag")
+    # LOG.info(f"df_lead head:\n{df_lead.head()}")
+    # LOG.info(f"df_lag head:\n{df_lag.head()}")
 
     # Intersect time range
     start_ts = max(df_lead.index[0], df_lag.index[0])
