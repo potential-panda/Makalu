@@ -179,8 +179,8 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--output",
-        default="models/active_score_curve.json",
-        help="Output JSON path (default: models/active_score_curve.json)",
+        default=None,
+        help="Output JSON path (default: models/active_score_curve_{SYMBOL}.json)",
     )
     args = parser.parse_args()
 
@@ -190,10 +190,13 @@ if __name__ == "__main__":
     env.enable_multiprocess_logging = True
     env.visit()
 
+    symbol_name = args.market.split(":")[-1]
+    output_path = Path(args.output) if args.output else Path(f"models/active_score_curve_{symbol_name}.json")
+
     main(
         market=Market.from_str(args.market),
         execution_size=args.execution_size,
         dt_range=DtRange.from_strings(args.from_dt, args.to_dt),
         bin_size_sec=args.bin_size,
-        output_path=Path(args.output),
+        output_path=output_path,
     )
