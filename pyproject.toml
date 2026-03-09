@@ -33,6 +33,12 @@ dev = [
     "black>=23.0.0",
     "ruff>=0.1.0",
 ]
+claude = [
+    "anthropic>=0.40.0",
+]
+openai = [
+    "openai>=1.0.0",
+]
 
 [project.scripts]
 makalu-pipeline = "pipeline:main"
