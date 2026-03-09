@@ -21,6 +21,8 @@ dependencies = [
     "seaborn==0.13.2",
     "influxdb-client==1.49.0",
     "pyarrow>=22.0.0",  # for parquet file support
+    "duckdb>=1.0.0",   # query engine for parquet data warehouse
+    "pyyaml>=6.0",     # catalog loading
     "lightgbm>=4.0.0",  # for ML model training
     "scikit-learn==1.8.0", # Added for model evaluation and utilities
 ]

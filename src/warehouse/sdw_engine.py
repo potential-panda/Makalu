@@ -1,59 +1,100 @@
+"""
+DuckDB query engine for the data warehouse.
+
+Loads the dataset catalog from doc/catalog.yaml and registers a view
+for every dataset that has data on disk. Views use Hive partitioning so
+DuckDB prunes by exchange, symbol, date, etc. automatically.
+
+Usage:
+    engine = SDWEngine()
+    engine.list_views()           # what's available
+    engine.describe("VolSpread")  # catalog metadata
+    df = engine.query(sql)        # run arbitrary SQL
+"""
+
+from pathlib import Path
+from typing import Any
+
 import duckdb
 import pandas as pd
-from pathlib import Path
-from typing import Optional, List
+import yaml
+
+# Catalog is in doc/ relative to the repo root (two levels up from this file)
+_REPO_ROOT = Path(__file__).parent.parent.parent
+_CATALOG_PATH = _REPO_ROOT / "doc" / "catalog.yaml"
+_DEFAULT_ROOT = "/panda/makalu-data"
+
+
+def _view_name(dataset_name: str) -> str:
+    """Convert dataset name to a valid SQL view name (lowercase, underscores)."""
+    return dataset_name.lower()
+
 
 class SDWEngine:
-    def __init__(self, parquet_root: str = "/panda/makalu-data"):
+    def __init__(self, parquet_root: str = _DEFAULT_ROOT, catalog_path: str = str(_CATALOG_PATH)):
         self.parquet_root = Path(parquet_root)
-        self.conn = duckdb.connect(database=':memory:')
-        self._setup_views()
+        self.catalog: list[dict[str, Any]] = self._load_catalog(catalog_path)
+        self.conn = duckdb.connect(database=":memory:")
+        self._registered: dict[str, str] = {}  # view_name -> dataset_name
+        self._register_views()
 
-    def _setup_views(self):
-        """Register virtual views for different microstructure categories."""
-        categories = [
-            "TradeAggression", "BookState", "BookChange", 
-            "LeadLag", "VolSpread", "MarketPrice"
-        ]
-        
-        for cat in categories:
-            path = self.parquet_root / cat / "*" / "*" / "*" / "*.parquet"
-            # DuckDB supports hive partitioning, so exchange/symbol/date are automatically inferred
+    def _load_catalog(self, catalog_path: str) -> list[dict[str, Any]]:
+        with open(catalog_path, "r") as f:
+            data = yaml.safe_load(f)
+        return data.get("datasets", [])
+
+    def _register_views(self) -> None:
+        for entry in self.catalog:
+            dataset = entry["dataset_name"]
+            layer = entry["layer"]
+            glob_path = self.parquet_root / layer / f"dataset={dataset}" / "**" / "*.parquet"
+            glob_str = str(glob_path)
+
+            # Skip datasets with no data on disk
+            if not any(self.parquet_root.joinpath(layer, f"dataset={dataset}").glob("**/*.parquet")):
+                continue
+
+            view = _view_name(dataset)
             try:
-                # We use a view to make it accessible via SQL
-                # The path globbing might be slow if there are millions of files, 
-                # but DuckDB is generally efficient at metadata scanning.
                 self.conn.execute(f"""
-                    CREATE OR REPLACE VIEW {cat.lower()} AS 
-                    SELECT * FROM read_parquet('{path}', hive_partitioning = 1)
+                    CREATE OR REPLACE VIEW {view} AS
+                    SELECT * FROM read_parquet('{glob_str}', hive_partitioning = true)
                 """)
-                print(f"Registered view: {cat.lower()}")
+                self._registered[view] = dataset
             except Exception as e:
-                print(f"Failed to register {cat}: {e}")
+                print(f"[SDWEngine] Failed to register view '{view}': {e}")
 
-    def query_to_df(self, sql: str) -> pd.DataFrame:
-        """Execute SQL and return result as a Pandas DataFrame."""
+    def list_views(self) -> list[str]:
+        """Return names of all registered dataset views."""
+        return sorted(self._registered.keys())
+
+    def describe(self, dataset_name: str) -> dict[str, Any] | None:
+        """Return catalog metadata for a dataset (by name or view name)."""
+        name_lower = dataset_name.lower()
+        for entry in self.catalog:
+            if entry["dataset_name"].lower() == name_lower:
+                return entry
+        return None
+
+    def schema(self, dataset_name: str) -> pd.DataFrame:
+        """Return column names and types for a registered view."""
+        view = _view_name(dataset_name)
+        return self.conn.execute(f"DESCRIBE {view}").fetchdf()
+
+    def query(self, sql: str) -> pd.DataFrame:
+        """Execute SQL and return a DataFrame."""
         return self.conn.execute(sql).fetchdf()
 
-    def get_schema(self, table_name: str) -> str:
-        """Get the schema of a specific table/view."""
-        df = self.conn.execute(f"PRAGMA table_info('{table_name}')").fetchdf()
-        return df[['name', 'type']].to_string(index=False)
+    def sample(self, dataset_name: str, n: int = 5) -> pd.DataFrame:
+        """Return n rows from a dataset view."""
+        view = _view_name(dataset_name)
+        return self.conn.execute(f"SELECT * FROM {view} LIMIT {n}").fetchdf()
 
-    def list_tables(self) -> List[str]:
-        """List all available views/tables."""
-        df = self.conn.execute("SHOW TABLES").fetchdf()
-        return df['name'].tolist()
 
 if __name__ == "__main__":
     engine = SDWEngine()
-    tables = engine.list_tables()
-    print(f"Available tables: {tables}")
-    
-    if "tradeaggression" in tables:
-        print("\nSchema for tradeaggression:")
-        print(engine.get_schema("tradeaggression"))
-        
-        print("\nRunning sample query: SELECT count(*) FROM tradeaggression")
-        count = engine.query_to_df("SELECT count(*) FROM tradeaggression").iloc[0, 0]
-        print(f"Total rows in tradeaggression: {count}")
+    views = engine.list_views()
+    print(f"Registered views ({len(views)}): {views}\n")
+    for v in views:
+        meta = engine.describe(v)
+        print(f"  {meta['dataset_name']:30s}  layer={meta['layer']:8s}  grain={meta['grain']}")
