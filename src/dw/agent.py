@@ -6,13 +6,12 @@ by generating SQL, executing it via the Engine, and explaining the results.
 It supports multi-turn conversation and enforces guardrails on every query.
 
 Quick start (OpenAI):
-    from dw import Engine
-    from dw.agent import Agent
-    from dw.backends import OpenAIBackend
+    from dw import Engine, Agent, OpenAIBackend
 
     engine = Engine()
     agent = Agent(engine, OpenAIBackend(api_key="sk-...", model="gpt-4o"))
     print(agent.ask("Show the average spread for BINANCE XRP_USDT in July 2025"))
+    print(agent.ask("Break that down by hour of day"))  # follow-up works naturally
 
 Quick start (Ollama):
     backend = OpenAIBackend(
@@ -23,7 +22,7 @@ Quick start (Ollama):
     agent = Agent(engine, backend)
 
 Quick start (Claude):
-    from dw.backends import ClaudeBackend
+    from dw import Agent, ClaudeBackend
     backend = ClaudeBackend(api_key="sk-ant-...", model="claude-sonnet-4-6")
     agent = Agent(engine, backend)
 """
@@ -35,7 +34,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from .backends import ClaudeBackend, LLMBackend, Message, OpenAIBackend, ToolCall
+from .backends import LLMBackend, ToolCall
 from .engine import Engine
 from .guardrails import GuardrailError, validate
 
@@ -71,19 +70,17 @@ _RUN_SQL_TOOL = {
 
 
 def _build_system_prompt(engine: Engine) -> str:
-    # Catalog summary
     catalog_lines = ["## Available Datasets\n"]
     for entry in engine._catalog:
         name = entry["dataset_name"]
         if name not in engine._datasets:
-            continue  # not on disk, skip
+            continue
         partitions = ", ".join(entry.get("partition_columns", []))
         catalog_lines.append(
             f"- **{name}** (layer={entry['layer']}, grain={entry['grain']}, "
             f"view=`{name.lower()}`, partitions: {partitions})"
         )
 
-    # Column definitions
     definitions = ""
     if _DEFINITIONS_PATH.exists():
         definitions = _DEFINITIONS_PATH.read_text()
@@ -111,7 +108,7 @@ You answer questions by generating DuckDB SQL queries, running them, and explain
 
 def _format_result(df: pd.DataFrame) -> str:
     """Serialise a DataFrame into a compact JSON string for the model."""
-    result = {
+    result: dict = {
         "row_count": len(df),
         "columns": list(df.columns),
         "rows": json.loads(df.head(_MAX_SAMPLE_ROWS).to_json(orient="records")),
@@ -125,51 +122,37 @@ class Agent:
     """
     Multi-turn research agent backed by any LLMBackend.
 
-    Each Agent instance maintains its own conversation history so you can
-    ask follow-up questions naturally.
-
-        agent.ask("Show average spread for BINANCE XRP_USDT in July 2025")
-        agent.ask("Break that down by hour of day")
-        agent.reset()  # start a new conversation
+    Conversation history is owned by the backend so tool call formatting
+    is correct per-provider. reset() starts a fresh conversation.
     """
 
     def __init__(self, engine: Engine, backend: LLMBackend):
         self._engine = engine
         self._backend = backend
         self._system = _build_system_prompt(engine)
-        self._history: list[Message] = []
 
     def reset(self) -> None:
         """Clear conversation history."""
-        self._history = []
+        self._backend.reset()
 
     def ask(self, question: str, *, verbose: bool = False) -> str:
         """
         Ask a natural language question and return the agent's response.
 
-        Set verbose=True to print SQL and row counts as they execute.
+        Set verbose=True to print each SQL query and row count as it executes.
         """
-        self._history.append(Message(role="user", content=question))
+        user_msg: str | None = question
 
         for _ in range(10):  # cap agentic loop at 10 steps
-            response = self._backend.complete(
-                messages=self._history,
-                tools=[_RUN_SQL_TOOL],
-                system=self._system,
-            )
+            response = self._backend.step(user_msg, self._system, [_RUN_SQL_TOOL])
+            user_msg = None  # subsequent steps are continuations, not new user messages
 
             if not response.tool_calls:
-                # Model gave a final text answer
-                answer = response.text or ""
-                self._history.append(Message(role="assistant", content=answer))
-                return answer
+                return response.text or ""
 
-            # Execute each tool call and feed results back
-            self._history.append(Message(role="assistant", content=response.text or ""))
             for tc in response.tool_calls:
-                tool_result = self._execute_tool(tc, verbose=verbose)
-                msg = self._backend.tool_result_message(tc, tool_result)
-                self._history.append(msg)
+                result = self._execute_tool(tc, verbose=verbose)
+                self._backend.record_tool_result(tc, result)
 
         return "Agent loop limit reached without a final answer."
 

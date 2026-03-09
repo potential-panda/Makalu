@@ -1,25 +1,22 @@
 """
 LLM backend abstraction for the research agent.
 
+Each backend owns its own conversation history in its native format, which
+avoids the impedance mismatch between OpenAI's tool_call/tool_result format
+and Claude's tool_use/tool_result format.
+
 Two implementations:
   - OpenAIBackend  — works with OpenAI API and any OpenAI-compatible server
                      (Ollama, vLLM, LM Studio, etc.)
   - ClaudeBackend  — Anthropic Claude API
-
-Both implement the same interface so the Agent is backend-agnostic.
 """
 
 from __future__ import annotations
 
+import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
-
-
-@dataclass
-class Message:
-    role: str   # "user" | "assistant" | "tool" | "system"
-    content: str
 
 
 @dataclass
@@ -33,22 +30,28 @@ class ToolCall:
 class BackendResponse:
     text: str | None
     tool_calls: list[ToolCall] = field(default_factory=list)
-    raw: Any = None  # original response object for debugging
 
 
 class LLMBackend(ABC):
     @abstractmethod
-    def complete(
-        self,
-        messages: list[Message],
-        tools: list[dict[str, Any]],
-        system: str,
-    ) -> BackendResponse:
-        """Send messages and return the model response."""
+    def reset(self) -> None:
+        """Clear conversation history."""
 
     @abstractmethod
-    def tool_result_message(self, tool_call: ToolCall, result: str) -> Message:
-        """Format a tool result as a Message in the format the backend expects."""
+    def step(
+        self,
+        user_message: str | None,
+        system: str,
+        tools: list[dict[str, Any]],
+    ) -> BackendResponse:
+        """
+        Optionally add a user message then run one completion step.
+        Pass user_message=None for continuation steps (tool results already recorded).
+        """
+
+    @abstractmethod
+    def record_tool_result(self, tool_call: ToolCall, result: str) -> None:
+        """Record a tool result into history after executing a tool call."""
 
 
 # ---------------------------------------------------------------------------
@@ -76,21 +79,22 @@ class OpenAIBackend(LLMBackend):
         from openai import OpenAI
         self._model = model
         self._client = OpenAI(api_key=api_key, base_url=base_url)
+        self._history: list[dict[str, Any]] = []
 
-    def complete(
+    def reset(self) -> None:
+        self._history = []
+
+    def step(
         self,
-        messages: list[Message],
-        tools: list[dict[str, Any]],
+        user_message: str | None,
         system: str,
+        tools: list[dict[str, Any]],
     ) -> BackendResponse:
-        openai_messages = [{"role": "system", "content": system}]
-        for m in messages:
-            openai_messages.append({"role": m.role, "content": m.content})
+        if user_message is not None:
+            self._history.append({"role": "user", "content": user_message})
 
-        kwargs: dict[str, Any] = {
-            "model": self._model,
-            "messages": openai_messages,
-        }
+        messages = [{"role": "system", "content": system}] + self._history
+        kwargs: dict[str, Any] = {"model": self._model, "messages": messages}
         if tools:
             kwargs["tools"] = [{"type": "function", "function": t} for t in tools]
             kwargs["tool_choice"] = "auto"
@@ -100,24 +104,39 @@ class OpenAIBackend(LLMBackend):
 
         tool_calls = []
         if choice.tool_calls:
-            import json
             for tc in choice.tool_calls:
                 tool_calls.append(ToolCall(
                     id=tc.id,
                     name=tc.function.name,
                     arguments=json.loads(tc.function.arguments),
                 ))
+            # Store assistant message with the full tool_calls structure OpenAI requires
+            self._history.append({
+                "role": "assistant",
+                "content": choice.content,
+                "tool_calls": [
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {
+                            "name": tc.function.name,
+                            "arguments": tc.function.arguments,
+                        },
+                    }
+                    for tc in choice.tool_calls
+                ],
+            })
+        else:
+            self._history.append({"role": "assistant", "content": choice.content})
 
-        return BackendResponse(
-            text=choice.content,
-            tool_calls=tool_calls,
-            raw=response,
-        )
+        return BackendResponse(text=choice.content, tool_calls=tool_calls)
 
-    def tool_result_message(self, tool_call: ToolCall, result: str) -> Message:
-        # OpenAI expects role="tool" with tool_call_id; we encode it in content
-        # because our Message type is simple. We handle this specially in the agent.
-        return Message(role="tool", content=result)
+    def record_tool_result(self, tool_call: ToolCall, result: str) -> None:
+        self._history.append({
+            "role": "tool",
+            "tool_call_id": tool_call.id,
+            "content": result,
+        })
 
 
 # ---------------------------------------------------------------------------
@@ -139,22 +158,22 @@ class ClaudeBackend(LLMBackend):
         from anthropic import Anthropic
         self._model = model
         self._client = Anthropic(api_key=api_key)
+        self._history: list[dict[str, Any]] = []
+        # Track pending tool uses so we can group results correctly
+        self._pending_tool_uses: list[dict[str, Any]] = []
 
-    def complete(
+    def reset(self) -> None:
+        self._history = []
+        self._pending_tool_uses = []
+
+    def step(
         self,
-        messages: list[Message],
-        tools: list[dict[str, Any]],
+        user_message: str | None,
         system: str,
+        tools: list[dict[str, Any]],
     ) -> BackendResponse:
-        import json
-
-        claude_messages = []
-        for m in messages:
-            if m.role == "tool":
-                # tool results in Claude format come from the agent layer
-                claude_messages.append(m.content)  # pre-formatted by tool_result_message
-            else:
-                claude_messages.append({"role": m.role, "content": m.content})
+        if user_message is not None:
+            self._history.append({"role": "user", "content": user_message})
 
         claude_tools = [
             {
@@ -169,12 +188,14 @@ class ClaudeBackend(LLMBackend):
             model=self._model,
             max_tokens=4096,
             system=system,
-            messages=claude_messages,
+            messages=self._history,
             tools=claude_tools if tools else [],
         )
 
         text = None
         tool_calls = []
+        self._pending_tool_uses = []
+
         for block in response.content:
             if block.type == "text":
                 text = block.text
@@ -184,14 +205,40 @@ class ClaudeBackend(LLMBackend):
                     name=block.name,
                     arguments=block.input,
                 ))
+                self._pending_tool_uses.append({
+                    "type": "tool_use",
+                    "id": block.id,
+                    "name": block.name,
+                    "input": block.input,
+                })
 
-        return BackendResponse(text=text, tool_calls=tool_calls, raw=response)
+        if tool_calls:
+            # Store the full assistant message with all content blocks
+            content_blocks: list[dict[str, Any]] = []
+            if text:
+                content_blocks.append({"type": "text", "text": text})
+            content_blocks.extend(self._pending_tool_uses)
+            self._history.append({"role": "assistant", "content": content_blocks})
+        else:
+            self._history.append({"role": "assistant", "content": text or ""})
 
-    def tool_result_message(self, tool_call: ToolCall, result: str) -> Message:
-        # Claude requires a specific structure; we pass the full dict as content
-        # and the agent handles it
-        content = {
-            "role": "user",
-            "content": [{"type": "tool_result", "tool_use_id": tool_call.id, "content": result}],
+        return BackendResponse(text=text, tool_calls=tool_calls)
+
+    def record_tool_result(self, tool_call: ToolCall, result: str) -> None:
+        # Claude batches all tool results for a turn into a single user message.
+        # If the last history entry is already a tool-result user message, append to it.
+        tool_result_block = {
+            "type": "tool_result",
+            "tool_use_id": tool_call.id,
+            "content": result,
         }
-        return Message(role="tool", content=content)
+        if (
+            self._history
+            and self._history[-1]["role"] == "user"
+            and isinstance(self._history[-1]["content"], list)
+            and self._history[-1]["content"]
+            and self._history[-1]["content"][0].get("type") == "tool_result"
+        ):
+            self._history[-1]["content"].append(tool_result_block)
+        else:
+            self._history.append({"role": "user", "content": [tool_result_block]})

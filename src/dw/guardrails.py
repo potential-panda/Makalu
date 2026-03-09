@@ -51,8 +51,7 @@ def validate(sql: str) -> str:
     # but no explicit JOIN ... ON)
     if _IMPLICIT_CROSS_JOIN.search(stripped):
         raise GuardrailError(
-            "Query looks like an implicit cross join (comma-separated tables). "
-            "Use explicit JOIN ... ON syntax."
+            "Query looks like an implicit cross join (comma-separated tables). " "Use explicit JOIN ... ON syntax."
         )
 
     # Inject or cap LIMIT

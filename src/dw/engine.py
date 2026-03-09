@@ -79,11 +79,14 @@ class Engine:
             data_dir = self._root / layer / f"dataset={name}"
             if not data_dir.is_dir():
                 continue
-            glob = str(data_dir / "**" / "*.parquet")
+
             view = _view(name)
+            glob = str(data_dir / "**" / "*.parquet")
+            # union_by_name handles datasets with inconsistent partition depth
+            # (e.g. LeadLag files with and without param_id in their path)
             self._conn.execute(f"""
                 CREATE OR REPLACE VIEW {view} AS
-                SELECT * FROM read_parquet('{glob}', hive_partitioning = true)
+                SELECT * FROM read_parquet('{glob}', hive_partitioning = true, union_by_name = true)
             """)
             self._datasets[name] = entry
 
@@ -160,8 +163,7 @@ class Engine:
         unknown = set(partition_filters) - valid_partitions
         if unknown:
             raise ValueError(
-                f"Unknown partition filter(s) for '{dataset}': {unknown}. "
-                f"Valid columns: {valid_partitions}"
+                f"Unknown partition filter(s) for '{dataset}': {unknown}. " f"Valid columns: {valid_partitions}"
             )
 
         clauses: list[str] = []
