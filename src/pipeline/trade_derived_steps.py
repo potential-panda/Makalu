@@ -37,7 +37,7 @@ class PopulateAggressionStep(Step):
         self.windows_sec = windows_sec
 
     def populate(self, pipeline_context: PipelineContext, stage_context: Context):
-        parquet_store = pipeline_context.parquet_store.create_single_market("TradeAggression", stage_context.market)
+        parquet_store = pipeline_context.parquet_store.create_single_market("TradeAggression", stage_context.market, layer="silver")
         count = 0
         for ts, write_fields, _ in self._populate(pipeline_context, stage_context):
             parquet_store.add(ts, write_fields)
@@ -127,7 +127,7 @@ class AbstractPopulateChartStep(Step):
         pass
 
     def populate(self, pipeline_context: PipelineContext, stage_context: Context):
-        parquet_store = pipeline_context.parquet_store.create_chart(stage_context.market, self.get_bar_type())
+        parquet_store = pipeline_context.parquet_store.create_chart(self.get_bar_type(), stage_context.market, self.get_threshold_str())
         count = 0
         for ts, fields in self._populate(pipeline_context, stage_context):
             parquet_store.add(ts, fields)
