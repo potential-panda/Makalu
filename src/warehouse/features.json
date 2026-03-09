@@ -1,0 +1,702 @@
+[
+  {
+    "name": "ta_vol_imbalance_ratio{suffix}",
+    "description": "",
+    "category": "Trade Aggression (Buy/Sell pressure)",
+    "prefix": "ta_",
+    "source_file": "trade_aggression.py"
+  },
+  {
+    "name": "ta_count_imbalance_ratio{suffix}",
+    "description": "",
+    "category": "Trade Aggression (Buy/Sell pressure)",
+    "prefix": "ta_",
+    "source_file": "trade_aggression.py"
+  },
+  {
+    "name": "ta_vwap_buy_sell_spread_bps{suffix}",
+    "description": "",
+    "category": "Trade Aggression (Buy/Sell pressure)",
+    "prefix": "ta_",
+    "source_file": "trade_aggression.py"
+  },
+  {
+    "name": "ta_size_asymmetry_norm{suffix}",
+    "description": "",
+    "category": "Trade Aggression (Buy/Sell pressure)",
+    "prefix": "ta_",
+    "source_file": "trade_aggression.py"
+  },
+  {
+    "name": "ta_avg_size_zscore{suffix}{roll_suffix}",
+    "description": "",
+    "category": "Trade Aggression (Buy/Sell pressure)",
+    "prefix": "ta_",
+    "source_file": "trade_aggression.py"
+  },
+  {
+    "name": "ta_avg_size_pct{suffix}{roll_suffix}",
+    "description": "",
+    "category": "Trade Aggression (Buy/Sell pressure)",
+    "prefix": "ta_",
+    "source_file": "trade_aggression.py"
+  },
+  {
+    "name": "ta_qty_per_sec_zscore{suffix}{roll_suffix}",
+    "description": "",
+    "category": "Trade Aggression (Buy/Sell pressure)",
+    "prefix": "ta_",
+    "source_file": "trade_aggression.py"
+  },
+  {
+    "name": "ta_qty_per_sec_pct{suffix}{roll_suffix}",
+    "description": "",
+    "category": "Trade Aggression (Buy/Sell pressure)",
+    "prefix": "ta_",
+    "source_file": "trade_aggression.py"
+  },
+  {
+    "name": "ta_trades_per_sec_zscore{suffix}{roll_suffix}",
+    "description": "",
+    "category": "Trade Aggression (Buy/Sell pressure)",
+    "prefix": "ta_",
+    "source_file": "trade_aggression.py"
+  },
+  {
+    "name": "ta_trades_per_sec_pct{suffix}{roll_suffix}",
+    "description": "",
+    "category": "Trade Aggression (Buy/Sell pressure)",
+    "prefix": "ta_",
+    "source_file": "trade_aggression.py"
+  },
+  {
+    "name": "ta_buy_qty_share{suffix}",
+    "description": "",
+    "category": "Trade Aggression (Buy/Sell pressure)",
+    "prefix": "ta_",
+    "source_file": "trade_aggression.py"
+  },
+  {
+    "name": "ta_buy_count_share{suffix}",
+    "description": "",
+    "category": "Trade Aggression (Buy/Sell pressure)",
+    "prefix": "ta_",
+    "source_file": "trade_aggression.py"
+  },
+  {
+    "name": "ta_qty_count_divergence{suffix}",
+    "description": "",
+    "category": "Trade Aggression (Buy/Sell pressure)",
+    "prefix": "ta_",
+    "source_file": "trade_aggression.py"
+  },
+  {
+    "name": "ta_imbalance_momentum_{w1}_{w2}",
+    "description": "",
+    "category": "Trade Aggression (Buy/Sell pressure)",
+    "prefix": "ta_",
+    "source_file": "trade_aggression.py"
+  },
+  {
+    "name": "ta_imbalance_momentum_{w1}_{w3}",
+    "description": "",
+    "category": "Trade Aggression (Buy/Sell pressure)",
+    "prefix": "ta_",
+    "source_file": "trade_aggression.py"
+  },
+  {
+    "name": "ta_imbalance_momentum_{w2}_{w3}",
+    "description": "",
+    "category": "Trade Aggression (Buy/Sell pressure)",
+    "prefix": "ta_",
+    "source_file": "trade_aggression.py"
+  },
+  {
+    "name": "ta_imbalance_sign_agree_{w1}_{w2}",
+    "description": "",
+    "category": "Trade Aggression (Buy/Sell pressure)",
+    "prefix": "ta_",
+    "source_file": "trade_aggression.py"
+  },
+  {
+    "name": "ta_imbalance_sign_agree_{w1}_{w3}",
+    "description": "",
+    "category": "Trade Aggression (Buy/Sell pressure)",
+    "prefix": "ta_",
+    "source_file": "trade_aggression.py"
+  },
+  {
+    "name": "ta_imbalance_sign_agree_{w2}_{w3}",
+    "description": "",
+    "category": "Trade Aggression (Buy/Sell pressure)",
+    "prefix": "ta_",
+    "source_file": "trade_aggression.py"
+  },
+  {
+    "name": "ta_imbalance_sign_agree_all",
+    "description": "",
+    "category": "Trade Aggression (Buy/Sell pressure)",
+    "prefix": "ta_",
+    "source_file": "trade_aggression.py"
+  },
+  {
+    "name": "ta_imbalance_sign_agree_{w1}_{w2}",
+    "description": "",
+    "category": "Trade Aggression (Buy/Sell pressure)",
+    "prefix": "ta_",
+    "source_file": "trade_aggression.py"
+  },
+  {
+    "name": "ta_imbalance_strengthening_{w1}_{w2}",
+    "description": "",
+    "category": "Trade Aggression (Buy/Sell pressure)",
+    "prefix": "ta_",
+    "source_file": "trade_aggression.py"
+  },
+  {
+    "name": "ta_imbalance_strengthening_{w1}_{w3}",
+    "description": "",
+    "category": "Trade Aggression (Buy/Sell pressure)",
+    "prefix": "ta_",
+    "source_file": "trade_aggression.py"
+  },
+  {
+    "name": "ta_imbalance_weakening_{w1}_{w3}",
+    "description": "",
+    "category": "Trade Aggression (Buy/Sell pressure)",
+    "prefix": "ta_",
+    "source_file": "trade_aggression.py"
+  },
+  {
+    "name": "ta_strong_buy_signal",
+    "description": "",
+    "category": "Trade Aggression (Buy/Sell pressure)",
+    "prefix": "ta_",
+    "source_file": "trade_aggression.py"
+  },
+  {
+    "name": "ta_imbalance_sign_agree_all",
+    "description": "",
+    "category": "Trade Aggression (Buy/Sell pressure)",
+    "prefix": "ta_",
+    "source_file": "trade_aggression.py"
+  },
+  {
+    "name": "ta_imbalance_strengthening_{w1}_{w3}",
+    "description": "",
+    "category": "Trade Aggression (Buy/Sell pressure)",
+    "prefix": "ta_",
+    "source_file": "trade_aggression.py"
+  },
+  {
+    "name": "ta_strong_sell_signal",
+    "description": "",
+    "category": "Trade Aggression (Buy/Sell pressure)",
+    "prefix": "ta_",
+    "source_file": "trade_aggression.py"
+  },
+  {
+    "name": "ta_imbalance_sign_agree_all",
+    "description": "",
+    "category": "Trade Aggression (Buy/Sell pressure)",
+    "prefix": "ta_",
+    "source_file": "trade_aggression.py"
+  },
+  {
+    "name": "ta_imbalance_strengthening_{w1}_{w3}",
+    "description": "",
+    "category": "Trade Aggression (Buy/Sell pressure)",
+    "prefix": "ta_",
+    "source_file": "trade_aggression.py"
+  },
+  {
+    "name": "ta_exhaustion_signal",
+    "description": "",
+    "category": "Trade Aggression (Buy/Sell pressure)",
+    "prefix": "ta_",
+    "source_file": "trade_aggression.py"
+  },
+  {
+    "name": "ta_imbalance_weakening_{w1}_{w3}",
+    "description": "",
+    "category": "Trade Aggression (Buy/Sell pressure)",
+    "prefix": "ta_",
+    "source_file": "trade_aggression.py"
+  },
+  {
+    "name": "ta_imbalance_sign_agree_{w1}_{w3}",
+    "description": "",
+    "category": "Trade Aggression (Buy/Sell pressure)",
+    "prefix": "ta_",
+    "source_file": "trade_aggression.py"
+  },
+  {
+    "name": "ta_reversal_signal",
+    "description": "",
+    "category": "Trade Aggression (Buy/Sell pressure)",
+    "prefix": "ta_",
+    "source_file": "trade_aggression.py"
+  },
+  {
+    "name": "ta_imbalance_sign_agree_{w1}_{w3}",
+    "description": "",
+    "category": "Trade Aggression (Buy/Sell pressure)",
+    "prefix": "ta_",
+    "source_file": "trade_aggression.py"
+  },
+  {
+    "name": "bs_microprice_offset_bps_k{k}",
+    "description": "",
+    "category": "Book State (Static orderbook features)",
+    "prefix": "bs_",
+    "source_file": "order_book_state.py"
+  },
+  {
+    "name": "bs_imbalance_gradient",
+    "description": "",
+    "category": "Book State (Static orderbook features)",
+    "prefix": "bs_",
+    "source_file": "order_book_state.py"
+  },
+  {
+    "name": "bs_imbalance_divergence",
+    "description": "",
+    "category": "Book State (Static orderbook features)",
+    "prefix": "bs_",
+    "source_file": "order_book_state.py"
+  },
+  {
+    "name": "bs_microprice_offset_norm",
+    "description": "",
+    "category": "Book State (Static orderbook features)",
+    "prefix": "bs_",
+    "source_file": "order_book_state.py"
+  },
+  {
+    "name": "bs_{name}_mean_{window}",
+    "description": "",
+    "category": "Book State (Static orderbook features)",
+    "prefix": "bs_",
+    "source_file": "order_book_state.py"
+  },
+  {
+    "name": "bs_{name}_std_{window}",
+    "description": "",
+    "category": "Book State (Static orderbook features)",
+    "prefix": "bs_",
+    "source_file": "order_book_state.py"
+  },
+  {
+    "name": "bc_delta_depth_imbalance_norm{suffix}",
+    "description": "",
+    "category": "Book Change (Dynamic orderbook changes, pulls/refills)",
+    "prefix": "bc_",
+    "source_file": "book_change.py"
+  },
+  {
+    "name": "bc_pull_imbalance{suffix}",
+    "description": "",
+    "category": "Book Change (Dynamic orderbook changes, pulls/refills)",
+    "prefix": "bc_",
+    "source_file": "book_change.py"
+  },
+  {
+    "name": "bc_refill_imbalance{suffix}",
+    "description": "",
+    "category": "Book Change (Dynamic orderbook changes, pulls/refills)",
+    "prefix": "bc_",
+    "source_file": "book_change.py"
+  },
+  {
+    "name": "bc_pull_refill_ratio{suffix}",
+    "description": "",
+    "category": "Book Change (Dynamic orderbook changes, pulls/refills)",
+    "prefix": "bc_",
+    "source_file": "book_change.py"
+  },
+  {
+    "name": "bc_total_pull_zscore{suffix}{roll_suffix}",
+    "description": "",
+    "category": "Book Change (Dynamic orderbook changes, pulls/refills)",
+    "prefix": "bc_",
+    "source_file": "book_change.py"
+  },
+  {
+    "name": "bc_total_activity_zscore{suffix}{roll_suffix}",
+    "description": "",
+    "category": "Book Change (Dynamic orderbook changes, pulls/refills)",
+    "prefix": "bc_",
+    "source_file": "book_change.py"
+  },
+  {
+    "name": "bc_total_activity_pct{suffix}{roll_suffix}",
+    "description": "",
+    "category": "Book Change (Dynamic orderbook changes, pulls/refills)",
+    "prefix": "bc_",
+    "source_file": "book_change.py"
+  },
+  {
+    "name": "bc_pull_imbalance_gradient",
+    "description": "",
+    "category": "Book Change (Dynamic orderbook changes, pulls/refills)",
+    "prefix": "bc_",
+    "source_file": "book_change.py"
+  },
+  {
+    "name": "bc_refill_imbalance_gradient",
+    "description": "",
+    "category": "Book Change (Dynamic orderbook changes, pulls/refills)",
+    "prefix": "bc_",
+    "source_file": "book_change.py"
+  },
+  {
+    "name": "ep_slippage_bid_bps",
+    "description": "",
+    "category": "Execution Price (Expected slippage and spread)",
+    "prefix": "ep_",
+    "source_file": "execution_price.py"
+  },
+  {
+    "name": "ep_slippage_ask_bps",
+    "description": "",
+    "category": "Execution Price (Expected slippage and spread)",
+    "prefix": "ep_",
+    "source_file": "execution_price.py"
+  },
+  {
+    "name": "ep_slippage_total_bps",
+    "description": "",
+    "category": "Execution Price (Expected slippage and spread)",
+    "prefix": "ep_",
+    "source_file": "execution_price.py"
+  },
+  {
+    "name": "ep_slippage_zscore{roll_suffix}",
+    "description": "",
+    "category": "Execution Price (Expected slippage and spread)",
+    "prefix": "ep_",
+    "source_file": "execution_price.py"
+  },
+  {
+    "name": "ep_slippage_pct{roll_suffix}",
+    "description": "",
+    "category": "Execution Price (Expected slippage and spread)",
+    "prefix": "ep_",
+    "source_file": "execution_price.py"
+  },
+  {
+    "name": "ep_slippage_asymmetry",
+    "description": "",
+    "category": "Execution Price (Expected slippage and spread)",
+    "prefix": "ep_",
+    "source_file": "execution_price.py"
+  },
+  {
+    "name": "ep_depth_quality",
+    "description": "",
+    "category": "Execution Price (Expected slippage and spread)",
+    "prefix": "ep_",
+    "source_file": "execution_price.py"
+  },
+  {
+    "name": "ep_exec_spread_bps",
+    "description": "",
+    "category": "Execution Price (Expected slippage and spread)",
+    "prefix": "ep_",
+    "source_file": "execution_price.py"
+  },
+  {
+    "name": "ep_spread_expansion_bps",
+    "description": "",
+    "category": "Execution Price (Expected slippage and spread)",
+    "prefix": "ep_",
+    "source_file": "execution_price.py"
+  },
+  {
+    "name": "ep_spread_expansion_ratio",
+    "description": "",
+    "category": "Execution Price (Expected slippage and spread)",
+    "prefix": "ep_",
+    "source_file": "execution_price.py"
+  },
+  {
+    "name": "cf_vwap_offset_bps{suffix}",
+    "description": "",
+    "category": "Cross-Feature (Interactions between trades and book)",
+    "prefix": "cf_",
+    "source_file": "interactions.py"
+  },
+  {
+    "name": "cf_vwap_buy_offset_bps{suffix}",
+    "description": "",
+    "category": "Cross-Feature (Interactions between trades and book)",
+    "prefix": "cf_",
+    "source_file": "interactions.py"
+  },
+  {
+    "name": "cf_vwap_sell_offset_bps{suffix}",
+    "description": "",
+    "category": "Cross-Feature (Interactions between trades and book)",
+    "prefix": "cf_",
+    "source_file": "interactions.py"
+  },
+  {
+    "name": "cf_sign_agree_trade_book",
+    "description": "",
+    "category": "Cross-Feature (Interactions between trades and book)",
+    "prefix": "cf_",
+    "source_file": "interactions.py"
+  },
+  {
+    "name": "cf_strong_agreement",
+    "description": "",
+    "category": "Cross-Feature (Interactions between trades and book)",
+    "prefix": "cf_",
+    "source_file": "interactions.py"
+  },
+  {
+    "name": "cf_sign_agree_trade_book",
+    "description": "",
+    "category": "Cross-Feature (Interactions between trades and book)",
+    "prefix": "cf_",
+    "source_file": "interactions.py"
+  },
+  {
+    "name": "cf_trade_book_divergence",
+    "description": "",
+    "category": "Cross-Feature (Interactions between trades and book)",
+    "prefix": "cf_",
+    "source_file": "interactions.py"
+  },
+  {
+    "name": "cf_divergence_magnitude",
+    "description": "",
+    "category": "Cross-Feature (Interactions between trades and book)",
+    "prefix": "cf_",
+    "source_file": "interactions.py"
+  },
+  {
+    "name": "cf_vwap_microprice_agree",
+    "description": "",
+    "category": "Cross-Feature (Interactions between trades and book)",
+    "prefix": "cf_",
+    "source_file": "interactions.py"
+  },
+  {
+    "name": "cf_vwap_microprice_spread",
+    "description": "",
+    "category": "Cross-Feature (Interactions between trades and book)",
+    "prefix": "cf_",
+    "source_file": "interactions.py"
+  },
+  {
+    "name": "cf_trade_consuming_asks",
+    "description": "",
+    "category": "Cross-Feature (Interactions between trades and book)",
+    "prefix": "cf_",
+    "source_file": "interactions.py"
+  },
+  {
+    "name": "cf_trade_consuming_bids",
+    "description": "",
+    "category": "Cross-Feature (Interactions between trades and book)",
+    "prefix": "cf_",
+    "source_file": "interactions.py"
+  },
+  {
+    "name": "cf_consumption_alignment",
+    "description": "",
+    "category": "Cross-Feature (Interactions between trades and book)",
+    "prefix": "cf_",
+    "source_file": "interactions.py"
+  },
+  {
+    "name": "cf_absorption_bid",
+    "description": "",
+    "category": "Cross-Feature (Interactions between trades and book)",
+    "prefix": "cf_",
+    "source_file": "interactions.py"
+  },
+  {
+    "name": "cf_absorption_ask",
+    "description": "",
+    "category": "Cross-Feature (Interactions between trades and book)",
+    "prefix": "cf_",
+    "source_file": "interactions.py"
+  },
+  {
+    "name": "cf_absorption_strength",
+    "description": "",
+    "category": "Cross-Feature (Interactions between trades and book)",
+    "prefix": "cf_",
+    "source_file": "interactions.py"
+  },
+  {
+    "name": "cf_imbalance_momentum",
+    "description": "",
+    "category": "Cross-Feature (Interactions between trades and book)",
+    "prefix": "cf_",
+    "source_file": "interactions.py"
+  },
+  {
+    "name": "cf_imbalance_building",
+    "description": "",
+    "category": "Cross-Feature (Interactions between trades and book)",
+    "prefix": "cf_",
+    "source_file": "interactions.py"
+  },
+  {
+    "name": "cf_imbalance_fading",
+    "description": "",
+    "category": "Cross-Feature (Interactions between trades and book)",
+    "prefix": "cf_",
+    "source_file": "interactions.py"
+  },
+  {
+    "name": "cf_stable_wall_bid",
+    "description": "",
+    "category": "Cross-Feature (Interactions between trades and book)",
+    "prefix": "cf_",
+    "source_file": "interactions.py"
+  },
+  {
+    "name": "cf_stable_wall_ask",
+    "description": "",
+    "category": "Cross-Feature (Interactions between trades and book)",
+    "prefix": "cf_",
+    "source_file": "interactions.py"
+  },
+  {
+    "name": "cf_unstable_book",
+    "description": "",
+    "category": "Cross-Feature (Interactions between trades and book)",
+    "prefix": "cf_",
+    "source_file": "interactions.py"
+  },
+  {
+    "name": "cf_slippage_imbalance_align",
+    "description": "",
+    "category": "Cross-Feature (Interactions between trades and book)",
+    "prefix": "cf_",
+    "source_file": "interactions.py"
+  },
+  {
+    "name": "cf_slippage_imbalance_corr",
+    "description": "",
+    "category": "Cross-Feature (Interactions between trades and book)",
+    "prefix": "cf_",
+    "source_file": "interactions.py"
+  },
+  {
+    "name": "cf_microprice_exec_gap",
+    "description": "",
+    "category": "Cross-Feature (Interactions between trades and book)",
+    "prefix": "cf_",
+    "source_file": "interactions.py"
+  },
+  {
+    "name": "cf_depth_quality_per_spread",
+    "description": "",
+    "category": "Cross-Feature (Interactions between trades and book)",
+    "prefix": "cf_",
+    "source_file": "interactions.py"
+  },
+  {
+    "name": "cf_spread_depth_ratio",
+    "description": "",
+    "category": "Cross-Feature (Interactions between trades and book)",
+    "prefix": "cf_",
+    "source_file": "interactions.py"
+  },
+  {
+    "name": "cf_efficient_trading",
+    "description": "",
+    "category": "Cross-Feature (Interactions between trades and book)",
+    "prefix": "cf_",
+    "source_file": "interactions.py"
+  },
+  {
+    "name": "cf_stressed_trading",
+    "description": "",
+    "category": "Cross-Feature (Interactions between trades and book)",
+    "prefix": "cf_",
+    "source_file": "interactions.py"
+  },
+  {
+    "name": "cf_activity_slippage_divergence",
+    "description": "",
+    "category": "Cross-Feature (Interactions between trades and book)",
+    "prefix": "cf_",
+    "source_file": "interactions.py"
+  },
+  {
+    "name": "cf_trade_execution_edge",
+    "description": "",
+    "category": "Cross-Feature (Interactions between trades and book)",
+    "prefix": "cf_",
+    "source_file": "interactions.py"
+  },
+  {
+    "name": "cf_confirmation_score",
+    "description": "",
+    "category": "Cross-Feature (Interactions between trades and book)",
+    "prefix": "cf_",
+    "source_file": "interactions.py"
+  },
+  {
+    "name": "cf_signal_agreement",
+    "description": "",
+    "category": "Cross-Feature (Interactions between trades and book)",
+    "prefix": "cf_",
+    "source_file": "interactions.py"
+  },
+  {
+    "name": "cf_regime_trending",
+    "description": "",
+    "category": "Cross-Feature (Interactions between trades and book)",
+    "prefix": "cf_",
+    "source_file": "interactions.py"
+  },
+  {
+    "name": "cf_regime_mean_reverting",
+    "description": "",
+    "category": "Cross-Feature (Interactions between trades and book)",
+    "prefix": "cf_",
+    "source_file": "interactions.py"
+  },
+  {
+    "name": "cf_regime_volatile",
+    "description": "",
+    "category": "Cross-Feature (Interactions between trades and book)",
+    "prefix": "cf_",
+    "source_file": "interactions.py"
+  },
+  {
+    "name": "cf_quality_weighted_signal",
+    "description": "",
+    "category": "Cross-Feature (Interactions between trades and book)",
+    "prefix": "cf_",
+    "source_file": "interactions.py"
+  },
+  {
+    "name": "vo_realized_vol_{w}",
+    "description": "",
+    "category": "Volatility and spread dynamics",
+    "prefix": "vo_",
+    "source_file": "volatility.py"
+  },
+  {
+    "name": "vo_relative_spread_{w}",
+    "description": "",
+    "category": "Volatility and spread dynamics",
+    "prefix": "vo_",
+    "source_file": "volatility.py"
+  },
+  {
+    "name": "tr_roc_{w}",
+    "description": "",
+    "category": "Unknown",
+    "prefix": "tr_",
+    "source_file": "trend.py"
+  }
+]
