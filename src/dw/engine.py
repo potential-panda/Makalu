@@ -81,14 +81,58 @@ class Engine:
                 continue
 
             view = _view(name)
-            glob = str(data_dir / "**" / "*.parquet")
-            # union_by_name handles datasets with inconsistent partition depth
-            # (e.g. LeadLag files with and without param_id in their path)
+            try:
+                self._register_view(view, data_dir, entry)
+                self._datasets[name] = entry
+            except Exception as e:
+                print(f"[Engine] Warning: could not register '{name}': {e}")
+
+    def _register_view(self, view: str, data_dir: Path, entry: dict) -> None:
+        glob = str(data_dir / "**" / "*.parquet")
+        partition_cols = entry.get("partition_columns", [])
+
+        try:
             self._conn.execute(f"""
                 CREATE OR REPLACE VIEW {view} AS
                 SELECT * FROM read_parquet('{glob}', hive_partitioning = true, union_by_name = true)
             """)
-            self._datasets[name] = entry
+        except Exception:
+            # Hive partition depth is inconsistent across files (e.g. some have
+            # an extra optional partition key). Build a UNION ALL from two
+            # depth-specific globs, filling the missing key with NULL.
+            self._register_view_union(view, data_dir, partition_cols)
+
+    def _register_view_union(self, view: str, data_dir: Path, partition_cols: list[str]) -> None:
+        """
+        Fallback for datasets where some files are missing an optional partition
+        level. Builds a UNION ALL from two separate depth-specific globs so
+        DuckDB sees a consistent partition structure in each half.
+
+        The last non-date partition key is treated as optional (present or absent).
+        """
+        if not partition_cols or partition_cols[-1] == "date":
+            raise RuntimeError(f"Cannot build union view for {view}: unexpected partition layout")
+
+        optional_key = partition_cols[-1]   # e.g. "param_id"
+        fixed_keys = partition_cols[:-1]    # e.g. ["market_a", "market_b"]
+
+        # Glob for files that DO have the optional key
+        with_key_parts = [f"{k}=*" for k in fixed_keys] + [f"{optional_key}=*", "date=*", "*.parquet"]
+        glob_with = str(data_dir.joinpath(*with_key_parts))
+
+        # Glob for files that DON'T have the optional key (date immediately after fixed keys)
+        without_key_parts = [f"{k}=*" for k in fixed_keys] + ["date=*", "*.parquet"]
+        glob_without = str(data_dir.joinpath(*without_key_parts))
+
+        # UNION ALL BY NAME matches columns by name so column order differences
+        # between the two halves don't matter.
+        self._conn.execute(f"""
+            CREATE OR REPLACE VIEW {view} AS
+            SELECT * FROM read_parquet('{glob_with}', hive_partitioning = true, union_by_name = true)
+            UNION ALL BY NAME
+            SELECT *, NULL::VARCHAR AS {optional_key}
+            FROM read_parquet('{glob_without}', hive_partitioning = true, union_by_name = true)
+        """)
 
     # ------------------------------------------------------------------
     # Introspection
