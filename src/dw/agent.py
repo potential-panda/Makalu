@@ -69,8 +69,22 @@ _RUN_SQL_TOOL = {
 }
 
 
+def _get_date_ranges(engine: Engine) -> str:
+    """Query actual min/max dates from each registered dataset."""
+    lines = []
+    for name in engine._datasets:
+        view = name.lower()
+        try:
+            df = engine.query(f"SELECT min(date) AS min_date, max(date) AS max_date FROM {view}")
+            row = df.iloc[0]
+            lines.append(f"  - {name}: {row['min_date']} → {row['max_date']}")
+        except Exception:
+            pass
+    return "\n".join(lines) if lines else "  (unavailable)"
+
+
 def _build_system_prompt(engine: Engine) -> str:
-    catalog_lines = ["## Available Datasets\n"]
+    catalog_lines = []
     for entry in engine._catalog:
         name = entry["dataset_name"]
         if name not in engine._datasets:
@@ -81,14 +95,24 @@ def _build_system_prompt(engine: Engine) -> str:
             f"view=`{name.lower()}`, partitions: {partitions})"
         )
 
+    date_ranges = _get_date_ranges(engine)
+
     definitions = ""
     if _DEFINITIONS_PATH.exists():
         definitions = _DEFINITIONS_PATH.read_text()
 
     return f"""You are a quantitative research assistant for a crypto market microstructure data warehouse.
-You answer questions by generating DuckDB SQL queries, running them, and explaining the results.
+This warehouse contains REAL live market data captured from crypto exchanges.
+The data covers dates that are beyond your training cutoff — you have NO knowledge of it.
+You MUST call `run_sql` for every factual question. Never answer from memory or training data.
+
+## Available Datasets
 
 {chr(10).join(catalog_lines)}
+
+## Actual Date Ranges on Disk
+
+{date_ranges}
 
 ## Column Definitions
 
@@ -96,13 +120,14 @@ You answer questions by generating DuckDB SQL queries, running them, and explain
 
 ## Rules
 
-1. Only use `run_sql` to fetch data — never guess or fabricate numbers.
-2. Use exact column names from the definitions above.
-3. View names in SQL are lowercase dataset names (e.g. VolSpread → `volspread`).
-4. Always include exchange, symbol, and a date range filter when possible.
-5. Only SELECT queries are allowed. No DDL or data modification.
-6. If a query returns no rows, say so clearly and suggest why (wrong date range, wrong symbol, etc.).
-7. After showing results, suggest one or two follow-up analyses.
+1. ALWAYS call `run_sql` before answering any factual question. Never guess or use training knowledge.
+2. If asked about data availability, call `run_sql` to check — do not assume based on your training cutoff.
+3. Use exact column names from the definitions above.
+4. View names in SQL are lowercase dataset names (e.g. VolSpread → `volspread`).
+5. Always include exchange, symbol, and a date range filter when possible to avoid large scans.
+6. Only SELECT queries are allowed. No DDL or data modification.
+7. If a query returns no rows, say so and suggest why (wrong date range, wrong symbol, wrong param_id).
+8. After showing results, suggest one or two follow-up analyses.
 """
 
 
