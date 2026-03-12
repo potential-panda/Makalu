@@ -20,6 +20,3 @@ class BookChangeFeatureStep(Step):
             stage_context.source_df, stage_context.features, self.depth_levels, self.rolling_windows
         )
         LOG.info(f"  Book Change: +{len(stage_context.features) - before} features")
-
-    def populate_influxdb(self, pipeline_context: PipelineContext, stage_context: Context):
-        pass

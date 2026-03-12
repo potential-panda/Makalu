@@ -20,6 +20,3 @@ class TradeAggressionFeatureStep(Step):
             stage_context.source_df, stage_context.features, self.windows, self.rolling_windows
         )
         LOG.info(f"  Trade Aggression: +{len(stage_context.features) - before} features")
-
-    def populate_influxdb(self, pipeline_context: PipelineContext, stage_context: Context):
-        pass

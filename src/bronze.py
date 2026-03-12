@@ -4,7 +4,6 @@ from logging import getLogger
 from qate.core.model import Market
 from qate.env import sys_env
 from qate.env.env import Env, EnvName
-from qate.store.influx_writer import InfluxdbStore
 from qate.store.market_data_store import MarketDataStore
 from qate.store.parquet_store import ParquetStore
 from qate.util.dt_range import DtRange
@@ -20,12 +19,11 @@ ENV_NAME = EnvName.LUIGI_MARIO
 def main(market: Market, dt_range: DtRange, populate=False):
     market_data_store = MarketDataStore(sys_env.get_market_data_dir())
     parquet_store = ParquetStore(sys_env.get_parquet_root_dir())
-    influx_store = InfluxdbStore(sys_env.get_influxdb())
 
     if populate:
         LOG.info(f"Starting Data pipeline from {dt_range.start_str} to {dt_range.end_str}")
 
-        Pipeline(market_data_store, parquet_store, influx_store).stage(
+        Pipeline(market_data_store, parquet_store).stage(
             MarketDataStage(market).step(PopulateTradeStep()).step(PopulateOrderBookStep())
         ).process(dt_range)
 
@@ -49,7 +47,12 @@ if __name__ == "__main__":
     parser.add_argument("--market", required=True, help="Market in format EXCHANGE:SYMBOL (e.g., BINANCE:BTC_USDT)")
     parser.add_argument("--from-dt", required=True, help="Start date in YYYYMMDD format")
     parser.add_argument("--to-dt", help="End date in YYYYMMDD format")
-    parser.add_argument("--populate", action="store_true", default=False, help="Run the populate pipeline (default: data_check only)")
+    parser.add_argument(
+        "--populate",
+        action="store_true",
+        default=False,
+        help="Run the populate pipeline (default: data_check only)",
+    )
     args = parser.parse_args()
 
     market = Market.from_str(args.market)

@@ -3,7 +3,6 @@ from abc import abstractmethod
 from dataclasses import dataclass
 from typing import List
 
-from influxdb_client import Point, WritePrecision
 from qate.core.model import Market, Trade
 from qate.trading.aggression import TradeAggressionBuilder
 from qate.trading.chart import (
@@ -37,16 +36,17 @@ class PopulateAggressionStep(Step):
         self.windows_sec = windows_sec
 
     def populate(self, pipeline_context: PipelineContext, stage_context: Context):
-        parquet_store = pipeline_context.parquet_store.create_single_market("TradeAggression", stage_context.market, layer="silver")
+        parquet_store = pipeline_context.parquet_store.create_single_market(
+            "TradeAggression", stage_context.market, layer="silver"
+        )
         count = 0
-        for ts, write_fields, _ in self._populate(pipeline_context, stage_context):
+        for ts, write_fields in self._populate(pipeline_context, stage_context):
             parquet_store.add(ts, write_fields)
             count += 1
         parquet_store.close()
         LOG.info(f"PopulateAggressionStep: Wrote {count} records to Parquet store")
 
     def _populate(self, pipeline_context: PipelineContext, stage_context: Context):
-        """Generator that yields (ts, write_fields, influx_points_data) tuples."""
         progress = StepProgressLogger(self.__class__.__name__, len(stage_context.trades))
         builder = TradeAggressionBuilder(windows_sec=self.windows_sec)
         for trade in stage_context.trades:
@@ -55,7 +55,6 @@ class PopulateAggressionStep(Step):
                 continue
 
             write_fields = {}
-            influx_points_data = []
             aggressions = builder.get_trade_aggression(trade.get_ts())
             for aggression in aggressions:
                 fields = {
@@ -83,34 +82,14 @@ class PopulateAggressionStep(Step):
                     "net_flow": aggression.net_flow,
                     "buy_sell_ratio": aggression.buy_sell_ratio,
                 }
-                influx_points_data.append((aggression.window_sec, aggression.ts, fields))
 
                 for k, v in fields.items():
                     write_fields[f"{k}_{aggression.window_sec}s"] = v
 
-            yield (trade.get_ts(), write_fields, influx_points_data)
+            yield (trade.get_ts(), write_fields)
             progress.update()
 
         LOG.info(f"PopulateAggressionStep: Processed {progress.cnt} objects")
-
-    def populate_influxdb(self, pipeline_context: PipelineContext, stage_context: Context):
-        influx_writer = pipeline_context.influx_store.create_writer(TRADE_DERIVED_BUCKET, no_retention=True)
-        count = 0
-        for _, _, influx_points_data in self._populate(pipeline_context, stage_context):
-            for window_sec, ts, fields in influx_points_data:
-                point = (
-                    Point("TRADE_AGGRESSION")
-                    .tag("exchange_name", stage_context.market.exchange_name.name)
-                    .tag("symbol", stage_context.market.symbol.name)
-                    .tag("window_sec", window_sec)
-                    .time(int(ts * 1000), WritePrecision.MS)
-                )
-                for k, v in fields.items():
-                    point.field(k, v)
-                influx_writer.add(point)
-            count += 1
-        influx_writer.close()
-        LOG.info(f"PopulateAggressionStep: Wrote {count} records to InfluxDB")
 
 
 class AbstractPopulateChartStep(Step):
@@ -127,7 +106,9 @@ class AbstractPopulateChartStep(Step):
         pass
 
     def populate(self, pipeline_context: PipelineContext, stage_context: Context):
-        parquet_store = pipeline_context.parquet_store.create_chart(self.get_bar_type(), stage_context.market, self.get_threshold_str())
+        parquet_store = pipeline_context.parquet_store.create_chart(
+            self.get_bar_type(), stage_context.market, self.get_threshold_str()
+        )
         count = 0
         for ts, fields in self._populate(pipeline_context, stage_context):
             parquet_store.add(ts, fields)
@@ -158,25 +139,6 @@ class AbstractPopulateChartStep(Step):
             progress.update()
 
         LOG.info(f"{self.__class__.__name__}: Created {progress.cnt} bars")
-
-    def populate_influxdb(self, pipeline_context: PipelineContext, stage_context: Context):
-        influx_writer = pipeline_context.influx_store.create_writer(TRADE_DERIVED_BUCKET, no_retention=True)
-        count = 0
-        for ts, fields in self._populate(pipeline_context, stage_context):
-            point = (
-                Point("CHART")
-                .tag("exchange_name", stage_context.market.exchange_name.name)
-                .tag("symbol", stage_context.market.symbol.name)
-                .tag("interval", self.get_threshold_str())
-                .tag("bar_type", self.get_bar_type())
-                .time(int(ts * 1000), WritePrecision.MS)
-            )
-            for k, v in fields.items():
-                point.field(k, v)
-            influx_writer.add(point)
-            count += 1
-        influx_writer.close()
-        LOG.info(f"{self.__class__.__name__}: Wrote {count} bars to InfluxDB")
 
 
 class PopulateCandleBarStep(AbstractPopulateChartStep):

@@ -4,7 +4,6 @@ from logging import getLogger
 from qate.core.model import Market
 from qate.env import sys_env
 from qate.env.env import Env, EnvName
-from qate.store.influx_writer import InfluxdbStore
 from qate.store.market_data_store import MarketDataStore
 from qate.store.parquet_store import ParquetStore
 from qate.util.dt_range import DtRange
@@ -56,9 +55,8 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
     market_lead, market_lag = LEAD_LAG_PAIRS.get(pair_key)
     market_data_store = MarketDataStore(sys_env.get_market_data_dir())
     parquet_store = ParquetStore(sys_env.get_parquet_root_dir())
-    influx_store = InfluxdbStore(sys_env.get_influxdb())
 
-    pipeline = Pipeline(market_data_store, parquet_store, influx_store)
+    pipeline = Pipeline(market_data_store, parquet_store)
 
     if "TradeDerived" in run_stages:
         pipeline.stage(

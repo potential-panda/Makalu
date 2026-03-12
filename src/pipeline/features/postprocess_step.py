@@ -107,7 +107,3 @@ class PostprocessAndSaveStep(Step):
             f"PostprocessAndSaveStep: Saved {len(feature_df)} rows "
             f"with {len(feature_df.columns)} columns to Parquet store."
         )
-
-    def populate_influxdb(self, pipeline_context: PipelineContext, stage_context: Context):
-        pass
-        pass

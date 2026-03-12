@@ -64,27 +64,6 @@ python src/pipeline.py --market BINANCE:BTC_USDT --from-dt 20250101 --to-dt 2025
 - `--from-dt`: Start date in YYYYMMDD format
 - `--to-dt`: End date in YYYYMMDD format
 
-## Architecture
-
-```
-MarketDataStage → InfluxDB (market_data bucket)
-  ├─ TRADE
-  ├─ ORDER_BOOK
-  ├─ VOLUME_IMBALANCE
-  ├─ WEIGHTED_IMBALANCE
-  ├─ DEPTH_IMBALANCE
-  ├─ MICROPRICE
-  └─ BOOK_CHANGE
-
-TradeDerivedStage → InfluxDB (trade_derived bucket)
-  ├─ CANDLE
-  ├─ HEIKIN_ASHI
-  ├─ RANGE
-  └─ TRADE_AGGRESSION
-
-FeatureStage → Parquet files
-  └─ {market_id}_features.parquet
-```
 
 ## Documentation
 
@@ -102,15 +81,6 @@ Pre-configured dashboards in `grafana/`:
 - `order_book.json`: OrderBook state metrics
 - `book_change.json`: Liquidity behavior
 - `chart.json`: OHLCV charts
-
-## Dependencies
-
-- Python >= 3.11
-- potential-panda-core (core trading primitives)
-- pandas (data manipulation)
-- influxdb-client (time-series storage)
-- pyarrow (parquet support)
-- lightgbm (ML model training)
 
 ## License
 

@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from logging import getLogger
 from typing import List
 
-from qate.store.influx_writer import InfluxdbStore
 from qate.store.market_data_store import MarketDataStore
 from qate.store.parquet_store import ParquetStore
 from qate.util.dt_range import DtRange
@@ -22,7 +21,6 @@ class StageContext:
 class PipelineContext:
     market_data_store: MarketDataStore
     parquet_store: ParquetStore
-    influx_store: InfluxdbStore
 
 
 class StepProgressLogger:
@@ -44,10 +42,6 @@ class StepProgressLogger:
 class Step(ABC):
     @abstractmethod
     def populate(self, pipeline_context: PipelineContext, stage_context: StageContext):
-        pass
-
-    @abstractmethod
-    def populate_influxdb(self, pipeline_context: PipelineContext, stage_context: StageContext):
         pass
 
 
@@ -83,10 +77,8 @@ class Stage(ABC):
 
 
 class Pipeline:
-    def __init__(
-        self, market_data_store: MarketDataStore, parquet_store: ParquetStore, influx_store: InfluxdbStore = None
-    ):
-        self._context = PipelineContext(market_data_store, parquet_store, influx_store)
+    def __init__(self, market_data_store: MarketDataStore, parquet_store: ParquetStore):
+        self._context = PipelineContext(market_data_store, parquet_store)
         self._stages: List[Stage] = []
 
     def stage(self, stage: Stage):

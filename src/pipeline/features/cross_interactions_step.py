@@ -25,6 +25,3 @@ class CrossInteractionsFeatureStep(Step):
             self.base_roll_window,
         )
         LOG.info(f"  Cross-Feature Interactions: +{len(stage_context.features) - before} features")
-
-    def populate_influxdb(self, pipeline_context: PipelineContext, stage_context: Context):
-        pass

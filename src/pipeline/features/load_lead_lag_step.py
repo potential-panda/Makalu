@@ -40,6 +40,3 @@ class LoadLeadLagStep(Step):
             stage_context.features[col] = df[col]
 
         LOG.info(f"  Load Lead-Lag: +{len(stage_context.features) - before} features")
-
-    def populate_influxdb(self, pipeline_context: PipelineContext, stage_context):
-        pass

@@ -5,7 +5,7 @@ from logging import getLogger
 from qate.core.ev_type import EventType
 from qate.core.model import Market
 from qate.store.market_data_store import partition_market_events
-from qate.util.dt_range import DtRange
+from qate.util.dt_range import DtRange, TimeFormat
 
 from labeling.triple_barrier import ts_index
 from lead_lag.lead_lag import prepare_returns
@@ -33,6 +33,10 @@ class MarketDataStage(Stage):
             self.market,
             [EventType.MARKET_ORDER_BOOK, EventType.MARKET_TRADE],
         )
+        # TODO
+        # remove this after fully migrate the date format in market data files
+        dt_range = DtRange(dt_range._start_dt, dt_range._end_dt, TimeFormat.YYYYMMDD)
+
         all_data = loader.batch_load_mt(dt_range, max_workers=8)
         order_books, trades = partition_market_events(all_data)
         end_time = time.time()

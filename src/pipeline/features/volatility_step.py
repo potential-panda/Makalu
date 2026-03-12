@@ -17,6 +17,3 @@ class VolatilityFeatureStep(Step):
         before = len(stage_context.features)
         build_volatility_features(stage_context.source_df, stage_context.features, self.windows)
         LOG.info(f"  Volatility: +{len(stage_context.features) - before} features")
-
-    def populate_influxdb(self, pipeline_context: PipelineContext, stage_context: Context):
-        pass

@@ -63,7 +63,7 @@ def plot_curve(
 
     # Horizontal threshold lines
     hline_colors = ["tomato", "orange", "green", "purple"]
-    hline_styles  = ["--", "-.", ":", "-"]
+    hline_styles = ["--", "-.", ":", "-"]
     for (label, y), color, ls in zip(thresholds, hline_colors, hline_styles):
         ax.axhline(y, color=color, linewidth=0.9, linestyle=ls, label=f"{label} ({y:.3f})")
 
@@ -139,7 +139,7 @@ def main(market: Market, execution_size: str, dt_range: DtRange, bin_size_sec: i
     total = len(flat)
 
     thresholds = [
-        ("std",    mu),
+        ("std", mu),
         ("std1dev", mu + sigma),
         ("std2dev", mu + 2 * sigma),
         ("std3dev", mu + 3 * sigma),
@@ -190,11 +190,11 @@ if __name__ == "__main__":
     env.enable_multiprocess_logging = True
     env.visit()
 
-    symbol_name = args.market.split(":")[-1]
-    output_path = Path(args.output) if args.output else Path(f"models/active_score_curve_{symbol_name}.json")
+    market = Market.from_str(args.market)
+    output_path = Path(args.output) if args.output else Path(f"models/active_score_curve_{market.symbol.name}.json")
 
     main(
-        market=Market.from_str(args.market),
+        market=market,
         execution_size=args.execution_size,
         dt_range=DtRange.from_strings(args.from_dt, args.to_dt),
         bin_size_sec=args.bin_size,
