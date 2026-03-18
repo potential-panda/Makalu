@@ -10,7 +10,6 @@ from dataclasses import dataclass
 from typing import Optional
 
 import numpy as np
-
 from qate.core.model import OrderBook
 
 LOG = logging.getLogger(__name__)
@@ -113,7 +112,9 @@ class VolatilityTracker:
             if self._spread_pct_ema is None:
                 self._spread_pct_ema = current_spread_pct
             else:
-                self._spread_pct_ema = self._ema_alpha * current_spread_pct + (1 - self._ema_alpha) * self._spread_pct_ema
+                self._spread_pct_ema = (
+                    self._ema_alpha * current_spread_pct + (1 - self._ema_alpha) * self._spread_pct_ema
+                )
 
     def get_volatility_ema(self) -> Optional[float]:
         """Get the current EMA-smoothed volatility."""

@@ -319,9 +319,9 @@ def simulate_trading(
         merged.loc[low_conf, "y_pred"] = 2
 
     if min_vol_spread_ratio is not None:
-        vol_ema = price_df["volatility_ema"].values
+        volatility = price_df["volatility"].values
         # spread_ema is already checked/used
-        ratio = vol_ema[np.clip(entry_positions, 0, len(vol_ema) - 1)] / (
+        ratio = volatility[np.clip(entry_positions, 0, len(volatility) - 1)] / (
             spread_pct_ema[np.clip(entry_positions, 0, len(spread_pct_ema) - 1)] + 1e-12
         )
         below = (ratio < min_vol_spread_ratio) & (merged["y_pred"].values != 2)

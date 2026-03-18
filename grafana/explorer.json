@@ -1,0 +1,81 @@
+{
+  "uid": "makalu-explorer",
+  "title": "Data Explorer",
+  "description": "Generic on-demand dashboard. Set var-bucket and var-measurement via URL or dropdowns.",
+  "editable": true,
+  "graphTooltip": 1,
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": { "type": "influxdb", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 5,
+            "lineWidth": 1,
+            "pointSize": 3,
+            "showPoints": "auto",
+            "spanNulls": true
+          }
+        }
+      },
+      "gridPos": { "h": 16, "w": 24, "x": 0, "y": 0 },
+      "id": 1,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "influxdb", "uid": "${datasource}" },
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"${measurement}\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> yield(name: \"mean\")",
+          "refId": "A"
+        }
+      ],
+      "title": "${measurement} — ${bucket}",
+      "type": "timeseries"
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "datasource",
+        "pluginId": "influxdb",
+        "label": "Data Source",
+        "hide": 0,
+        "current": {}
+      },
+      {
+        "name": "bucket",
+        "type": "query",
+        "label": "Bucket",
+        "hide": 0,
+        "refresh": 1,
+        "datasource": { "type": "influxdb", "uid": "${datasource}" },
+        "query": "import \"influxdata/influxdb/schema\"\nschema.buckets() |> filter(fn: (r) => r.name =~ /^makalu_/)",
+        "sort": 1,
+        "current": {},
+        "options": []
+      },
+      {
+        "name": "measurement",
+        "type": "query",
+        "label": "Measurement",
+        "hide": 0,
+        "refresh": 2,
+        "datasource": { "type": "influxdb", "uid": "${datasource}" },
+        "query": "import \"influxdata/influxdb/schema\"\nschema.measurements(bucket: \"${bucket}\")",
+        "sort": 1,
+        "current": {},
+        "options": []
+      }
+    ]
+  },
+  "time": { "from": "now-7d", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "version": 1
+}

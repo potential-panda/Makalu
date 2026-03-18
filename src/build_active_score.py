@@ -17,23 +17,12 @@ from feature_engineering.volatility import VolSpreadConfig
 LOG = logging.getLogger(__name__)
 ENV_NAME = EnvName.MARIO_MARIO
 
-# All 15 VolSpread configs from data_pipeline.py (ExecutionPriceDerived stage)
+# VolSpread configs kept in sync with the ExecutionPriceDerived stage.
 VOL_CONFIGS = [
-    VolSpreadConfig(60, 60, 60),
-    VolSpreadConfig(60, 180, 180),
-    VolSpreadConfig(60, 300, 300),
-    VolSpreadConfig(60, 600, 600),
-    VolSpreadConfig(60, 900, 900),
-    VolSpreadConfig(180, 60, 60),
-    VolSpreadConfig(180, 180, 180),
-    VolSpreadConfig(180, 300, 300),
-    VolSpreadConfig(180, 600, 600),
-    VolSpreadConfig(180, 900, 900),
-    VolSpreadConfig(300, 60, 60),
-    VolSpreadConfig(300, 180, 180),
-    VolSpreadConfig(300, 300, 300),
-    VolSpreadConfig(300, 600, 600),
-    VolSpreadConfig(300, 900, 900),
+    VolSpreadConfig(60, 300, 120),
+    VolSpreadConfig(60, 900, 300),
+    VolSpreadConfig(180, 900, 300),
+    VolSpreadConfig(300, 900, 300),
 ]
 
 DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]

@@ -59,11 +59,7 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
     pipeline = Pipeline(market_data_store, parquet_store)
 
     if "TradeDerived" in run_stages:
-        pipeline.stage(
-            TradeDerivedStage(market_lead).step(
-                PopulateAggressionStep(windows_sec=[1, 3, 5, 10, 30, 60, 120, 180])
-            )  # Aggression metrics
-        )
+        pipeline.stage(TradeDerivedStage(market_lead).step(PopulateAggressionStep(windows_sec=[1, 3, 5, 10, 30, 60])))
 
     if "TradeChart" in run_stages:
         pipeline.stage(
@@ -73,7 +69,7 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
             .step(PopulateRangeBarStep(box_size_rate=0.001))  # 0.1% range bars (example)
         )
 
-    if "OrderBookDerived" in run_stages:
+    if "ExecutionPrice" in run_stages:
         pipeline.stage(
             OrderBookDerivedStage(market_lead).step(PopulateMarketPriceStep(EXECUTION_SIZE.get(market_lead.symbol)))
         )
@@ -82,45 +78,38 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
         )
 
     if "ExectuionPriceDerived" in run_stages:
+        # Param policy:
+        # - Keep return_shift_sec responsive for frequent trading.
+        # - Require lookback_sec >= return_shift_sec so volatility is estimated on a sensible horizon.
+        # - Keep ema_span_sec shorter than lookback_sec so spread smoothing does not become too sluggish.
+
         # pipeline.stage(
         #     ExecutionPriceDerivedStage(market_lead, EXECUTION_SIZE.get(market_lead.symbol))
-        #     .step(VolSpreadStep(VolSpreadConfig(60, 60, 60)))
-        #     .step(VolSpreadStep(VolSpreadConfig(60, 180, 180)))
-        #     .step(VolSpreadStep(VolSpreadConfig(60, 300, 300)))
-        #     .step(VolSpreadStep(VolSpreadConfig(60, 600, 600)))
-        #     .step(VolSpreadStep(VolSpreadConfig(60, 900, 900)))
+        #     .step(VolSpreadStep(VolSpreadConfig(60, 300, 120)))
+        #     .step(VolSpreadStep(VolSpreadConfig(60, 900, 300)))
+        #     .step(VolSpreadStep(VolSpreadConfig(180, 900, 300)))
+        #     .step(VolSpreadStep(VolSpreadConfig(300, 900, 300)))
         # )
         pipeline.stage(
             ExecutionPriceDerivedStage(market_lag, EXECUTION_SIZE.get(market_lag.symbol))
-            .step(VolSpreadStep(VolSpreadConfig(60, 60, 60)))
-            .step(VolSpreadStep(VolSpreadConfig(60, 180, 180)))
-            .step(VolSpreadStep(VolSpreadConfig(60, 300, 300)))
-            .step(VolSpreadStep(VolSpreadConfig(60, 600, 600)))
-            .step(VolSpreadStep(VolSpreadConfig(60, 900, 900)))
-            .step(VolSpreadStep(VolSpreadConfig(180, 60, 60)))
-            .step(VolSpreadStep(VolSpreadConfig(180, 180, 180)))
-            .step(VolSpreadStep(VolSpreadConfig(180, 300, 300)))
-            .step(VolSpreadStep(VolSpreadConfig(180, 600, 600)))
-            .step(VolSpreadStep(VolSpreadConfig(180, 900, 900)))
-            .step(VolSpreadStep(VolSpreadConfig(300, 60, 60)))
-            .step(VolSpreadStep(VolSpreadConfig(300, 180, 180)))
-            .step(VolSpreadStep(VolSpreadConfig(300, 300, 300)))
-            .step(VolSpreadStep(VolSpreadConfig(300, 600, 600)))
-            .step(VolSpreadStep(VolSpreadConfig(300, 900, 900)))
+            .step(VolSpreadStep(VolSpreadConfig(60, 300, 120)))
+            .step(VolSpreadStep(VolSpreadConfig(60, 900, 300)))
+            .step(VolSpreadStep(VolSpreadConfig(180, 900, 300)))
+            .step(VolSpreadStep(VolSpreadConfig(300, 900, 300)))
         )
 
-    if "OrderBookDerivedHeavy" in run_stages:
+    if "OrderBookDerived" in run_stages:
         pipeline.stage(
             OrderBookDerivedStage(market_lead)
             .step(
                 PopulateBookStateStep(
-                    volume_imbalance_k=[1, 3, 5, 10, 20],
-                    weighted_imbalance_k=[1, 3, 5, 10, 20],
-                    depth_imbalance_rate=None,
-                    microprice_k=[1, 3, 5, 10, 20],
+                    volume_imbalance_k=[1, 3, 5, 10],
+                    weighted_imbalance_k=[1, 3, 5, 10],
+                    depth_imbalance_rate=[0.0001, 0.0002, 0.0005, 0.001],
+                    microprice_k=[1, 3, 5, 10],
                 )
             )
-            .step(PopulateBookChangeStep(k_levels=[1, 3, 5, 10, 20]))
+            .step(PopulateBookChangeStep(k_levels=[1, 3, 5, 10]))
         )
 
     if "LeadLag" in run_stages:

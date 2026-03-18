@@ -39,7 +39,7 @@ class VolSpreadStep(Step):
         spread_pct = spread_resampled / mid_resampled
         spread_pct_ema = spread_pct.ewm(span=self.config.ema_span_sec, adjust=False).mean()
 
-        df["volatility_ema"] = volatility.reindex(df.index, method="ffill")
+        df["volatility"] = volatility.reindex(df.index, method="ffill")
         df["spread_pct_ema"] = spread_pct_ema.reindex(df.index, method="ffill")
         return df
 
