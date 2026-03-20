@@ -38,7 +38,8 @@ TYPICAL WORKFLOW
        python cli.py populate bronze --exchange GMO --symbol BTC_JPY --start 2026-01-01 --end 2026-01-07
 
   3. Populate silver datasets that depend on bronze:
-       python cli.py populate MarketPrice --exchange GMO --symbol BTC_JPY --start 2026-01-01 --end 2026-01-07 --execution-size 0.002
+       python cli.py populate MarketPrice --exchange GMO --symbol BTC_JPY --start 2026-01-01 --end 2026-01-07 \
+          --execution-size 0.002
 
   4. Update manifest after populating:
        python cli.py scan
@@ -56,7 +57,7 @@ from qate.env import sys_env
 from qate.env.env import Env
 from qate.env.env_name import EnvName
 
-from makalu.cli import data_check, evict, populate, scan
+from makalu.cli import data_check, evict, plot, populate, scan
 
 ENV_NAME = EnvName.LUIGI_MARIO
 
@@ -80,6 +81,7 @@ def main():
 
     data_check.register_cli(sub)
     populate.register_cli(sub)
+    plot.register_cli(sub)
     scan.register_cli(sub)
     evict.register_cli(sub)
 

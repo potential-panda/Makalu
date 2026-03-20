@@ -30,11 +30,7 @@ def execute_single_market(args):
 
     dataset = args.dataset
     if dataset == "TradeAggression":
-        pipeline.stage(
-            TradeDerivedStage(market).step(
-                PopulateAggressionStep(windows_sec=[1, 3, 5, 10, 30, 60])
-            )
-        )
+        pipeline.stage(TradeDerivedStage(market).step(PopulateAggressionStep(windows_sec=[1, 3, 5, 10, 30, 60])))
     elif dataset == "BookState":
         pipeline.stage(
             OrderBookDerivedStage(market).step(
@@ -47,17 +43,9 @@ def execute_single_market(args):
             )
         )
     elif dataset == "BookChange":
-        pipeline.stage(
-            OrderBookDerivedStage(market).step(
-                PopulateBookChangeStep(k_levels=[1, 3, 5, 10])
-            )
-        )
+        pipeline.stage(OrderBookDerivedStage(market).step(PopulateBookChangeStep(k_levels=[1, 3, 5, 10])))
     elif dataset == "MarketPrice":
-        pipeline.stage(
-            OrderBookDerivedStage(market).step(
-                PopulateMarketPriceStep(args.execution_size)
-            )
-        )
+        pipeline.stage(OrderBookDerivedStage(market).step(PopulateMarketPriceStep(args.execution_size)))
     else:
         LOG.error(f"Unknown dataset for populate: {dataset}")
         sys.exit(1)
@@ -101,6 +89,57 @@ def execute_bronze(args):
     LOG.info("Done.")
 
 
+def execute_volspread(args):
+    from feature_engineering.volatility import VolSpreadConfig
+    from pipeline.execution_price_derived_steps import VolSpreadStep
+    from pipeline.framework import Pipeline
+    from pipeline.stages import ExecutionPriceDerivedStage
+
+    market = Market.from_str(f"{args.exchange}:{args.symbol}")
+    dt_range = DtRange.from_strings(args.start, args.end)
+
+    pipeline = Pipeline(MarketDataStore(sys_env.MARKET_DATA_DIR), ParquetStore(sys_env.PARQUET_ROOT_DIR))
+    pipeline.stage(
+        ExecutionPriceDerivedStage(market, args.execution_size)
+        .step(VolSpreadStep(VolSpreadConfig(60, 300, 120)))
+        .step(VolSpreadStep(VolSpreadConfig(60, 900, 300)))
+        .step(VolSpreadStep(VolSpreadConfig(180, 900, 300)))
+        .step(VolSpreadStep(VolSpreadConfig(300, 900, 300)))
+    )
+
+    LOG.info(f"Populating VolSpread: {market.id} (execution_size={args.execution_size}) {args.start} → {args.end}")
+    pipeline.process(dt_range)
+    LOG.info("Done.")
+
+
+def execute_leadlag(args):
+    from lead_lag.lead_lag import LEAD_LAG_CONFIG_MID, LEAD_LAG_CONFIG_NEARHFT
+    from pipeline.framework import Pipeline
+    from pipeline.lead_lag_steps import LeadLagStep
+    from pipeline.market_pair import EXECUTION_SIZE, LEAD_LAG_PAIRS
+    from pipeline.stages import LeadLagStage
+
+    pair = LEAD_LAG_PAIRS.get(args.pair)
+    if pair is None:
+        LOG.error(f"Unknown pair '{args.pair}'. Known: {list(LEAD_LAG_PAIRS)}")
+        sys.exit(1)
+
+    market_lead, market_lag = pair
+    execution_size = EXECUTION_SIZE.get(market_lag.symbol)
+    dt_range = DtRange.from_strings(args.start, args.end)
+
+    pipeline = Pipeline(MarketDataStore(sys_env.MARKET_DATA_DIR), ParquetStore(sys_env.PARQUET_ROOT_DIR))
+    pipeline.stage(
+        LeadLagStage(market_lead, market_lag, execution_size)
+        .step(LeadLagStep(config=LEAD_LAG_CONFIG_NEARHFT))
+        .step(LeadLagStep(config=LEAD_LAG_CONFIG_MID))
+    )
+
+    LOG.info(f"Populating LeadLag: {market_lead.id} → {market_lag.id} {args.start} → {args.end}")
+    pipeline.process(dt_range)
+    LOG.info("Done.")
+
+
 _DATASET_META = {
     "bronze": {
         "help": "Populate Trade + OrderBook (always together, sourced from raw msgpack files)",
@@ -120,7 +159,8 @@ _DATASET_META = {
             "attached to each trade event. Windows: 1s, 3s, 5s, 10s, 30s, 60s.\n\n"
             "Prerequisite: bronze must be populated for the same market and date range."
         ),
-        "example": "python cli.py populate TradeAggression --exchange GMO --symbol BTC_JPY --start 2026-01-01 --end 2026-01-07",
+        "example": "python cli.py populate TradeAggression --exchange GMO --symbol BTC_JPY --start 2026-01-01 "
+        "--end 2026-01-07",
     },
     "BookState": {
         "help": "Populate order book microstructure state derived from OrderBook (silver layer)",
@@ -129,7 +169,8 @@ _DATASET_META = {
             "depth imbalance, and microprice at depth levels 1, 3, 5, 10.\n\n"
             "Prerequisite: bronze must be populated for the same market and date range."
         ),
-        "example": "python cli.py populate BookState --exchange GMO --symbol BTC_JPY --start 2026-01-01 --end 2026-01-07",
+        "example": "python cli.py populate BookState --exchange GMO --symbol BTC_JPY --start 2026-01-01 "
+        "--end 2026-01-07",
     },
     "BookChange": {
         "help": "Populate order book diff metrics derived from OrderBook (silver layer)",
@@ -138,7 +179,8 @@ _DATASET_META = {
             "order book snapshots at depth levels 1, 3, 5, 10.\n\n"
             "Prerequisite: bronze must be populated for the same market and date range."
         ),
-        "example": "python cli.py populate BookChange --exchange GMO --symbol BTC_JPY --start 2026-01-01 --end 2026-01-07",
+        "example": "python cli.py populate BookChange --exchange GMO --symbol BTC_JPY --start 2026-01-01 "
+        "--end 2026-01-07",
     },
     "MarketPrice": {
         "help": "Populate effective execution prices by walking the order book (silver layer)",
@@ -149,7 +191,29 @@ _DATASET_META = {
             "Prerequisite: bronze must be populated for the same market and date range.\n"
             "MarketPrice is itself a prerequisite for VolSpread (gold layer)."
         ),
-        "example": "python cli.py populate MarketPrice --exchange GMO --symbol BTC_JPY --start 2026-01-01 --end 2026-01-07 --execution-size 0.002",
+        "example": "python cli.py populate MarketPrice --exchange GMO --symbol BTC_JPY --start 2026-01-01 "
+        "--end 2026-01-07 --execution-size 0.002",
+    },
+    "VolSpread": {
+        "help": "Populate volatility and spread EMA metrics derived from MarketPrice (gold layer)",
+        "description": (
+            "Computes EMA of realized volatility and spread percentage from execution prices.\n"
+            "Produces 4 param_id configs: (shift=60,lookback=300,ema=120), (60,900,300),\n"
+            "                             (180,900,300), (300,900,300).\n\n"
+            "Prerequisite: MarketPrice must be populated for the same market and execution_size."
+        ),
+        "example": "python cli.py populate VolSpread --exchange GMO --symbol BTC_JPY --start 2026-01-01 "
+        "--end 2026-01-07 --execution-size 0.002",
+    },
+    "LeadLag": {
+        "help": "Populate lead-lag cross-correlation metrics between a BINANCE lead and GMO lag market (gold layer)",
+        "description": (
+            "Computes cross-correlation statistics between the lead market (BINANCE) and lag market (GMO)\n"
+            "using 100ms resampled returns. Produces two configs: NearHFT and Mid.\n\n"
+            "Known pairs: btc (BINANCE:BTC_USDT → GMO:BTC_JPY), eth, xrp, sol.\n\n"
+            "Prerequisite: MarketPrice must be populated for both markets in the pair."
+        ),
+        "example": "python cli.py populate LeadLag --pair btc --start 2026-01-01 --end 2026-01-07",
     },
 }
 
@@ -181,15 +245,45 @@ def _register_market_price(sub: argparse.ArgumentParser) -> argparse.ArgumentPar
     return p
 
 
+def _register_volspread(sub: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    p = _register_dataset_single_market(sub, "VolSpread")
+    p.add_argument(
+        "--execution-size",
+        required=True,
+        dest="execution_size",
+        help="Execution size matching the MarketPrice partition to read from, e.g. 0.002.",
+    )
+    return p
+
+
+def _register_leadlag(sub: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    meta = _DATASET_META["LeadLag"]
+    p = sub.add_parser(
+        "LeadLag",
+        help=meta["help"],
+        description=meta["description"],
+        epilog=f"Example:\n  {meta['example']}",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p.add_argument("--pair", required=True, help="Asset pair key: btc, eth, xrp, sol")
+    p.add_argument("--start", required=True, help="Start date YYYY-MM-DD")
+    p.add_argument("--end", help="End date YYYY-MM-DD (defaults to --start if omitted)")
+    return p
+
+
 def register_cli(parser: argparse.ArgumentParser):
     p = parser.add_parser(
         "populate",
         help="Write parquet data from raw sources or derived computations (idempotent)",
         description=(
             "Populate parquet datasets from raw msgpack files (bronze) or by deriving\n"
-            "metrics from already-populated bronze data (silver).\n\n"
+            "metrics from already-populated bronze data (silver/gold).\n\n"
             "All commands are idempotent — safe to re-run. Later dates do not affect earlier ones.\n"
-            "Run 'python cli.py scan' after populating to update the manifest."
+            "Run 'python cli.py scan' after populating to update the manifest.\n\n"
+            "Data flow:\n"
+            "  bronze → MarketPrice → VolSpread\n"
+            "  bronze → BookState / BookChange / TradeAggression\n"
+            "  MarketPrice (both markets) → LeadLag"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -200,3 +294,5 @@ def register_cli(parser: argparse.ArgumentParser):
     _register_dataset_single_market(sub, "BookState").set_defaults(func=execute_single_market)
     _register_dataset_single_market(sub, "TradeAggression").set_defaults(func=execute_single_market)
     _register_market_price(sub).set_defaults(func=execute_single_market)
+    _register_volspread(sub).set_defaults(func=execute_volspread)
+    _register_leadlag(sub).set_defaults(func=execute_leadlag)
