@@ -94,7 +94,7 @@ def execute_plot_volspread(args) -> None:
     df["dt"] = pd.to_datetime(df["ts"], unit="s")
 
     fig, ax = plt.subplots(figsize=(14, 5))
-    ax.plot(df["dt"], df["volatility_ema"], label="volatility_ema", linewidth=0.8, color="#e74c3c", alpha=0.85)
+    ax.plot(df["dt"], df["volatility"], label="volatility", linewidth=0.8, color="#e74c3c", alpha=0.85)
     ax.plot(df["dt"], df["spread_pct_ema"], label="spread_pct_ema", linewidth=0.8, color="#3498db", alpha=0.85)
     ax.set_title(f"VolSpread — {args.exchange} {args.symbol} | {args.param_id}\n{args.start} → {args.end}")
     ax.set_xlabel("Time")
