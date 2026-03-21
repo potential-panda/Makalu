@@ -20,6 +20,8 @@ def _volspread_base(exchange: str, symbol: str) -> Path:
 
 
 def _discover_execution_size(sym_dir: Path, requested: str | None) -> "Path | None":
+    if not sym_dir.exists():
+        return None
     if requested:
         d = sym_dir / f"execution_size={requested}"
         return d if d.exists() else None
@@ -28,12 +30,24 @@ def _discover_execution_size(sym_dir: Path, requested: str | None) -> "Path | No
 
 
 def execute_list_volspread(args) -> None:
-    """List available param_ids for VolSpread (called when --list-params is set)."""
+    """List available param_ids for VolSpread (called when --list-params is set).
+
+    Always exits 0 and returns JSON. Returns {"param_ids": [], "needs_populate": true}
+    when no data exists so the agent can trigger a populate flow.
+    """
     sym_dir = _volspread_base(args.exchange, args.symbol)
     es_dir = _discover_execution_size(sym_dir, getattr(args, "execution_size", None))
     if es_dir is None:
-        print(json.dumps({"error": f"No VolSpread data for {args.exchange} {args.symbol}"}))
-        sys.exit(1)
+        # No data on disk — signal the agent to populate first
+        print(json.dumps({
+            "param_ids": [],
+            "needs_populate": True,
+            "message": (
+                f"No VolSpread data found for {args.exchange} {args.symbol}. "
+                "Run data-check then populate VolSpread (requires MarketPrice first)."
+            ),
+        }))
+        return
     param_ids = sorted(
         p.name.split("=", 1)[1]
         for p in es_dir.iterdir()
