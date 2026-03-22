@@ -10,13 +10,7 @@ LOG = getLogger(__name__)
 
 
 def _volspread_base(exchange: str, symbol: str) -> Path:
-    return (
-        Path(sys_env.PARQUET_ROOT_DIR)
-        / "gold"
-        / "dataset=VolSpread"
-        / f"exchange={exchange}"
-        / f"symbol={symbol}"
-    )
+    return Path(sys_env.PARQUET_ROOT_DIR) / "gold" / "dataset=VolSpread" / f"exchange={exchange}" / f"symbol={symbol}"
 
 
 def _discover_execution_size(sym_dir: Path, requested: str | None) -> "Path | None":
@@ -39,25 +33,28 @@ def execute_list_volspread(args) -> None:
     es_dir = _discover_execution_size(sym_dir, getattr(args, "execution_size", None))
     if es_dir is None:
         # No data on disk — signal the agent to populate first
-        print(json.dumps({
-            "param_ids": [],
-            "needs_populate": True,
-            "message": (
-                f"No VolSpread data found for {args.exchange} {args.symbol}. "
-                "Run data-check then populate VolSpread (requires MarketPrice first)."
-            ),
-        }))
+        print(
+            json.dumps(
+                {
+                    "param_ids": [],
+                    "needs_populate": True,
+                    "message": (
+                        f"No VolSpread data found for {args.exchange} {args.symbol}. "
+                        "Run data-check then populate VolSpread (requires MarketPrice first)."
+                    ),
+                }
+            )
+        )
         return
     param_ids = sorted(
-        p.name.split("=", 1)[1]
-        for p in es_dir.iterdir()
-        if p.is_dir() and p.name.startswith("param_id=")
+        p.name.split("=", 1)[1] for p in es_dir.iterdir() if p.is_dir() and p.name.startswith("param_id=")
     )
     print(json.dumps({"param_ids": param_ids, "execution_size": es_dir.name.split("=", 1)[1]}))
 
 
 def execute_plot_volspread(args) -> None:
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.dates as mdates
     import matplotlib.pyplot as plt
@@ -71,7 +68,11 @@ def execute_plot_volspread(args) -> None:
 
     param_dir = es_dir / f"param_id={args.param_id}"
     if not param_dir.exists():
-        print(json.dumps({"error": f"param_id '{args.param_id}' not found. Run with --list-params to see available values."}))
+        print(
+            json.dumps(
+                {"error": f"param_id '{args.param_id}' not found. Run with --list-params to see available values."}
+            )
+        )
         sys.exit(1)
 
     dfs = []
@@ -132,7 +133,9 @@ def register_cli(parser: argparse.ArgumentParser) -> None:
     p.add_argument("--symbol", required=True)
     p.add_argument("--start", help="Start date YYYY-MM-DD")
     p.add_argument("--end", help="End date YYYY-MM-DD")
-    p.add_argument("--execution-size", dest="execution_size", help="Execution size partition (auto-discovered if omitted)")
+    p.add_argument(
+        "--execution-size", dest="execution_size", help="Execution size partition (auto-discovered if omitted)"
+    )
     p.add_argument("--param-id", dest="param_id", help="param_id partition value (required unless --list-params)")
     p.add_argument("--output", help="Output PNG file path (required unless --list-params)")
     p.add_argument("--list-params", action="store_true", help="List available param_ids and exit")
@@ -145,7 +148,9 @@ def _dispatch(args) -> None:
             execute_list_volspread(args)
         else:
             if not args.param_id:
-                print(json.dumps({"error": "VolSpread requires --param-id. Use --list-params to see available values."}))
+                print(
+                    json.dumps({"error": "VolSpread requires --param-id. Use --list-params to see available values."})
+                )
                 sys.exit(1)
             if not args.output:
                 print(json.dumps({"error": "--output is required"}))
