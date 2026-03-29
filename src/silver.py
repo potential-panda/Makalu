@@ -10,7 +10,7 @@ from qate.util.dt_range import DtRange
 
 from feature_engineering.volatility import VolSpreadConfig
 from labeling.triple_barrier import TripleBarrierConfig
-from lead_lag.lead_lag import LEAD_LAG_CONFIG_MID, LEAD_LAG_CONFIG_NEARHFT
+from lead_lag.lead_lag import LEAD_LAG_CONFIG_MID, LEAD_LAG_CONFIG_NEARHFT, LEAD_LAG_CONFIG_FAR
 from pipeline.execution_price_derived_steps import VolSpreadStep
 from pipeline.features import (
     BookChangeFeatureStep,
@@ -21,6 +21,7 @@ from pipeline.features import (
     PostprocessAndSaveStep,
     TradeAggressionFeatureStep,
     TrendFeatureStep,
+    VolatilityFeatureStep,
 )
 from pipeline.features.stage import FeatureStage
 from pipeline.features.target import FeatureTarget
@@ -158,6 +159,21 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
             .step(PostprocessAndSaveStep())
         )
 
+    if "Feature_" + FeatureTarget.ORION in run_stages:
+        # Orion is a meta-regime filter operating on range-bar close timestamps.
+        # Windows are chosen to cover the 5m–2h regime-detection horizon from the spec.
+        pipeline.stage(
+            FeatureStage(market_lead, EXECUTION_SIZE.get(market_lead.symbol), target=FeatureTarget.ORION)
+            .step(TradeAggressionFeatureStep(windows=["300s", "1800s"], rolling_windows=["300s", "1800s", "7200s"]))
+            .step(OrderBookStateFeatureStep(depth_levels=[5, 10, 20], windows=["300s", "1800s"]))
+            .step(BookChangeFeatureStep(depth_levels=[5, 10, 20], rolling_windows=["300s", "1800s", "7200s"]))
+            .step(ExecutionPriceFeatureStep(rolling_windows=["300s", "1800s", "7200s"]))
+            .step(VolatilityFeatureStep(windows=["300s", "1800s", "7200s"]))
+            .step(TrendFeatureStep(windows=["300s", "1800s", "7200s"]))
+            .step(LoadLeadLagStep(market_lag, LEAD_LAG_CONFIG_FAR))
+            .step(PostprocessAndSaveStep())
+        )
+
     if "Label" in run_stages:
         pipeline.stage(
             LabelingStage(market_lag, EXECUTION_SIZE.get(market_lag.symbol)).step(
@@ -189,6 +205,7 @@ ALL_STEPS = [
     "LeadLag",
     "Feature_" + FeatureTarget.NEAR_HFT,  # Feature_NearHFT
     "Feature_" + FeatureTarget.MID,  # Feature_MID
+    "Feature_" + FeatureTarget.ORION,  # Feature_Orion
     "Label",
 ]
 
