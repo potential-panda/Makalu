@@ -28,6 +28,8 @@ SUBCOMMANDS
               Run once after populate to keep the manifest in sync.
   evict       DESTRUCTIVE. Delete files that exceed the retention policy.
               Always dry-run by default; requires --apply to delete.
+  grafana-export WRITE. Push a date range of parquet data to InfluxDB and
+              return a Grafana dashboard URL. JSON output: {grafana_url, ...}.
 
 TYPICAL WORKFLOW
 ----------------
@@ -57,7 +59,7 @@ from qate.env import sys_env
 from qate.env.env import Env
 from qate.env.env_name import EnvName
 
-from makalu.cli import data_check, evict, plot, populate, scan
+from makalu.cli import data_check, evict, grafana_export, plot, populate, scan
 
 ENV_NAME = EnvName.LUIGI_MARIO
 
@@ -82,6 +84,7 @@ def main():
     data_check.register_cli(sub)
     populate.register_cli(sub)
     plot.register_cli(sub)
+    grafana_export.register_cli(sub)
     scan.register_cli(sub)
     evict.register_cli(sub)
 
