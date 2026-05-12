@@ -22,14 +22,18 @@ DATA FLOW (must be populated in this order)
 
 SUBCOMMANDS
 -----------
-  data-check  READ-ONLY.  Inspect what data is on disk. Safe to run anytime.
-  populate    WRITE.      Convert or derive parquet files. Idempotent (safe to re-run).
-  scan        WRITE.      Register existing parquet files into the manifest database.
-              Run once after populate to keep the manifest in sync.
-  evict       DESTRUCTIVE. Delete files that exceed the retention policy.
-              Always dry-run by default; requires --apply to delete.
-  grafana-export WRITE. Push a date range of parquet data to InfluxDB and
-              return a Grafana dashboard URL. JSON output: {grafana_url, ...}.
+  data-check    READ-ONLY.  Inspect what parquet data is on disk. Safe to run anytime.
+  populate      WRITE.      Convert or derive parquet files. Idempotent (safe to re-run).
+  market-data   WRITE.      Download raw msgpack market data from S3 to /panda/market-data/.
+                Idempotent. Run this before 'populate bronze'.
+  metrics-data  WRITE.      Download 5-min trading metrics from S3 and push to InfluxDB.
+                Idempotent. Looks back up to 28 days for missing intervals.
+  scan          WRITE.      Register existing parquet files into the manifest database.
+                Run once after populate to keep the manifest in sync.
+  evict         DESTRUCTIVE. Delete files that exceed the retention policy.
+                Always dry-run by default; requires --apply to delete.
+  grafana-export WRITE.     Push a date range of parquet data to InfluxDB and
+                return a Grafana dashboard URL. JSON output: {grafana_url, ...}.
 
 TYPICAL WORKFLOW
 ----------------
@@ -59,7 +63,7 @@ from qate.env import sys_env
 from qate.env.env import Env
 from qate.env.env_name import EnvName
 
-from makalu.cli import data_check, evict, grafana_export, plot, populate, scan
+from makalu.cli import data_check, evict, grafana_export, market_data, metrics_data, plot, populate, scan
 
 ENV_NAME = EnvName.LUIGI_MARIO
 
@@ -83,6 +87,8 @@ def main():
 
     data_check.register_cli(sub)
     populate.register_cli(sub)
+    market_data.register_cli(sub)
+    metrics_data.register_cli(sub)
     plot.register_cli(sub)
     grafana_export.register_cli(sub)
     scan.register_cli(sub)

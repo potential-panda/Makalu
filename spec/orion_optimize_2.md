@@ -278,6 +278,27 @@ The Strategy State feature group requires a separate input DataFrame produced by
 | `sar_direction` | int | SAR indicator direction at bar close: `+1` = long, `-1` = short |
 | `trade_executed` | bool | Whether a trade entry or exit occurred at this bar close |
 
+For getting above values, please have a look at below 2 places:
+1) for the data points when traded was executed
+
+/home/lulurun/workspace/Himalaya/src/himalaya/bt/result_q.py L110-L123
+- decision_ts -> pnl_upodate.open_ts
+- equity -> equity
+- pnl_increment -> pnl_return or pnl_inc
+- sar_direction -> No such field, but should be able to infer from the `side`
+- trade_executed -> for every pnl_update object, the trade_executed should be True
+
+This data is saved in Backtest_Pnl parquet file
+
+2) for other data points when a bar is closed
+
+/home/lulurun/workspace/Himalaya/src/himalaya/bt/result_q.py L63-L74
+Not implementated yet. Please read the comment and complete the code.
+The data should be saved in Backtest_Bars parquet file
+
+Noth of the 2 datasets use trade.get_ts() as timestamp, can be joined.
+
+
 Derived features computed from `strategy_df`:
 
 | Feature | Derivation |
