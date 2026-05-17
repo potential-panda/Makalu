@@ -74,6 +74,10 @@ See [doc/spec.md](doc/spec.md) for comprehensive specification including:
 - ML feature engineering guide
 - Label computation strategies
 
+Dataset reference files owned by Makalu:
+- `doc/catalog.yaml` — dataset inventory, layer, grain, and partition columns
+- `doc/dataset_definitions.md` — column-level dataset definitions
+
 ## Grafana Dashboards
 
 Pre-configured dashboards in `grafana/`:

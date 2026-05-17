@@ -1,0 +1,399 @@
+# Dataset Definitions
+
+Formal definitions for every metric, feature, and label in the data warehouse.
+This is the semantic layer the LLM query interface relies on.
+All column names used in queries must have an entry here.
+
+**Notation**
+- `EPS` = 1e-12 (division guard)
+- `mid` = `(best_bid + best_ask) / 2`
+- `bps` = basis points = × 10000
+- Rolling windows are in seconds unless stated otherwise
+
+---
+
+## Bronze Layer
+
+Raw structured data. No derived analytics.
+
+### dataset=Trade
+
+Source: msgpack trade stream
+Grain: per trade
+
+| Column | Definition |
+|--------|------------|
+| `ts` | Unix timestamp (seconds, float) |
+| `side` | 0 = BUY, 1 = SELL |
+| `price` | Trade price |
+| `size` | Trade quantity |
+
+---
+
+### dataset=OrderBook
+
+Source: msgpack order book snapshots
+Grain: per order book update
+
+| Column | Definition |
+|--------|------------|
+| `ts` | Unix timestamp (seconds, float) |
+| `bid{i}_price` | Price of i-th bid level (i = 0..19, 0 = best) |
+| `bid{i}_qty` | Quantity at i-th bid level |
+| `ask{i}_price` | Price of i-th ask level (i = 0..19, 0 = best) |
+| `ask{i}_qty` | Quantity at i-th ask level |
+
+---
+
+### dataset=BookChange
+
+Source: OrderBook (diff between consecutive snapshots)
+Grain: per order book update
+
+| Column | Definition |
+|--------|------------|
+| `ts` | Unix timestamp (seconds, float) |
+| `delta_sec` | Time elapsed since previous snapshot |
+| `best_bid_reset_k{k}` | 1 if best bid changed within top-k levels, else 0 |
+| `best_ask_reset_k{k}` | 1 if best ask changed within top-k levels, else 0 |
+| `delta_depth_bid_k{k}` | Change in total bid quantity within top-k levels |
+| `delta_depth_ask_k{k}` | Change in total ask quantity within top-k levels |
+| `delta_depth_bid_rate_k{k}` | `delta_depth_bid_k{k} / delta_sec` |
+| `delta_depth_ask_rate_k{k}` | `delta_depth_ask_k{k} / delta_sec` |
+| `pull_bid_rate_k{k}` | Rate of bid-side quantity removed per second within top-k |
+| `pull_ask_rate_k{k}` | Rate of ask-side quantity removed per second within top-k |
+| `refill_bid_rate_k{k}` | Rate of bid-side quantity added per second within top-k |
+| `refill_ask_rate_k{k}` | Rate of ask-side quantity added per second within top-k |
+
+---
+
+### dataset=BookState
+
+Source: OrderBook
+Grain: per order book update
+
+| Column | Definition |
+|--------|------------|
+| `ts` | Unix timestamp (seconds, float) |
+| `best_bid` | Best bid price |
+| `best_ask` | Best ask price |
+| `best_mid` | `(best_bid + best_ask) / 2` |
+| `best_spread` | `best_ask - best_bid` |
+| `best_spread_bps` | `best_spread / best_mid * 10000` |
+| `vol_imb_k{k}` | Volume imbalance within top-k levels: `(bid_qty - ask_qty) / (bid_qty + ask_qty + EPS)` |
+| `weighted_imb_k{k}` | Price-weighted imbalance within top-k levels |
+| `depth_imb_{rate_bps}bps` | Depth imbalance at price distance `rate_bps` bps from mid |
+| `microprice_k{k}` | `(bid_qty * ask_price + ask_qty * bid_price) / (bid_qty + ask_qty)` within top-k levels |
+
+---
+
+## Silver Layer
+
+Point-in-time derived metrics. No rolling windows.
+
+### dataset=MarketPrice
+
+Source: OrderBook
+Grain: per order book update
+Partitioned by: `exchange`, `symbol`, `execution_size`
+
+`execution_size` = notional quantity used to walk the book (e.g. 150 = 150 units).
+
+| Column | Definition |
+|--------|------------|
+| `ts` | Unix timestamp (seconds, float) |
+| `bid` | Effective bid price after consuming `execution_size` on the bid side |
+| `ask` | Effective ask price after consuming `execution_size` on the ask side |
+| `mid` | `(bid + ask) / 2` |
+| `spread` | `ask - bid` |
+| `spread_bps` | `spread / mid * 10000` |
+
+---
+
+### dataset=TradeAggression
+
+Source: Trade stream
+Grain: per trade, with rolling window aggregations attached
+Windows: multiple (e.g. 1s, 5s, 10s — parameterised per run)
+
+| Column | Definition |
+|--------|------------|
+| `ts` | Unix timestamp (seconds, float) |
+| `buy_qty_{w}` | Sum of buy trade quantities over window `w` |
+| `sell_qty_{w}` | Sum of sell trade quantities over window `w` |
+| `buy_count_{w}` | Count of buy trades over window `w` |
+| `sell_count_{w}` | Count of sell trades over window `w` |
+| `total_qty_{w}` | `buy_qty_{w} + sell_qty_{w}` |
+| `total_count_{w}` | `buy_count_{w} + sell_count_{w}` |
+| `imbalance_qty_{w}` | `buy_qty_{w} - sell_qty_{w}` |
+| `imbalance_count_{w}` | `buy_count_{w} - sell_count_{w}` |
+| `qty_per_sec_{w}` | `total_qty_{w} / w` |
+| `trades_per_sec_{w}` | `total_count_{w} / w` |
+| `buy_qty_per_sec_{w}` | `buy_qty_{w} / w` |
+| `sell_qty_per_sec_{w}` | `sell_qty_{w} / w` |
+| `avg_trade_size_{w}` | `total_qty_{w} / (total_count_{w} + EPS)` |
+| `vwap_{w}` | Volume-weighted average price over window `w` |
+| `vwap_buy_{w}` | VWAP of buy trades over window `w` |
+| `vwap_sell_{w}` | VWAP of sell trades over window `w` |
+| `net_flow_{w}` | `buy_qty_{w} - sell_qty_{w}` (signed volume) |
+| `buy_sell_ratio_{w}` | `buy_qty_{w} / (sell_qty_{w} + EPS)` |
+| `max_trade_size_{w}` | Largest single trade size in window `w` |
+| `burst_flag_{w}` | 1 if qty_per_sec exceeds burst threshold, else 0 |
+| `dominant_size_bucket_{w}` | Most frequent trade size bucket in window `w` |
+| `dominant_bucket_count_{w}` | Count of trades in dominant bucket |
+| `dominant_bucket_share_{w}` | `dominant_bucket_count_{w} / total_count_{w}` |
+
+---
+
+## Gold Layer
+
+Window-based and statistical signals. Building blocks for features.
+
+### dataset=Chart_{bar_type}
+
+Source: Trade stream
+Grain: per bar
+Bar types: `CANDLE` (time-based), `HEIKIN_ASHI`, `RANGE`
+Partitioned by: `exchange`, `symbol`, `param_id` (bar parameter, e.g. period in seconds)
+
+| Column | Definition |
+|--------|------------|
+| `ts` | Bar close timestamp |
+| `open` | First trade price in bar |
+| `high` | Highest trade price in bar |
+| `low` | Lowest trade price in bar |
+| `close` | Last trade price in bar |
+| `volume` | Sum of trade quantities in bar |
+| `tick_count` | Number of trades in bar |
+
+For `HEIKIN_ASHI`, OHLC values are smoothed:
+- `ha_close = (open + high + low + close) / 4`
+- `ha_open = (prev_ha_open + prev_ha_close) / 2`
+- `ha_high = max(high, ha_open, ha_close)`
+- `ha_low = min(low, ha_open, ha_close)`
+
+---
+
+### dataset=LeadLag
+
+Source: MarketPrice (two markets)
+Grain: per sliding window step (stride = 1s–30s depending on config)
+Partitioned by: `market_a`, `market_b`, `param_id`
+
+Column naming pattern: `ll_{metric}_{window}s_{span}s`
+- `{window}` = cross-correlation window in seconds
+- `{span}` = EWM decay span in seconds
+
+| Column | Definition |
+|--------|------------|
+| `ts` | Window end timestamp |
+| `ll_corr_at_zero_{w}_{s}` | Cross-correlation between market_a and market_b returns at zero lag, clipped to [-1, 1] |
+| `ll_max_corr_{w}_{s}` | Maximum cross-correlation over all searched lags, clipped to [-1, 1] |
+| `ll_opt_lag_ms_{w}_{s}` | Lag in milliseconds at which max correlation occurs, normalised to [0, 1] by max_lag_ms |
+| `ll_alpha_gain_{w}_{s}` | `abs(max_corr) / (abs(corr_at_zero) + EPS)`, clipped to [1, 100]. > 1 means market_a leads at a non-zero lag |
+| `ll_alpha_gain_log_{w}_{s}` | `log(1 + alpha_gain)` |
+| `ll_drift_{w}_{s}` | Change in optimal lag from previous window, normalised by max_lag_ms |
+| `ll_lag_stability_lb{n}_{w}_{s}` | `log(1 + std(opt_lag[-n:]))` — rolling stability of the optimal lag over last n windows |
+
+---
+
+### dataset=VolSpread
+
+Source: MarketPrice
+Grain: resampled to 1s intervals
+Partitioned by: `exchange`, `symbol`, `execution_size`, `param_id`
+
+**SQL note:** always include `param_id` in the WHERE clause — without it the query scans every
+param combination and returns mixed results. Discover available values first:
+`SELECT DISTINCT param_id FROM volspread WHERE exchange='...' AND symbol='...' LIMIT 20`
+
+| Column | Definition |
+|--------|------------|
+| `ts` | Unix timestamp (seconds, float) |
+| `bid` | Effective bid execution price (carried from MarketPrice source) |
+| `ask` | Effective ask execution price (carried from MarketPrice source) |
+| `mid` | `(bid + ask) / 2` |
+| `spread` | `ask - bid` |
+| `spread_bps` | `spread / mid * 10000` |
+| `volatility` | `EMA(returns.rolling(window).std(), span=ema_span_sec)` where `returns = mid.pct_change(shift_periods)` |
+| `spread_pct_ema` | `EMA(spread / mid, span=ema_span_sec)` |
+
+---
+
+## Feature Layer
+
+ML-ready features. All columns are normalised and dimensionless unless stated.
+Grain: tick-level (aligned to order book updates).
+
+### dataset=Feature_Mid / dataset=Feature_NearHFT
+
+Source: BookState, BookChange, TradeAggression, MarketPrice, LeadLag
+Partitioned by: `exchange`, `symbol`
+
+#### Trade Aggression Features (`ta_`)
+
+| Column | Formula |
+|--------|---------|
+| `ta_vol_imbalance_ratio_{w}` | `(buy_qty - sell_qty) / (buy_qty + sell_qty + EPS)` |
+| `ta_count_imbalance_ratio_{w}` | `(buy_count - sell_count) / (buy_count + sell_count + EPS)` |
+| `ta_vwap_buy_sell_spread_bps_{w}` | `(vwap_buy - vwap_sell) / (vwap + EPS) * 10000` |
+| `ta_size_asymmetry_norm_{w}` | `(avg_buy_size - avg_sell_size) / (avg_buy_size + avg_sell_size + EPS)` |
+| `ta_buy_qty_share_{w}` | `buy_qty / (total_qty + EPS)` |
+| `ta_buy_count_share_{w}` | `buy_count / (total_count + EPS)` |
+| `ta_qty_count_divergence_{w}` | `ta_buy_qty_share_{w} - ta_buy_count_share_{w}` |
+| `ta_avg_size_zscore_{w}_{rw}` | Z-score of `avg_trade_size_{w}` over rolling window `rw` |
+| `ta_avg_size_pct_{w}_{rw}` | Percentile rank of `avg_trade_size_{w}` over rolling window `rw` |
+| `ta_qty_per_sec_zscore_{w}_{rw}` | Z-score of `qty_per_sec_{w}` over rolling window `rw` |
+| `ta_qty_per_sec_pct_{w}_{rw}` | Percentile rank of `qty_per_sec_{w}` over rolling window `rw` |
+| `ta_trades_per_sec_zscore_{w}_{rw}` | Z-score of `trades_per_sec_{w}` over rolling window `rw` |
+| `ta_trades_per_sec_pct_{w}_{rw}` | Percentile rank of `trades_per_sec_{w}` over rolling window `rw` |
+| `ta_imbalance_momentum_{w1}_{w2}` | `ta_vol_imbalance_ratio_{w1} - ta_vol_imbalance_ratio_{w2}` (short minus longer window) |
+| `ta_imbalance_sign_agree_{w1}_{w2}` | `1` if `sign(ratio_{w1}) == sign(ratio_{w2})`, else `0` |
+| `ta_imbalance_sign_agree_all` | `1` if all three windows agree on sign |
+| `ta_imbalance_strengthening_{w1}_{w2}` | `1` if `abs(ratio_{w1}) > abs(ratio_{w2})` (short window stronger) |
+| `ta_strong_buy_signal` | `(ratio_w1 > 0.3) & (all windows agree) & (short window strengthening)` |
+| `ta_strong_sell_signal` | `(ratio_w1 < -0.3) & (all windows agree) & (short window strengthening)` |
+| `ta_exhaustion_signal` | `(abs(ratio_w3) > 0.3) & (short window weakening) & (signs agree w1, w3)` |
+| `ta_reversal_signal` | `(abs(ratio_w3) > 0.3) & (sign(w1) != sign(w3))` |
+
+#### Order Book State Features (`bs_`)
+
+| Column | Formula |
+|--------|---------|
+| `bs_microprice_offset_bps_k{k}` | `(microprice_k{k} - best_mid) / (best_mid + EPS) * 10000` |
+| `bs_imbalance_gradient` | `vol_imb_k{shallow} - vol_imb_k{mid}` |
+| `bs_imbalance_divergence` | `abs(vol_imb_k{shallow} - vol_imb_k{deep})` |
+| `bs_microprice_offset_norm` | `bs_microprice_offset_bps_k1 / (best_spread_bps + EPS)` |
+| `bs_spread_bps_mean_{rw}` | Rolling mean of `best_spread_bps` over `rw` |
+| `bs_spread_bps_std_{rw}` | Rolling std of `best_spread_bps` over `rw` |
+| `bs_vol_imb_k{k}_mean_{rw}` | Rolling mean of `vol_imb_k{k}` over `rw` |
+| `bs_vol_imb_k{k}_std_{rw}` | Rolling std of `vol_imb_k{k}` over `rw` |
+
+#### Book Change Features (`bc_`)
+
+| Column | Formula |
+|--------|---------|
+| `bc_delta_depth_imbalance_norm_k{k}` | `(delta_depth_bid - delta_depth_ask) / (abs(delta_depth_bid) + abs(delta_depth_ask) + EPS)` |
+| `bc_pull_imbalance_k{k}` | `(pull_bid_rate - pull_ask_rate) / (pull_bid_rate + pull_ask_rate + EPS)` |
+| `bc_refill_imbalance_k{k}` | `(refill_bid_rate - refill_ask_rate) / (refill_bid_rate + refill_ask_rate + EPS)` |
+| `bc_pull_refill_ratio_k{k}` | `(pull_bid_rate + pull_ask_rate) / (refill_bid_rate + refill_ask_rate + EPS)` |
+| `bc_total_pull_zscore_k{k}_{rw}` | Z-score of `pull_bid_rate + pull_ask_rate` over rolling window `rw` |
+| `bc_total_activity_zscore_k{k}_{rw}` | Z-score of `pull_bid_rate + pull_ask_rate + refill_bid_rate + refill_ask_rate` |
+| `bc_total_activity_pct_k{k}_{rw}` | Percentile rank of total book activity over `rw` |
+| `bc_pull_imbalance_gradient` | `bc_pull_imbalance_k{shallow} - bc_pull_imbalance_k{mid}` |
+| `bc_refill_imbalance_gradient` | `bc_refill_imbalance_k{shallow} - bc_refill_imbalance_k{mid}` |
+
+#### Execution Price Features (`ep_`)
+
+| Column | Formula |
+|--------|---------|
+| `ep_slippage_bid_bps` | `(best_bid - exec_bid) / (best_bid + EPS) * 10000` |
+| `ep_slippage_ask_bps` | `(exec_ask - best_ask) / (best_ask + EPS) * 10000` |
+| `ep_slippage_total_bps` | `ep_slippage_bid_bps + ep_slippage_ask_bps` |
+| `ep_slippage_zscore_{rw}` | Z-score of `ep_slippage_total_bps` over `rw` |
+| `ep_slippage_pct_{rw}` | Percentile rank of `ep_slippage_total_bps` over `rw` |
+| `ep_slippage_asymmetry` | `(ep_slippage_ask_bps - ep_slippage_bid_bps) / (ep_slippage_total_bps + EPS)` |
+| `ep_depth_quality` | `1 / (ep_slippage_total_bps + 1)` — higher = cheaper to execute |
+| `ep_exec_spread_bps` | `(exec_ask - exec_bid) / mid * 10000` — effective spread at execution size |
+| `ep_spread_expansion_bps` | `ep_exec_spread_bps - best_spread_bps` |
+| `ep_spread_expansion_ratio` | `ep_exec_spread_bps / (best_spread_bps + EPS)` |
+
+#### Trend Features (`tr_`)
+
+| Column | Formula |
+|--------|---------|
+| `tr_roc_{w}` | `mid / mid.shift(lookback) - 1` — rate of change over window `w` |
+| `tr_ema_spread_{fast}_{slow}` | `EWM(mid, span=fast) / EWM(mid, span=slow) - 1` |
+
+#### Volatility Features (`vo_`)
+
+| Column | Formula |
+|--------|---------|
+| `vo_realized_vol_{w}` | `mid.pct_change().rolling(w).std()` |
+| `vo_relative_spread_{w}` | `best_spread_bps / (vo_realized_vol_{w} * 10000 + EPS)` |
+
+#### Cross-Feature Interactions (`cf_`)
+
+| Column | Formula |
+|--------|---------|
+| `cf_vwap_offset_bps_{w}` | `(vwap_{w} - mid) / mid * 10000` |
+| `cf_sign_agree_trade_book` | `1` if `sign(ta_vol_imbalance_ratio_w1) == sign(bs_vol_imb_k1)` |
+| `cf_strong_agreement` | `(abs(ta_ratio_w1) > 0.3) & (abs(bs_vol_imb_k1) > 0.3) & cf_sign_agree_trade_book` |
+| `cf_trade_consuming_asks` | `(ta_ratio_w1 > 0.3) & (bc_pull_imbalance_k1 < -0.3)` — buys consuming ask liquidity |
+| `cf_trade_consuming_bids` | `(ta_ratio_w1 < -0.3) & (bc_pull_imbalance_k1 > 0.3)` — sells consuming bid liquidity |
+| `cf_consumption_alignment` | `ta_vol_imbalance_ratio_w1 * (-bc_pull_imbalance_k1)` |
+| `cf_absorption_bid` | `(ta_ratio_w1 < -0.3) & (bc_delta_depth_imbalance_norm_k1 >= 0)` — sells absorbed at bid |
+| `cf_absorption_ask` | `(ta_ratio_w1 > 0.3) & (bc_delta_depth_imbalance_norm_k1 <= 0)` — buys absorbed at ask |
+| `cf_absorption_strength` | `ta_vol_imbalance_ratio_w1 * (-bc_delta_depth_imbalance_norm_k1)` |
+| `cf_stable_wall_bid` | `(bs_vol_imb_k1 > 0.5) & (bc_best_bid_reset == 0)` |
+| `cf_stable_wall_ask` | `(bs_vol_imb_k1 < -0.5) & (bc_best_ask_reset == 0)` |
+| `cf_depth_quality_per_spread` | `ep_depth_quality / (best_spread_bps + EPS)` |
+| `cf_confirmation_score` | Mean of 4 sign agreement signals, range [-1, 1] |
+| `cf_signal_agreement` | `abs(cf_confirmation_score)` |
+| `cf_quality_weighted_signal` | `cf_confirmation_score * cf_signal_agreement * ep_depth_quality * (1 / (spread_bps + 1))` |
+| `cf_regime_trending` | Multi-factor: strong imbalance + momentum alignment + low spread |
+| `cf_regime_mean_reverting` | Multi-factor: high spread + absorption signals |
+| `cf_regime_volatile` | Multi-factor: high vol + large spread expansion |
+
+---
+
+## Research Layer
+
+Experiment outputs. Not canonical — may change between runs.
+
+### dataset=TripleBarrierLabel / dataset=TripleBarrierLabel_tmp
+
+Source: MarketPrice
+Grain: per entry point (sampled from execution price series)
+Partitioned by: `exchange`, `symbol`, `param_id`
+
+Barriers are dynamic, sized as multiples of `volatility_ema`:
+- Upper barrier: `entry_mid * (1 + barrier_multiplier * volatility_ema)`
+- Lower barrier: `entry_mid * (1 - barrier_multiplier * volatility_ema)`
+- Timeout: `timeout_sec`
+
+| Column | Definition |
+|--------|------------|
+| `ts` | Entry timestamp |
+| `label` | `1` = upper barrier hit first (win), `-1` = lower barrier hit first (loss), `0` = timeout |
+| `pnl` | `bid_exit - ask_entry` for long; `bid_entry - ask_exit` for short |
+| `volatility_ema` | `EMA(mid.pct_change().rolling(w).std(), span=s)` at entry time |
+| `spread_pct_ema` | `EMA(spread / mid, span=s)` at entry time |
+
+---
+
+### dataset=BuyLabel_tmp
+
+Source: MarketPrice
+Grain: per tick
+Partitioned by: `exchange`, `symbol`, `param_id`
+
+Barriers are spread-relative:
+- Profit-take: `entry_mid * (1 + pt_multiplier * spread_pct_ema)`
+- Stop-loss: `entry_mid * (1 - sl_multiplier * spread_pct_ema)`
+- Timeout: `timeout_sec`
+
+| Column | Definition |
+|--------|------------|
+| `ts` | Entry timestamp |
+| `label` | `1` = profit-take hit first (buy signal valid), `0` = stop-loss or timeout |
+| `buy_pnl` | `bid_exit - ask_entry` |
+| `spread_pct_ema` | `EMA(spread / mid, span=s)` at entry time |
+
+---
+
+### dataset=BacktestPnL
+
+Source: Himalaya backtest engine
+Grain: per trade fill
+Partitioned by: `strategy`, `exchange`, `symbol`, `variant`, `param_set_id`
+
+| Column | Definition |
+|--------|------------|
+| `ts` | Fill timestamp |
+| `side` | BUY or SELL |
+| `price` | Fill price |
+| `size` | Fill quantity |
+| `pnl` | Realised PnL on close |
+| `fee` | Exchange fee paid |
+| `settle_type` | OPEN or CLOSE |
