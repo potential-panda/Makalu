@@ -1,0 +1,47 @@
+{
+  "orion": {
+    "strategy_module_name": "orion",
+    "default_variant": "v601",
+    "asset_signal_map": {
+      "BTC": "BINANCE:BTC_USDT",
+      "ETH": "BINANCE:ETH_USDT",
+      "XRP": "BINANCE:XRP_USDT"
+    },
+    "order_size_by_asset": {
+      "BTC": 0.002,
+      "ETH": 0.2,
+      "XRP": 150
+    },
+    "magnifier": 5.0,
+    "data_requirements": {
+      "signal_datasets": ["Trade"],
+      "trading_datasets": ["OrderBook"]
+    },
+    "param_grid": [
+      {
+        "default_value": 0.02,
+        "factor": 1000,
+        "name": "acceleration",
+        "values": [0.02]
+      },
+      {
+        "default_value": 0.02,
+        "factor": 1000,
+        "name": "step",
+        "values": [0.02, 0.04]
+      },
+      {
+        "default_value": 0.2,
+        "factor": 1000,
+        "name": "maximum",
+        "values": [0.2]
+      },
+      {
+        "default_value": 0.0025,
+        "factor": 100000,
+        "name": "box_size_rate",
+        "values": [0.0015, 0.002, 0.0025, 0.003]
+      }
+    ]
+  }
+}
