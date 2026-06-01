@@ -1,0 +1,291 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_INFLUXDB",
+      "label": "InfluxDB",
+      "description": "",
+      "type": "datasource",
+      "pluginId": "influxdb",
+      "pluginName": "InfluxDB"
+    }
+  ],
+  "__requires": [
+    { "type": "grafana", "id": "grafana", "name": "Grafana", "version": "10.0.0" },
+    { "type": "panel", "id": "timeseries", "name": "Time series", "version": "" },
+    { "type": "panel", "id": "stat", "name": "Stat", "version": "" },
+    { "type": "datasource", "id": "influxdb", "name": "InfluxDB", "version": "" }
+  ],
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true, "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts", "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "gnetId": null,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "title": "Cross-exchange mid spread — GMO vs BITBANK (bps)",
+      "description": "Positive = GMO costlier. Green fill = buy BITBANK/sell GMO arb. Red = buy GMO/sell BITBANK arb.",
+      "type": "timeseries",
+      "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+          "query": "from(bucket: \"makalu_ArbSpot\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn: (r) => r[\"_measurement\"] == \"ArbSpot\") |> filter(fn: (r) => r[\"exchange_a\"] == \"GMO\" and r[\"exchange_b\"] == \"BITBANK\") |> filter(fn: (r) => r[\"symbol\"] == \"${symbol}\") |> filter(fn: (r) => r[\"_field\"] == \"cross_bps\" or r[\"_field\"] == \"arb_ab_bps\" or r[\"_field\"] == \"arb_ba_bps\") |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false) |> yield(name: \"mean\")"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line", "lineWidth": 1, "fillOpacity": 8,
+            "gradientMode": "none", "spanNulls": false,
+            "showPoints": "never", "lineInterpolation": "linear",
+            "axisCenteredZero": true
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "cross_bps" },
+            "properties": [
+              { "id": "displayName", "value": "mid spread (bps)" },
+              { "id": "color", "value": { "fixedColor": "#4a90d9", "mode": "fixed" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "arb_ab_bps" },
+            "properties": [
+              { "id": "displayName", "value": "buy BITBANK / sell GMO (bps)" },
+              { "id": "color", "value": { "fixedColor": "#27ae60", "mode": "fixed" } },
+              { "id": "custom.fillOpacity", "value": 20 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "arb_ba_bps" },
+            "properties": [
+              { "id": "displayName", "value": "buy GMO / sell BITBANK (bps)" },
+              { "id": "color", "value": { "fixedColor": "#e74c3c", "mode": "fixed" } },
+              { "id": "custom.fillOpacity", "value": 20 }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "title": "Cross-exchange mid spread — GMO vs COINCHECK (bps)",
+      "description": "Positive = GMO costlier.",
+      "type": "timeseries",
+      "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 9 },
+      "targets": [
+        {
+          "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+          "query": "from(bucket: \"makalu_ArbSpot\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn: (r) => r[\"_measurement\"] == \"ArbSpot\") |> filter(fn: (r) => r[\"exchange_a\"] == \"GMO\" and r[\"exchange_b\"] == \"COINCHECK\") |> filter(fn: (r) => r[\"symbol\"] == \"${symbol}\") |> filter(fn: (r) => r[\"_field\"] == \"cross_bps\" or r[\"_field\"] == \"arb_ab_bps\" or r[\"_field\"] == \"arb_ba_bps\") |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false) |> yield(name: \"mean\")"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line", "lineWidth": 1, "fillOpacity": 8,
+            "gradientMode": "none", "spanNulls": false,
+            "showPoints": "never", "lineInterpolation": "linear",
+            "axisCenteredZero": true
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "cross_bps" },
+            "properties": [
+              { "id": "displayName", "value": "mid spread (bps)" },
+              { "id": "color", "value": { "fixedColor": "#4a90d9", "mode": "fixed" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "arb_ab_bps" },
+            "properties": [
+              { "id": "displayName", "value": "buy COINCHECK / sell GMO (bps)" },
+              { "id": "color", "value": { "fixedColor": "#27ae60", "mode": "fixed" } },
+              { "id": "custom.fillOpacity", "value": 20 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "arb_ba_bps" },
+            "properties": [
+              { "id": "displayName", "value": "buy GMO / sell COINCHECK (bps)" },
+              { "id": "color", "value": { "fixedColor": "#e74c3c", "mode": "fixed" } },
+              { "id": "custom.fillOpacity", "value": 20 }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "title": "Cross-exchange mid spread — BITBANK vs COINCHECK (bps)",
+      "description": "Positive = BITBANK costlier.",
+      "type": "timeseries",
+      "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 18 },
+      "targets": [
+        {
+          "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+          "query": "from(bucket: \"makalu_ArbSpot\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn: (r) => r[\"_measurement\"] == \"ArbSpot\") |> filter(fn: (r) => r[\"exchange_a\"] == \"BITBANK\" and r[\"exchange_b\"] == \"COINCHECK\") |> filter(fn: (r) => r[\"symbol\"] == \"${symbol}\") |> filter(fn: (r) => r[\"_field\"] == \"cross_bps\" or r[\"_field\"] == \"arb_ab_bps\" or r[\"_field\"] == \"arb_ba_bps\") |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false) |> yield(name: \"mean\")"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line", "lineWidth": 1, "fillOpacity": 8,
+            "gradientMode": "none", "spanNulls": false,
+            "showPoints": "never", "lineInterpolation": "linear",
+            "axisCenteredZero": true
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "cross_bps" },
+            "properties": [
+              { "id": "displayName", "value": "mid spread (bps)" },
+              { "id": "color", "value": { "fixedColor": "#4a90d9", "mode": "fixed" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "arb_ab_bps" },
+            "properties": [
+              { "id": "displayName", "value": "buy COINCHECK / sell BITBANK (bps)" },
+              { "id": "color", "value": { "fixedColor": "#27ae60", "mode": "fixed" } },
+              { "id": "custom.fillOpacity", "value": 20 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "arb_ba_bps" },
+            "properties": [
+              { "id": "displayName", "value": "buy BITBANK / sell COINCHECK (bps)" },
+              { "id": "color", "value": { "fixedColor": "#e74c3c", "mode": "fixed" } },
+              { "id": "custom.fillOpacity", "value": 20 }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "title": "Arb opportunity % — GMO/BITBANK",
+      "description": "% of 1s windows where a true cross-exchange arb exists (before fees).",
+      "type": "stat",
+      "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 27 },
+      "targets": [
+        {
+          "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+          "query": "import \"contrib/tomhollingworth/events\"\nfrom(bucket: \"makalu_ArbSpot\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn: (r) => r[\"_measurement\"] == \"ArbSpot\") |> filter(fn: (r) => r[\"exchange_a\"] == \"GMO\" and r[\"exchange_b\"] == \"BITBANK\") |> filter(fn: (r) => r[\"symbol\"] == \"${symbol}\") |> filter(fn: (r) => r[\"_field\"] == \"arb_ab_bps\" or r[\"_field\"] == \"arb_ba_bps\") |> map(fn: (r) => ({r with _value: if r._value > 0.0 then 1.0 else 0.0})) |> mean() |> map(fn: (r) => ({r with _value: r._value * 100.0}))"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 10 },
+              { "color": "red", "value": 50 }
+            ]
+          }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["mean"] }, "orientation": "auto", "textMode": "auto", "colorMode": "background" }
+    },
+    {
+      "title": "Arb opportunity % — GMO/COINCHECK",
+      "type": "stat",
+      "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+      "gridPos": { "h": 4, "w": 8, "x": 8, "y": 27 },
+      "targets": [
+        {
+          "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+          "query": "from(bucket: \"makalu_ArbSpot\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn: (r) => r[\"_measurement\"] == \"ArbSpot\") |> filter(fn: (r) => r[\"exchange_a\"] == \"GMO\" and r[\"exchange_b\"] == \"COINCHECK\") |> filter(fn: (r) => r[\"symbol\"] == \"${symbol}\") |> filter(fn: (r) => r[\"_field\"] == \"arb_ab_bps\" or r[\"_field\"] == \"arb_ba_bps\") |> map(fn: (r) => ({r with _value: if r._value > 0.0 then 1.0 else 0.0})) |> mean() |> map(fn: (r) => ({r with _value: r._value * 100.0}))"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 10 },
+              { "color": "red", "value": 50 }
+            ]
+          }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["mean"] }, "orientation": "auto", "textMode": "auto", "colorMode": "background" }
+    },
+    {
+      "title": "Arb opportunity % — BITBANK/COINCHECK",
+      "type": "stat",
+      "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 27 },
+      "targets": [
+        {
+          "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+          "query": "from(bucket: \"makalu_ArbSpot\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn: (r) => r[\"_measurement\"] == \"ArbSpot\") |> filter(fn: (r) => r[\"exchange_a\"] == \"BITBANK\" and r[\"exchange_b\"] == \"COINCHECK\") |> filter(fn: (r) => r[\"symbol\"] == \"${symbol}\") |> filter(fn: (r) => r[\"_field\"] == \"arb_ab_bps\" or r[\"_field\"] == \"arb_ba_bps\") |> map(fn: (r) => ({r with _value: if r._value > 0.0 then 1.0 else 0.0})) |> mean() |> map(fn: (r) => ({r with _value: r._value * 100.0}))"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 10 },
+              { "color": "red", "value": 50 }
+            ]
+          }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["mean"] }, "orientation": "auto", "textMode": "auto", "colorMode": "background" }
+    }
+  ],
+  "refresh": "5m",
+  "schemaVersion": 37,
+  "style": "dark",
+  "tags": ["arb", "spot", "arbitrage", "flux"],
+  "templating": {
+    "list": [
+      {
+        "current": { "selected": true, "text": "XRP_SPOT", "value": "XRP_SPOT" },
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "name": "symbol",
+        "options": [
+          { "selected": true, "text": "XRP_SPOT", "value": "XRP_SPOT" },
+          { "selected": false, "text": "BTC_SPOT", "value": "BTC_SPOT" },
+          { "selected": false, "text": "ETH_SPOT", "value": "ETH_SPOT" }
+        ],
+        "query": "XRP_SPOT,BTC_SPOT,ETH_SPOT",
+        "skipUrlSync": false,
+        "type": "custom"
+      }
+    ]
+  },
+  "time": { "from": "now-7d", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Spot Arbitrage — GMO / BITBANK / COINCHECK",
+  "uid": "arb-spot",
+  "version": 1
+}

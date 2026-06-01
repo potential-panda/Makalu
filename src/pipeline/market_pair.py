@@ -10,6 +10,9 @@ MIN_EXECUTION_SIZE = {
     Symbol.ETH_USDT: "0.05",
     Symbol.XRP_USDT: "50",
     Symbol.SOL_USDT: "0.3",
+    Symbol.BTC_SPOT: "0.001",
+    Symbol.ETH_SPOT: "0.05",
+    Symbol.XRP_SPOT: "50",
 }
 
 EXECUTION_SIZE = {
@@ -21,6 +24,9 @@ EXECUTION_SIZE = {
     Symbol.ETH_USDT: "0.1",
     Symbol.XRP_USDT: "150",
     Symbol.SOL_USDT: "1",
+    Symbol.BTC_SPOT: "0.002",
+    Symbol.ETH_SPOT: "0.1",
+    Symbol.XRP_SPOT: "150",
 }
 
 LEAD_LAG_PAIRS = {
