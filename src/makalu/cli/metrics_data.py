@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 import msgpack
 import qate.env.sys_env as sys_env
 from qate.store.influx_store import InfluxdbStore, convert_to_point
-from qate.store.s3 import download
+from qate.store.s3 import download, list_files
 
 LOG = getLogger(__name__)
 
@@ -24,39 +24,21 @@ HOST_CONFIG = {
         "bucket": "panda-cc-orion-02",
         "envs": ["QASIM_TARIQ"],
     },
+    "pisces-01": {
+        "bucket": "panda-cc-pisces-01",
+        "envs": ["ASHLEY_XEON", "ATSUSHI_EGAWA"],
+    },
 }
 
 DEFAULT_HOSTS = list(HOST_CONFIG.keys())
 _TZ = ZoneInfo("Asia/Tokyo")
 
 
-def _intervals_since(start_str: str) -> list[str]:
-    """5-minute intervals from start_str (YYYYMMDD_HHMM) to now."""
-    start = datetime.strptime(start_str, "%Y%m%d_%H%M").replace(tzinfo=_TZ)
+def _current_interval() -> str:
+    """Return the in-progress 5-minute interval key (YYYYMMDD_HHMM) — skip this one."""
     now = datetime.now(_TZ)
-    result = []
-    current = start
-    while current <= now:
-        current += timedelta(minutes=5)
-        result.append(current.strftime("%Y%m%d_%H%M"))
-    return result
-
-
-def _last_date_str(env_dir: Path) -> str:
-    """Inspect local files to find the most-recent interval string."""
-    if not env_dir.exists():
-        return ""
-    files = sorted(env_dir.iterdir(), key=lambda p: p.stat().st_ctime, reverse=True)
-    for f in files:
-        if not f.name.endswith((".msgpack", ".msgpack__done")):
-            continue
-        try:
-            parts = f.name.split(".")[0].split("_")
-            if len(parts) >= 5:
-                return f"{parts[-2]}_{parts[-1]}"
-        except Exception:
-            continue
-    return ""
+    floored = now.replace(minute=(now.minute // 5) * 5, second=0, microsecond=0)
+    return floored.strftime("%Y%m%d_%H%M")
 
 
 def _load_file(writer, path: Path) -> int:
@@ -70,44 +52,50 @@ def _load_file(writer, path: Path) -> int:
     return count
 
 
-def _update_env(host: str, env_name: str, base_dir: Path) -> dict:
+def _update_env(host: str, env_name: str, base_dir: Path, client) -> dict:
     stats = {"downloaded": 0, "processed": 0, "skipped": 0}
     s3_bucket = HOST_CONFIG[host]["bucket"]
     env_dir = base_dir / s3_bucket
     env_dir.mkdir(parents=True, exist_ok=True)
 
-    client = sys_env.get_s3_client()
+    # Build set of already-local filenames (with and without __done suffix)
+    local = {
+        f.name.replace("__done", "")
+        for f in env_dir.iterdir()
+        if f.name.startswith(env_name + "_Metrics_")
+    }
 
-    last_dt = _last_date_str(env_dir)
-    lookback = (datetime.today() - timedelta(days=28)).strftime("%Y%m%d") + "_0000"
-    if not last_dt or lookback > last_dt:
-        last_dt = lookback
+    # List what actually exists in S3 for this env (one paginated call)
+    prefix = f"{env_name}_Metrics_"
+    s3_objects = list_files(client, s3_bucket, prefix=prefix)
+    current = _current_interval()
 
-    intervals = _intervals_since(last_dt)
-    LOG.info(f"{host}/{env_name}: {len(intervals)} intervals from {intervals[0]}")
-
-    # Download all but the last interval (may be incomplete)
-    for dt_str in intervals[:-1]:
-        s3_name = f"{env_name}_Metrics_{dt_str}.msgpack.bz2"
-        local = env_dir / s3_name[:-4]
-        done = env_dir / (s3_name[:-4] + "__done")
-        if local.exists() or done.exists():
+    to_download = []
+    for _key, objs in s3_objects.items():
+        s3_name = objs[0].name  # e.g. ENV_Metrics_YYYYMMDD_HHMM.msgpack.bz2
+        local_name = s3_name[:-4] if s3_name.endswith(".bz2") else s3_name
+        # skip current (may be incomplete) and already-local files
+        if current in s3_name or local_name in local:
             stats["skipped"] += 1
             continue
+        to_download.append(s3_name)
+
+    LOG.info(f"{host}/{env_name}: {len(to_download)} to download, {stats['skipped']} already local/current")
+
+    for s3_name in sorted(to_download):
         try:
             download(client, s3_bucket, s3_name, env_dir)
             stats["downloaded"] += 1
         except Exception as e:
-            LOG.warning(f"Not available {s3_bucket}/{s3_name}: {e}")
-            stats["skipped"] += 1
+            LOG.warning(f"Download failed {s3_bucket}/{s3_name}: {e}")
 
     # Push all unprocessed local files to InfluxDB
     influx = InfluxdbStore(sys_env.get_influxdb())
     writer = influx.create_writer(env_name, 4096, no_retention=True)
-    for f in sorted(env_dir.iterdir(), key=lambda p: p.stat().st_ctime, reverse=True):
+    for f in sorted(env_dir.iterdir()):
         if not f.is_file() or not f.name.endswith(".msgpack"):
             continue
-        if env_name not in f.name:
+        if not f.name.startswith(env_name + "_Metrics_"):
             continue
         try:
             stats["processed"] += _load_file(writer, f)
@@ -121,6 +109,7 @@ def _update_env(host: str, env_name: str, base_dir: Path) -> dict:
 def execute(args) -> None:
     base_dir = Path(DOWNLOAD_DIR)
     hosts = [args.host] if args.host else DEFAULT_HOSTS
+    client = sys_env.get_s3_client()
 
     totals = {"downloaded": 0, "processed": 0, "skipped": 0, "errors": 0}
 
@@ -132,7 +121,7 @@ def execute(args) -> None:
         for env_name in HOST_CONFIG[host]["envs"]:
             try:
                 LOG.info(f"Processing {host}/{env_name}")
-                stats = _update_env(host, env_name, base_dir)
+                stats = _update_env(host, env_name, base_dir, client)
                 totals["downloaded"] += stats["downloaded"]
                 totals["processed"] += stats["processed"]
                 totals["skipped"] += stats["skipped"]
@@ -155,7 +144,7 @@ def register_cli(sub) -> None:
             "for each production host and writes them to InfluxDB.\n\n"
             "Looks back up to 28 days for missing intervals.\n"
             "Already-downloaded or already-processed files are skipped.\n\n"
-            "Hosts  : orion-01 → QIN_TENGFEI, orion-02 → QASIM_TARIQ\n"
+            "Hosts  : orion-01 → QIN_TENGFEI, orion-02 → QASIM_TARIQ, pisces-01 → ASHLEY_XEON ATSUSHI_EGAWA\n"
             "Download dir: /panda/metrics-data/"
         ),
         epilog=(
