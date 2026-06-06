@@ -63,7 +63,7 @@ from qate.env import sys_env
 from qate.env.env import Env
 from qate.env.env_name import EnvName
 
-from makalu.cli import arb_spot, backtest, data_check, evict, grafana_export, infra, market_data, metrics_data, plot, populate, query, scan
+from makalu.cli import arb_spot, backtest, data_check, evict, grafana_export, infra, market_data, metrics_data, pisces_chart, plot, populate, query, scan
 
 ENV_NAME = EnvName.LUIGI_MARIO
 
@@ -96,6 +96,7 @@ def main():
     evict.register_cli(sub)
     query.register_cli(sub)
     backtest.register_cli(sub)
+    pisces_chart.register_cli(sub)
     infra.register_cli(sub)
 
     args = parser.parse_args()
