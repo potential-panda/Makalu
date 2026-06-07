@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Makalu — Data Warehouse</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- Topbar -->
+    <header id="topbar">
+      <div id="logo">
+        <span id="logo-dot"></span>
+        MAKALU
+        <span id="logo-sub">Data Warehouse</span>
+      </div>
+    </header>
+
+    <!-- Stats bar -->
+    <div id="stats-bar">
+      <div class="stat-item">
+        <span class="stat-label">RAW</span>
+        <span class="stat-value" id="stat-raw">—</span>
+        <span class="stat-count" id="stat-raw-count"></span>
+      </div>
+      <div class="stat-sep"></div>
+      <div class="stat-item">
+        <span class="stat-dot bronze-dot"></span>
+        <span class="stat-label">BRONZE</span>
+        <span class="stat-value" id="stat-bronze">—</span>
+      </div>
+      <div class="stat-sep"></div>
+      <div class="stat-item">
+        <span class="stat-dot silver-dot"></span>
+        <span class="stat-label">SILVER</span>
+        <span class="stat-value" id="stat-silver">—</span>
+      </div>
+      <div class="stat-sep"></div>
+      <div class="stat-item">
+        <span class="stat-dot gold-dot"></span>
+        <span class="stat-label">GOLD</span>
+        <span class="stat-value" id="stat-gold">—</span>
+      </div>
+    </div>
+
+    <!-- Main -->
+    <div id="main">
+      <!-- Sidebar -->
+      <aside id="sidebar">
+        <div class="panel-label">MARKET</div>
+        <select id="market-select">
+          <option value="">Loading…</option>
+        </select>
+
+        <div class="panel-label" style="margin-top:20px">LAYERS</div>
+        <div class="legend">
+          <div class="legend-row"><span class="leg-dot raw-dot"></span><span class="leg-name">Raw</span><span class="leg-count" id="leg-raw">—</span></div>
+          <div class="legend-row"><span class="leg-dot bronze-dot"></span><span class="leg-name">Bronze</span><span class="leg-count" id="leg-bronze">—</span></div>
+          <div class="legend-row"><span class="leg-dot silver-dot"></span><span class="leg-name">Silver</span><span class="leg-count" id="leg-silver">—</span></div>
+          <div class="legend-row"><span class="leg-dot gold-dot"></span><span class="leg-name">Gold</span><span class="leg-count" id="leg-gold">—</span></div>
+        </div>
+
+        <div class="panel-label" style="margin-top:20px">SELECTED RANGE</div>
+        <div id="range-display">
+          <div class="range-row">
+            <span class="range-label">From</span>
+            <input type="date" id="range-start" class="date-input" />
+          </div>
+          <div class="range-row">
+            <span class="range-label">To</span>
+            <input type="date" id="range-end" class="date-input" />
+          </div>
+          <div id="range-days"></div>
+        </div>
+
+        <div class="panel-label" style="margin-top:20px">OPERATIONS</div>
+        <div id="ops-panel">
+          <button class="op-btn" id="btn-download">Download Raw</button>
+          <div class="dataset-select-wrap">
+            <select id="populate-dataset">
+              <option value="bronze">bronze (Trade + OrderBook)</option>
+              <option value="BookChange">silver: BookChange</option>
+              <option value="BookState">silver: BookState</option>
+              <option value="TradeAggression">silver: TradeAggression</option>
+              <option value="MarketPrice">silver: MarketPrice</option>
+            </select>
+            <button class="op-btn op-btn-secondary" id="btn-populate">Populate</button>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Calendar + Jobs -->
+      <div id="content">
+        <div id="calendar-container">
+          <div id="calendar-header">
+            <button class="nav-btn" id="cal-prev">&#x2190;</button>
+            <span id="cal-month-label"></span>
+            <button class="nav-btn" id="cal-next">&#x2192;</button>
+          </div>
+          <div id="calendar-grid"></div>
+        </div>
+
+        <div id="jobs-section">
+          <div class="section-header">
+            <span class="panel-label">JOBS</span>
+            <button class="link-btn" id="jobs-refresh">refresh</button>
+          </div>
+          <div id="jobs-list">
+            <div class="jobs-empty">No jobs yet</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
