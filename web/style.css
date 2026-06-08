@@ -293,6 +293,28 @@ body {
   gap: 20px;
 }
 
+/* ─── Calendar spinner ────────────────────────────── */
+#calendar-spinner {
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#calendar-spinner::after {
+  content: '';
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--border-dim);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 /* ─── Calendar ────────────────────────────────────── */
 #calendar-container {
   background: var(--surface);

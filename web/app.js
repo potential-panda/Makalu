@@ -122,6 +122,10 @@ async function selectMarket(mkt, pushHash = true) {
   state.selectedMarket = mkt;
   document.getElementById('market-select').value = mkt.market;
   if (pushHash) location.hash = `#market/${encodeURIComponent(mkt.market)}`;
+
+  document.getElementById('calendar-spinner').style.display = 'flex';
+  document.getElementById('calendar-grid').style.display = 'none';
+
   try {
     const data = await apiFetch(`/api/availability?exchange=${mkt.exchange}&symbol=${mkt.symbol}`);
     if (data.loading) {
@@ -134,7 +138,11 @@ async function selectMarket(mkt, pushHash = true) {
     updateLegendCounts(data.stats);
     initCalendarView();
     renderCalendar();
+    document.getElementById('calendar-spinner').style.display = 'none';
+    document.getElementById('calendar-grid').style.display = 'grid';
   } catch (e) {
+    document.getElementById('calendar-spinner').style.display = 'none';
+    document.getElementById('calendar-grid').style.display = 'grid';
     console.error('availability error', e);
   }
 }
