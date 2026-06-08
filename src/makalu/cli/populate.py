@@ -55,7 +55,7 @@ def execute_single_market(args):
     LOG.info("Done.")
 
 
-BRONZE_BATCH_DAYS = 7  # days loaded into memory at once before flushing to parquet
+BRONZE_BATCH_DAYS = 3  # days loaded into memory at once before flushing to parquet
 
 
 def execute_bronze(args):
