@@ -162,3 +162,4 @@ ops/hosts
 public/
 *~
 models/
+.potential-panda.json
