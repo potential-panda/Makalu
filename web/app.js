@@ -49,16 +49,32 @@ let state = {
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 
+function getHashMarket() {
+  const m = location.hash.match(/^#market\/(.+)$/)
+  return m ? decodeURIComponent(m[1]) : null
+}
+
 async function boot() {
   loadGlobalStats();
   await loadMarkets();
   if (state.markets.length > 0) {
-    const sel = document.getElementById('market-select');
-    sel.value = state.markets[0].market;
-    await selectMarket(state.markets[0]);
+    const hashMarket = getHashMarket()
+    const initial = state.markets.find(m => m.market === hashMarket) || state.markets[0]
+    document.getElementById('market-select').value = initial.market
+    await selectMarket(initial)
   }
   loadJobs();
   setInterval(loadJobs, 8000);
+
+  window.addEventListener('hashchange', async () => {
+    const marketKey = getHashMarket()
+    if (!marketKey) return
+    const mkt = state.markets.find(m => m.market === marketKey)
+    if (mkt && mkt.market !== state.selectedMarket?.market) {
+      document.getElementById('market-select').value = mkt.market
+      await selectMarket(mkt, false)
+    }
+  })
 }
 
 // ─── Global stats ─────────────────────────────────────────────────────────────
@@ -102,14 +118,15 @@ async function loadMarkets() {
 
 // ─── Availability ─────────────────────────────────────────────────────────────
 
-async function selectMarket(mkt) {
+async function selectMarket(mkt, pushHash = true) {
   state.selectedMarket = mkt;
   document.getElementById('market-select').value = mkt.market;
+  if (pushHash) location.hash = `#market/${encodeURIComponent(mkt.market)}`;
   try {
     const data = await apiFetch(`/api/availability?exchange=${mkt.exchange}&symbol=${mkt.symbol}`);
     if (data.loading) {
       // Cache warming — retry in 3 seconds
-      setTimeout(() => selectMarket(mkt), 3000);
+      setTimeout(() => selectMarket(mkt, false), 3000);
       return;
     }
     state.availDates = data.dates;
