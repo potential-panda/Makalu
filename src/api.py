@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Makalu data warehouse HTTP API — port 9776."""
 
+import json
 import subprocess
 import sys
 import threading
@@ -18,8 +19,30 @@ CLI = Path(__file__).parent / "cli.py"
 
 app = Flask(__name__, static_folder=str(WEB_DIR))
 
+JOBS_DIR = Path("/panda-infra/makalu/jobs")
+JOBS_DIR.mkdir(parents=True, exist_ok=True)
+
 _jobs: dict[str, dict] = {}
 _jobs_lock = threading.Lock()
+
+
+def _save_job(job: dict) -> None:
+    try:
+        (JOBS_DIR / f"{job['id']}.json").write_text(json.dumps(job, indent=2))
+    except OSError:
+        pass
+
+
+def _load_jobs() -> None:
+    for f in sorted(JOBS_DIR.glob("*.json")):
+        try:
+            job = json.loads(f.read_text())
+            _jobs[job["id"]] = job
+        except (json.JSONDecodeError, KeyError, OSError):
+            pass
+
+
+_load_jobs()
 
 CACHE_TTL = 300  # 5 min
 
@@ -115,11 +138,14 @@ def _run_job(job_id: str, cmd: list[str]) -> None:
         _jobs[job_id]["returncode"] = proc.returncode
         _jobs[job_id]["status"] = "done" if proc.returncode == 0 else "failed"
         _jobs[job_id]["finished_at"] = time.time()
+        _save_job(_jobs[job_id])
 
 
 def _submit(job_id: str, job_meta: dict, cmd: list[str]) -> None:
     with _jobs_lock:
-        _jobs[job_id] = {**job_meta, "cmd": " ".join(cmd), "status": "pending", "log": [], "created_at": time.time()}
+        job = {**job_meta, "cmd": " ".join(cmd), "status": "pending", "log": [], "created_at": time.time()}
+        _jobs[job_id] = job
+        _save_job(job)
     threading.Thread(target=_run_job, args=(job_id, cmd), daemon=True).start()
 
 
