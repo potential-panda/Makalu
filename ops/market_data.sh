@@ -4,4 +4,4 @@
 set -euo pipefail
 export PATH="/home/lulurun/.pyenv/shims:/home/lulurun/.pyenv/bin:$PATH"
 cd /home/lulurun/workspace/Makalu
-exec python cli.py market-data "$@"
+exec python src/cli.py market-data "$@"

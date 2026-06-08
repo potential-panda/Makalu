@@ -4,4 +4,4 @@
 set -euo pipefail
 export PATH="/home/lulurun/.pyenv/shims:/home/lulurun/.pyenv/bin:$PATH"
 cd /home/lulurun/workspace/Makalu
-exec python cli.py metrics-data "$@"
+exec python src/cli.py metrics-data "$@"
