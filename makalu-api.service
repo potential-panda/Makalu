@@ -1,0 +1,16 @@
+[Unit]
+Description=Makalu Data Warehouse API Server
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/lulurun/workspace/Makalu
+Environment=PATH=/home/lulurun/.pyenv/versions/3.13.9/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/home/lulurun/.pyenv/versions/3.13.9/bin/python src/api.py
+Restart=always
+RestartSec=10
+StandardOutput=append:/panda-infra/makalu/api.log
+StandardError=append:/panda-infra/makalu/api.log
+
+[Install]
+WantedBy=default.target
