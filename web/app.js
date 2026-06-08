@@ -432,5 +432,11 @@ function escHtml(s) {
 
 document.getElementById('jobs-refresh').addEventListener('click', loadJobs);
 
+// Viewport width indicator
+const _vpEl = document.getElementById('viewport-indicator');
+function updateVp() { _vpEl.textContent = window.innerWidth + 'px'; }
+updateVp();
+window.addEventListener('resize', updateVp);
+
 // ─── Init ─────────────────────────────────────────────────────────────────────
 boot();
