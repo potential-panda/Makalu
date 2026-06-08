@@ -66,6 +66,11 @@ async function boot() {
 async function loadGlobalStats() {
   try {
     const stats = await apiFetch('/api/stats');
+    if (stats.loading) {
+      // Cache still warming — retry in 5 seconds
+      setTimeout(loadGlobalStats, 5000);
+      return;
+    }
     document.getElementById('stat-raw').textContent = fmtBytes(stats.raw);
     document.getElementById('stat-raw-count').textContent = `${stats.raw_file_count} files`;
     document.getElementById('stat-bronze').textContent = fmtBytes(stats.bronze);
@@ -102,6 +107,11 @@ async function selectMarket(mkt) {
   document.getElementById('market-select').value = mkt.market;
   try {
     const data = await apiFetch(`/api/availability?exchange=${mkt.exchange}&symbol=${mkt.symbol}`);
+    if (data.loading) {
+      // Cache warming — retry in 3 seconds
+      setTimeout(() => selectMarket(mkt), 3000);
+      return;
+    }
     state.availDates = data.dates;
     state.availStats = data.stats;
     updateLegendCounts(data.stats);

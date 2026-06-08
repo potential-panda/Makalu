@@ -21,9 +21,45 @@ app = Flask(__name__, static_folder=str(WEB_DIR))
 _jobs: dict[str, dict] = {}
 _jobs_lock = threading.Lock()
 
+CACHE_TTL = 300  # 5 min
+
+# Stats cache
 _stats_cache: dict = {}
 _stats_cache_ts: float = 0
-STATS_CACHE_TTL = 300
+_stats_refreshing = False
+
+# Availability cache: key = "EXCHANGE_SYMBOL"
+_avail_cache: dict[str, dict] = {}
+_avail_cache_ts: dict[str, float] = {}
+_avail_refreshing: set[str] = set()
+
+
+def _refresh_stats() -> None:
+    global _stats_cache, _stats_cache_ts, _stats_refreshing
+    _stats_refreshing = True
+    try:
+        _stats_cache = global_stats()
+        _stats_cache_ts = time.time()
+    except Exception:
+        pass
+    finally:
+        _stats_refreshing = False
+
+
+def _refresh_avail(exchange: str, symbol: str) -> None:
+    key = f"{exchange}_{symbol}"
+    _avail_refreshing.add(key)
+    try:
+        _avail_cache[key] = availability(exchange, symbol)
+        _avail_cache_ts[key] = time.time()
+    except Exception:
+        pass
+    finally:
+        _avail_refreshing.discard(key)
+
+
+# Pre-warm stats cache in background on startup
+threading.Thread(target=_refresh_stats, daemon=True).start()
 
 
 # ── Data endpoints ────────────────────────────────────────────────────────────
@@ -39,17 +75,21 @@ def api_availability():
     symbol = request.args.get("symbol", "")
     if not exchange or not symbol:
         return jsonify({"error": "exchange and symbol required"}), 400
-    return jsonify(availability(exchange, symbol))
+    key = f"{exchange}_{symbol}"
+    if time.time() - _avail_cache_ts.get(key, 0) > CACHE_TTL and key not in _avail_refreshing:
+        threading.Thread(target=_refresh_avail, args=(exchange, symbol), daemon=True).start()
+    if key in _avail_cache:
+        return jsonify(_avail_cache[key])
+    return jsonify({"loading": True})
 
 
 @app.route("/api/stats")
 def api_stats():
-    global _stats_cache, _stats_cache_ts
-    if time.time() - _stats_cache_ts < STATS_CACHE_TTL and _stats_cache:
+    if time.time() - _stats_cache_ts > CACHE_TTL and not _stats_refreshing:
+        threading.Thread(target=_refresh_stats, daemon=True).start()
+    if _stats_cache:
         return jsonify(_stats_cache)
-    _stats_cache = global_stats()
-    _stats_cache_ts = time.time()
-    return jsonify(_stats_cache)
+    return jsonify({"loading": True})
 
 
 # ── Job runner ────────────────────────────────────────────────────────────────
@@ -154,4 +194,4 @@ def serve_web(path: str):
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=9776, debug=False)
+    app.run(host="0.0.0.0", port=9776, debug=False, threaded=True)
