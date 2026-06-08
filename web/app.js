@@ -134,6 +134,8 @@ function updateLegendCounts(stats) {
 const DOW = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
+let _dayHandlersAttached = false;
+
 function initCalendarView() {
   const dates = Object.keys(state.availDates).sort();
   if (dates.length === 0) return;
@@ -146,6 +148,10 @@ function initCalendarView() {
   if (m < 0) { m += 12; y--; }
   state.viewYear = y;
   state.viewMonth = m;
+  if (!_dayHandlersAttached) {
+    attachDayHandlers();
+    _dayHandlersAttached = true;
+  }
 }
 
 function renderCalendar() {
@@ -165,7 +171,18 @@ function renderCalendar() {
   label.textContent = `${MONTHS[first.month]} ${first.year}  ·  ${MONTHS[last.month]} ${last.year}`;
 
   grid.innerHTML = months.map(({ year, month }) => renderMonth(year, month)).join('');
-  attachDayHandlers();
+}
+
+// Update only range-related classes in-place — no HTML rebuild needed
+function updateRangeHighlight() {
+  const grid = document.getElementById('calendar-grid');
+  grid.querySelectorAll('.day-cell:not(.empty)').forEach(cell => {
+    const d = cell.dataset.date;
+    const inRange = state.rangeStart && state.rangeEnd && d >= state.rangeStart && d <= state.rangeEnd;
+    cell.classList.toggle('in-range',    !!inRange);
+    cell.classList.toggle('range-start', d === state.rangeStart);
+    cell.classList.toggle('range-end',   d === state.rangeEnd);
+  });
 }
 
 function renderMonth(year, month) {
@@ -253,7 +270,7 @@ function attachDayHandlers() {
     state.rangeStart = date;
     state.rangeEnd = date;
     updateRangeUI();
-    renderCalendar();
+    updateRangeHighlight();
   });
 
   grid.addEventListener('mouseover', e => {
@@ -268,7 +285,7 @@ function attachDayHandlers() {
       state.rangeEnd = date;
     }
     updateRangeUI();
-    renderCalendar();
+    updateRangeHighlight();
   });
 
   document.addEventListener('mouseup', () => { state.selecting = false; });
