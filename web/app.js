@@ -142,8 +142,8 @@ function initCalendarView() {
   const last = dates[dates.length - 1].split('-');
   state.viewYear = parseInt(last[0]);
   state.viewMonth = parseInt(last[1]) - 1;
-  // Back up one so we show the last 3 months centered
-  let m = state.viewMonth - 2;
+  // Back up one so the last month is on the right
+  let m = state.viewMonth - 1;
   let y = state.viewYear;
   if (m < 0) { m += 12; y--; }
   state.viewYear = y;
@@ -158,10 +158,10 @@ function renderCalendar() {
   const label = document.getElementById('cal-month-label');
   const grid  = document.getElementById('calendar-grid');
 
-  // Show 3 months starting from viewYear/viewMonth
+  // Show 2 months starting from viewYear/viewMonth
   const months = [];
   let y = state.viewYear, m = state.viewMonth;
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 2; i++) {
     months.push({ year: y, month: m });
     m++;
     if (m > 11) { m = 0; y++; }
@@ -307,7 +307,7 @@ function updateRangeUI() {
 // ─── Navigation ───────────────────────────────────────────────────────────────
 
 document.getElementById('cal-prev').addEventListener('click', () => {
-  let m = state.viewMonth - 3;
+  let m = state.viewMonth - 2;
   let y = state.viewYear;
   while (m < 0) { m += 12; y--; }
   state.viewMonth = m;
@@ -316,7 +316,7 @@ document.getElementById('cal-prev').addEventListener('click', () => {
 });
 
 document.getElementById('cal-next').addEventListener('click', () => {
-  let m = state.viewMonth + 3;
+  let m = state.viewMonth + 2;
   let y = state.viewYear;
   while (m > 11) { m -= 12; y++; }
   state.viewMonth = m;
