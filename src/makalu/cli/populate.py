@@ -55,37 +55,49 @@ def execute_single_market(args):
     LOG.info("Done.")
 
 
+BRONZE_BATCH_DAYS = 7  # days loaded into memory at once before flushing to parquet
+
+
 def execute_bronze(args):
     market = Market.from_str(f"{args.exchange}:{args.symbol}")
     dt_range = DtRange.from_strings(args.start, args.end)
+    dt_range = DtRange(dt_range._start_dt, dt_range._end_dt, TimeFormat.YYYYMMDD)
+    days = dt_range.days
 
+    n_batches = (len(days) + BRONZE_BATCH_DAYS - 1) // BRONZE_BATCH_DAYS
     LOG.info(f"Populating bronze: {market.id}  {args.start} → {args.end}")
     LOG.info(f"  Source : {sys_env.MARKET_DATA_DIR}")
     LOG.info(f"  Output : {sys_env.PARQUET_ROOT_DIR}")
-
-    loader = MarketDataStore(sys_env.MARKET_DATA_DIR).create_loader(
-        market,
-        event_types=None,  # load both trades and order books
-    )
-    dt_range = DtRange(dt_range._start_dt, dt_range._end_dt, TimeFormat.YYYYMMDD)
-    all_data = loader.batch_load_mt(dt_range, max_workers=8)
-    order_books, trades = partition_market_events(all_data)
-    LOG.info(f"  Loaded : {len(trades)} trades, {len(order_books)} order books")
+    LOG.info(f"  Days   : {len(days)} in {n_batches} batch(es) of {BRONZE_BATCH_DAYS}")
 
     parquet_store = ParquetStore(sys_env.PARQUET_ROOT_DIR)
-
     trade_store = parquet_store.create_trade(market)
-    for trade in trades:
-        trade_store.add_trade(trade)
-    trade_store.close()
-    LOG.info(f"  Wrote  : {len(trades)} trades")
-
     ob_store = parquet_store.create_order_book(market)
-    for ob in order_books:
-        ob_store.add_order_book(ob)
-    ob_store.close()
-    LOG.info(f"  Wrote  : {len(order_books)} order books")
+    total_trades = total_obs = 0
 
+    for batch_idx, i in enumerate(range(0, len(days), BRONZE_BATCH_DAYS)):
+        batch = days[i:i + BRONZE_BATCH_DAYS]
+        batch_range = DtRange.from_strings(batch[0], batch[-1])
+        batch_range = DtRange(batch_range._start_dt, batch_range._end_dt, TimeFormat.YYYYMMDD)
+
+        loader = MarketDataStore(sys_env.MARKET_DATA_DIR).create_loader(market, event_types=None)
+        all_data = loader.batch_load_mt(batch_range, max_workers=min(len(batch), 8))
+        order_books, trades = partition_market_events(all_data)
+        del all_data  # free before writing
+
+        for trade in trades:
+            trade_store.add_trade(trade)
+        for ob in order_books:
+            ob_store.add_order_book(ob)
+
+        total_trades += len(trades)
+        total_obs += len(order_books)
+        LOG.info(f"  Batch {batch_idx + 1}/{n_batches} ({batch[0]}..{batch[-1]}): {len(trades)} trades, {len(order_books)} order books")
+        del order_books, trades
+
+    trade_store.close()
+    ob_store.close()
+    LOG.info(f"  Wrote  : {total_trades} trades, {total_obs} order books")
     LOG.info("Done.")
 
 
