@@ -590,7 +590,7 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: #253040; }
 
 /* ─── Responsive ──────────────────────────────────── */
-@media (max-width: 900px) {
+@media (max-width: 1200px) {
   #calendar-grid { grid-template-columns: 1fr; }
   #main { flex-direction: column; height: auto; }
   #sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border-dim); }
