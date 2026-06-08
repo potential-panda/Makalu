@@ -175,7 +175,7 @@ if __name__ == "__main__":
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
-    env = Env.load_env(sys_env.ENV_DIR, ENV_NAME)
+    env = Env.load_env(sys_env.get_env_root_dir(), ENV_NAME)
     env.enable_multiprocess_logging = True
     env.visit()
 

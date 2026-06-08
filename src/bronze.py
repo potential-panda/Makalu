@@ -58,7 +58,7 @@ if __name__ == "__main__":
     market = Market.from_str(args.market)
     dt_range = DtRange.from_strings(args.from_dt, args.to_dt)
 
-    env = Env.load_env(sys_env.ENV_DIR, ENV_NAME)
+    env = Env.load_env(sys_env.get_env_root_dir(), ENV_NAME)
     env.enable_multiprocess_logging = True
     env.visit()
     main(market, dt_range, populate=args.populate)

@@ -185,7 +185,7 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
 
 
 def run_pipeline(args):
-    env = Env.load_env(sys_env.ENV_DIR, ENV_NAME)
+    env = Env.load_env(sys_env.get_env_root_dir(), ENV_NAME)
     env.enable_multiprocess_logging = True
     dt_range = DtRange.from_strings(args.from_dt, args.to_dt)
     market = Market.from_str(args.market)

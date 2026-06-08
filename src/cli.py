@@ -69,7 +69,7 @@ ENV_NAME = EnvName.LUIGI_MARIO
 
 
 def _setup_env() -> None:
-    env = Env(sys_env.ENV_DIR, ENV_NAME)
+    env = Env(sys_env.get_env_root_dir(), ENV_NAME)
     env.visit()
     # Also log to stdout so the agent subprocess can read LOG output
     stream_handler = logging.StreamHandler(sys.stdout)

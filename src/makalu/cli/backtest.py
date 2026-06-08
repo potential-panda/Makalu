@@ -21,7 +21,7 @@ def register_cli(subparsers) -> None:
 
 
 def run_setup(args) -> None:
-    runner = BacktestRunner(str(sys_env.ENV_DIR))
+    runner = BacktestRunner(str(sys_env.get_env_root_dir()))
     k = runner._knowledge.get(args.strategy)
     if k is None:
         print(f"Unknown strategy '{args.strategy}'. Known: {list(runner._knowledge)}")
@@ -56,6 +56,6 @@ def run_setup(args) -> None:
 
 
 def run_publish(args) -> None:
-    runner = BacktestRunner(str(sys_env.ENV_DIR))
+    runner = BacktestRunner(str(sys_env.get_env_root_dir()))
     count = runner._publish_run_logs(args.env)
     print(f"Published {count} run-log(s) from env '{args.env}'")
