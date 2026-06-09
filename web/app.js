@@ -405,8 +405,15 @@ function checkBronzeAvailable() {
 
 // ─── Operations ───────────────────────────────────────────────────────────────
 
-document.getElementById('btn-download').addEventListener('click', async () => {
+function disableFor(btn, ms = 3000) {
+  btn.disabled = true;
+  setTimeout(() => { btn.disabled = false; checkBronzeAvailable(); }, ms);
+}
+
+document.getElementById('btn-download').addEventListener('click', async (e) => {
   if (!state.rangeStart || !state.rangeEnd) { alert('Select a date range first'); return; }
+  const btn = e.currentTarget;
+  disableFor(btn);
   const mkt = state.selectedMarket;
   const market = mkt ? `${mkt.exchange}:${mkt.symbol}` : '';
   try {
@@ -421,10 +428,12 @@ document.getElementById('btn-download').addEventListener('click', async () => {
   }
 });
 
-document.getElementById('btn-populate').addEventListener('click', async () => {
+document.getElementById('btn-populate').addEventListener('click', async (e) => {
   if (!state.rangeStart || !state.rangeEnd) { alert('Select a date range first'); return; }
   const mkt = state.selectedMarket;
   if (!mkt) { alert('Select a market first'); return; }
+  const btn = e.currentTarget;
+  disableFor(btn);
   const dataset = document.getElementById('populate-dataset').value;
   try {
     const res = await apiFetch('/api/ops/populate', {
@@ -444,10 +453,12 @@ document.getElementById('btn-populate').addEventListener('click', async () => {
   }
 });
 
-document.getElementById('btn-backtest').addEventListener('click', async () => {
+document.getElementById('btn-backtest').addEventListener('click', async (e) => {
   const env = document.getElementById('backtest-env').value;
   if (!env) { alert('Select a backtest env first'); return; }
   if (!state.rangeStart || !state.rangeEnd) { alert('Select a date range first'); return; }
+  const btn = e.currentTarget;
+  disableFor(btn);
   try {
     const res = await apiFetch('/api/ops/backtest', {
       method: 'POST',
