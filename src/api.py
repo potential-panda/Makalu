@@ -41,6 +41,11 @@ def _load_jobs() -> None:
     for f in sorted(JOBS_DIR.glob("*.json")):
         try:
             job = json.loads(f.read_text())
+            # Jobs still marked "running" were interrupted by a server restart
+            if job.get("status") == "running":
+                job["status"] = "failed"
+                job["returncode"] = -1
+                f.write_text(json.dumps(job, indent=2))
             _jobs[job["id"]] = job
         except (json.JSONDecodeError, KeyError, OSError):
             pass
@@ -169,6 +174,10 @@ def _executor_loop() -> None:
     finally:
         with _executor_lock:
             _executor_running = False
+        # A job may have arrived between the last _next_pending() and clearing
+        # the flag — kick off a new executor to pick it up if so.
+        if _next_pending():
+            _ensure_executor()
 
 
 def _ensure_executor() -> None:
@@ -292,7 +301,8 @@ def api_ops_populate():
 @app.route("/api/jobs")
 def api_jobs():
     with _jobs_lock:
-        return jsonify(list(reversed(list(_jobs.values()))))
+        jobs = sorted(_jobs.values(), key=lambda j: j.get("created_at", 0), reverse=True)
+    return jsonify(jobs)
 
 
 @app.route("/api/jobs/<job_id>")
