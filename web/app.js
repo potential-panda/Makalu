@@ -287,33 +287,30 @@ function buildTooltip(iso, info) {
 function attachDayHandlers() {
   const grid = document.getElementById('calendar-grid');
 
-  grid.addEventListener('mousedown', e => {
+  grid.addEventListener('click', e => {
     const cell = e.target.closest('.day-cell');
     if (!cell || cell.classList.contains('empty')) return;
     const date = cell.dataset.date;
-    state.selecting = true;
-    state.rangeStart = date;
-    state.rangeEnd = date;
-    updateRangeUI();
-    updateRangeHighlight();
-  });
 
-  grid.addEventListener('mouseover', e => {
-    if (!state.selecting) return;
-    const cell = e.target.closest('.day-cell');
-    if (!cell || cell.classList.contains('empty')) return;
-    const date = cell.dataset.date;
-    if (date < state.rangeStart) {
-      state.rangeEnd = state.rangeStart;
+    if (!state.rangeStart) {
+      // First click — set from date
       state.rangeStart = date;
+      state.rangeEnd = date;
+    } else if (date < state.rangeStart) {
+      // Click before range — extend from date
+      state.rangeStart = date;
+    } else if (date > state.rangeEnd) {
+      // Click after range — extend to date
+      state.rangeEnd = date;
     } else {
+      // Click within range — reset to this single day
+      state.rangeStart = date;
       state.rangeEnd = date;
     }
+
     updateRangeUI();
     updateRangeHighlight();
   });
-
-  document.addEventListener('mouseup', () => { state.selecting = false; });
 }
 
 function updateRangeUI() {
