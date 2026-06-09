@@ -85,6 +85,35 @@ body {
   color: var(--text-muted);
 }
 
+/* ─── Market bar ─────────────────────────────────── */
+#market-bar {
+  position: sticky;
+  top: 54px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  padding: 8px 28px;
+  background: rgba(7, 10, 14, 0.95);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+}
+
+#market-bar #market-select {
+  width: 100%;
+  max-width: 480px;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 7px 12px;
+  color: var(--accent);
+  border-color: rgba(0, 220, 150, 0.3);
+  letter-spacing: 0.04em;
+}
+
+#market-bar #market-select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-glow);
+}
+
 /* ─── Stats bar ───────────────────────────────────── */
 #stats-bar {
   display: flex;
@@ -142,7 +171,7 @@ body {
 /* ─── Layout ──────────────────────────────────────── */
 #main {
   display: flex;
-  height: calc(100vh - 94px);
+  height: calc(100vh - 140px);
   overflow: hidden;
 }
 
@@ -616,6 +645,8 @@ body {
   #calendar-grid { grid-template-columns: 1fr; }
   #main { flex-direction: column; height: auto; }
   #sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border-dim); }
+  #market-bar #market-select { max-width: 100%; }
+  #main { height: auto; }
 }
 
 #viewport-indicator {
