@@ -16,6 +16,8 @@ from makalu.data_access import availability, global_stats, list_markets
 
 WEB_DIR = Path(__file__).parent.parent / "web"
 CLI = Path(__file__).parent / "cli.py"
+HIMALAYA_START_SH = Path("/home/lulurun/workspace/Himalaya/start.sh")
+BACKTEST_ENV_ROOT = Path.home() / "env" / "backtest"
 
 app = Flask(__name__, static_folder=str(WEB_DIR))
 
@@ -87,6 +89,7 @@ threading.Thread(target=_refresh_stats, daemon=True).start()
 
 # ── Data endpoints ────────────────────────────────────────────────────────────
 
+
 @app.route("/api/markets")
 def api_markets():
     return jsonify(list_markets())
@@ -117,14 +120,17 @@ def api_stats():
 
 # ── Job runner ────────────────────────────────────────────────────────────────
 
+
 def _run_job(job_id: str, cmd: list[str]) -> None:
     with _jobs_lock:
         _jobs[job_id]["status"] = "running"
         _jobs[job_id]["started_at"] = time.time()
 
     proc = subprocess.Popen(
-        cmd, cwd=str(CLI.parent.parent),
-        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        cmd,
+        cwd=str(CLI.parent.parent),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
         text=True,
     )
     lines: list[str] = []
@@ -149,7 +155,42 @@ def _submit(job_id: str, job_meta: dict, cmd: list[str]) -> None:
     threading.Thread(target=_run_job, args=(job_id, cmd), daemon=True).start()
 
 
+# ── Backtest endpoints ────────────────────────────────────────────────────────
+
+
+@app.route("/api/backtest/envs")
+def api_backtest_envs():
+    envs = []
+    if BACKTEST_ENV_ROOT.exists():
+        for d in sorted(BACKTEST_ENV_ROOT.iterdir()):
+            if d.is_dir() and (d / "trading.json").exists():
+                envs.append(d.name)
+    return jsonify(envs)
+
+
+@app.route("/api/ops/backtest", methods=["POST"])
+def api_ops_backtest():
+    data = request.json or {}
+    env = data.get("env", "")
+    start = data.get("start", "")
+    end = data.get("end", "")
+    optimize = data.get("optimize", True)
+    if not all([env, start, end]):
+        return jsonify({"error": "env, start, end required"}), 400
+    if not HIMALAYA_START_SH.exists():
+        return jsonify({"error": f"start.sh not found: {HIMALAYA_START_SH}"}), 500
+
+    cmd = [str(HIMALAYA_START_SH), "--env", env, "--from-dt", start, "--to-dt", end]
+    if optimize:
+        cmd.append("--optimize")
+
+    job_id = str(uuid.uuid4())[:8]
+    _submit(job_id, {"id": job_id, "type": "backtest", "label": f"backtest {env} {start}→{end}"}, cmd)
+    return jsonify({"job_id": job_id})
+
+
 # ── Operation endpoints ───────────────────────────────────────────────────────
+
 
 @app.route("/api/ops/download", methods=["POST"])
 def api_ops_download():
@@ -173,21 +214,34 @@ def api_ops_download():
 @app.route("/api/ops/populate", methods=["POST"])
 def api_ops_populate():
     data = request.json or {}
-    dataset  = data.get("dataset", "")
+    dataset = data.get("dataset", "")
     exchange = data.get("exchange", "")
-    symbol   = data.get("symbol", "")
-    start    = data.get("start", "")
-    end      = data.get("end", "")
+    symbol = data.get("symbol", "")
+    start = data.get("start", "")
+    end = data.get("end", "")
     if not all([dataset, exchange, symbol, start, end]):
         return jsonify({"error": "dataset, exchange, symbol, start, end required"}), 400
 
     cmd = [
-        sys.executable, str(CLI), "populate", dataset,
-        "--exchange", exchange, "--symbol", symbol,
-        "--start", start, "--end", end,
+        sys.executable,
+        str(CLI),
+        "populate",
+        dataset,
+        "--exchange",
+        exchange,
+        "--symbol",
+        symbol,
+        "--start",
+        start,
+        "--end",
+        end,
     ]
     job_id = str(uuid.uuid4())[:8]
-    _submit(job_id, {"id": job_id, "type": "populate", "label": f"populate {dataset} {exchange}:{symbol} {start}→{end}"}, cmd)
+    _submit(
+        job_id,
+        {"id": job_id, "type": "populate", "label": f"populate {dataset} {exchange}:{symbol} {start}→{end}"},
+        cmd,
+    )
     return jsonify({"job_id": job_id})
 
 
@@ -207,6 +261,7 @@ def api_job(job_id: str):
 
 
 # ── Static / SPA ──────────────────────────────────────────────────────────────
+
 
 @app.route("/", defaults={"path": ""})
 @app.route("/<path:path>")

@@ -260,6 +260,46 @@ body {
 /* Ops */
 #ops-panel { display: flex; flex-direction: column; gap: 8px; }
 
+.ops-sep {
+  height: 1px;
+  background: var(--border-dim);
+  margin: 4px 0;
+}
+
+#backtest-section { display: flex; flex-direction: column; gap: 6px; }
+
+.backtest-env-select {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border-dim);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 6px 9px;
+  border-radius: 3px;
+  outline: none;
+  appearance: none;
+}
+
+.op-btn-backtest {
+  border-color: #7c3aed;
+  color: #a78bfa;
+}
+.op-btn-backtest:not(:disabled):hover {
+  background: rgba(124, 58, 237, 0.15);
+  box-shadow: 0 0 12px rgba(124, 58, 237, 0.3);
+}
+.op-btn-backtest:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+#backtest-status {
+  font-size: 10px;
+  color: var(--text-muted);
+  min-height: 14px;
+}
+
 .op-btn {
   width: 100%;
   padding: 7px 12px;

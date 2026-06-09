@@ -56,6 +56,7 @@ function getHashMarket() {
 
 async function boot() {
   loadGlobalStats();
+  loadBacktestEnvs();
   await loadMarkets();
   if (state.markets.length > 0) {
     const hashMarket = getHashMarket()
@@ -140,6 +141,7 @@ async function selectMarket(mkt, pushHash = true) {
     renderCalendar();
     document.getElementById('calendar-spinner').style.display = 'none';
     document.getElementById('calendar-grid').style.display = 'grid';
+    checkBronzeAvailable();
   } catch (e) {
     document.getElementById('calendar-spinner').style.display = 'none';
     document.getElementById('calendar-grid').style.display = 'grid';
@@ -310,6 +312,7 @@ function attachDayHandlers() {
 
     updateRangeUI();
     updateRangeHighlight();
+    checkBronzeAvailable();
   });
 }
 
@@ -356,7 +359,49 @@ document.getElementById('range-end').addEventListener('change', e => {
   state.rangeEnd = e.target.value;
   updateRangeUI();
   renderCalendar();
+  checkBronzeAvailable();
 });
+
+// ─── Backtest envs ────────────────────────────────────────────────────────────
+
+async function loadBacktestEnvs() {
+  try {
+    const envs = await apiFetch('/api/backtest/envs');
+    const sel = document.getElementById('backtest-env');
+    sel.innerHTML = '<option value="">Select env…</option>' +
+      envs.map(e => `<option value="${e}">${e}</option>`).join('');
+  } catch (e) {
+    console.error('backtest envs error', e);
+  }
+}
+
+function checkBronzeAvailable() {
+  const btn = document.getElementById('btn-backtest');
+  const status = document.getElementById('backtest-status');
+  if (!state.rangeStart || !state.rangeEnd || !state.availDates) {
+    btn.disabled = true;
+    status.textContent = '';
+    return;
+  }
+  // Collect all dates in range
+  const dates = [];
+  let d = new Date(state.rangeStart);
+  const end = new Date(state.rangeEnd);
+  while (d <= end) {
+    dates.push(d.toISOString().slice(0, 10));
+    d.setDate(d.getDate() + 1);
+  }
+  const missing = dates.filter(dt => !state.availDates[dt] || !state.availDates[dt].bronze);
+  if (missing.length === 0) {
+    btn.disabled = false;
+    status.textContent = `Bronze OK (${dates.length} days)`;
+    status.style.color = 'var(--accent)';
+  } else {
+    btn.disabled = true;
+    status.textContent = `Missing bronze: ${missing.length} day(s)`;
+    status.style.color = 'var(--red)';
+  }
+}
 
 // ─── Operations ───────────────────────────────────────────────────────────────
 
@@ -394,6 +439,22 @@ document.getElementById('btn-populate').addEventListener('click', async () => {
     });
     await loadJobs();
     alert(`Populate job started: ${res.job_id}`);
+  } catch (e) {
+    alert('Error: ' + e.message);
+  }
+});
+
+document.getElementById('btn-backtest').addEventListener('click', async () => {
+  const env = document.getElementById('backtest-env').value;
+  if (!env) { alert('Select a backtest env first'); return; }
+  if (!state.rangeStart || !state.rangeEnd) { alert('Select a date range first'); return; }
+  try {
+    const res = await apiFetch('/api/ops/backtest', {
+      method: 'POST',
+      body: JSON.stringify({ env, start: state.rangeStart, end: state.rangeEnd, optimize: true }),
+    });
+    await loadJobs();
+    document.getElementById('backtest-status').textContent = `Job started: ${res.job_id}`;
   } catch (e) {
     alert('Error: ' + e.message);
   }
