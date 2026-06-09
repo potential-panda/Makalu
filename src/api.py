@@ -224,7 +224,7 @@ def api_ops_backtest():
     if not HIMALAYA_START_SH.exists():
         return jsonify({"error": f"start.sh not found: {HIMALAYA_START_SH}"}), 500
 
-    cmd = [str(HIMALAYA_START_SH), "--env", env, "--from-dt", start, "--to-dt", end]
+    cmd = [str(HIMALAYA_START_SH), "--env", env, "--from-dt", start, "--to-dt", end, "--retest"]
     if optimize:
         cmd.append("--optimize")
 
