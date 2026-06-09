@@ -26,6 +26,8 @@ JOBS_DIR.mkdir(parents=True, exist_ok=True)
 
 _jobs: dict[str, dict] = {}
 _jobs_lock = threading.Lock()
+_executor_running = False
+_executor_lock = threading.Lock()
 
 
 def _save_job(job: dict) -> None:
@@ -118,13 +120,14 @@ def api_stats():
     return jsonify({"loading": True})
 
 
-# ── Job runner ────────────────────────────────────────────────────────────────
+# ── Job queue + executor ──────────────────────────────────────────────────────
 
 
 def _run_job(job_id: str, cmd: list[str]) -> None:
     with _jobs_lock:
         _jobs[job_id]["status"] = "running"
         _jobs[job_id]["started_at"] = time.time()
+        _save_job(_jobs[job_id])
 
     proc = subprocess.Popen(
         cmd,
@@ -147,12 +150,53 @@ def _run_job(job_id: str, cmd: list[str]) -> None:
         _save_job(_jobs[job_id])
 
 
+def _next_pending() -> dict | None:
+    with _jobs_lock:
+        pending = [j for j in _jobs.values() if j["status"] == "pending" and j.get("cmd_args")]
+    if not pending:
+        return None
+    return min(pending, key=lambda j: j.get("created_at", 0))
+
+
+def _executor_loop() -> None:
+    global _executor_running
+    try:
+        while True:
+            job = _next_pending()
+            if job is None:
+                break
+            _run_job(job["id"], job["cmd_args"])
+    finally:
+        with _executor_lock:
+            _executor_running = False
+
+
+def _ensure_executor() -> None:
+    global _executor_running
+    with _executor_lock:
+        if _executor_running:
+            return
+        _executor_running = True
+    threading.Thread(target=_executor_loop, daemon=True).start()
+
+
 def _submit(job_id: str, job_meta: dict, cmd: list[str]) -> None:
     with _jobs_lock:
-        job = {**job_meta, "cmd": " ".join(cmd), "status": "pending", "log": [], "created_at": time.time()}
+        job = {
+            **job_meta,
+            "cmd": " ".join(cmd),   # display string
+            "cmd_args": cmd,         # execution list
+            "status": "pending",
+            "log": [],
+            "created_at": time.time(),
+        }
         _jobs[job_id] = job
         _save_job(job)
-    threading.Thread(target=_run_job, args=(job_id, cmd), daemon=True).start()
+    _ensure_executor()
+
+
+# Resume any pending jobs left over from a previous run
+_ensure_executor()
 
 
 # ── Backtest endpoints ────────────────────────────────────────────────────────
