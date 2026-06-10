@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Makalu data warehouse HTTP API — port 9776."""
 
+import datetime
 import json
+import os
 import subprocess
 import sys
 import threading
@@ -30,25 +32,49 @@ _executor_running = False
 _executor_lock = threading.Lock()
 
 
-def _save_job(job: dict) -> None:
+# Job file extensions encode state:
+#   {id}.json             → pending
+#   {id}.json.processing  → running  (contains pid)
+#   {id}.done             → finished (done or failed)
+#   {id}.log              → subprocess stdout (written while running)
+#   {id}.rc               → exit code (written by executor before finalising)
+
+def _job_pending_path(job_id: str) -> Path:
+    return JOBS_DIR / f"{job_id}.json"
+
+def _job_processing_path(job_id: str) -> Path:
+    return JOBS_DIR / f"{job_id}.json.processing"
+
+def _job_done_path(job_id: str) -> Path:
+    return JOBS_DIR / f"{job_id}.done"
+
+def _job_log_path(job_id: str) -> Path:
+    return JOBS_DIR / f"{job_id}.log"
+
+def _job_rc_path(job_id: str) -> Path:
+    return JOBS_DIR / f"{job_id}.rc"
+
+
+def _read_log_tail(job_id: str) -> list[str]:
     try:
-        (JOBS_DIR / f"{job['id']}.json").write_text(json.dumps(job, indent=2))
+        return _job_log_path(job_id).read_text().splitlines()[-200:]
     except OSError:
-        pass
+        return []
 
 
 def _load_jobs() -> None:
-    for f in sorted(JOBS_DIR.glob("*.json")):
-        try:
-            job = json.loads(f.read_text())
-            # Jobs still marked "running" were interrupted by a server restart
-            if job.get("status") == "running":
-                job["status"] = "failed"
-                job["returncode"] = -1
-                f.write_text(json.dumps(job, indent=2))
-            _jobs[job["id"]] = job
-        except (json.JSONDecodeError, KeyError, OSError):
-            pass
+    """Load all jobs from disk into the in-memory cache at startup."""
+    seen: set[str] = set()
+    for pattern in ("*.json.processing", "*.json", "*.done"):
+        for f in sorted(JOBS_DIR.glob(pattern)):
+            try:
+                job = json.loads(f.read_text())
+                jid = job["id"]
+                if jid not in seen:
+                    seen.add(jid)
+                    _jobs[jid] = job
+            except (json.JSONDecodeError, KeyError, OSError):
+                pass
 
 
 _load_jobs()
@@ -128,55 +154,146 @@ def api_stats():
 # ── Job queue + executor ──────────────────────────────────────────────────────
 
 
-def _run_job(job_id: str, cmd: list[str]) -> None:
-    with _jobs_lock:
-        _jobs[job_id]["status"] = "running"
-        _jobs[job_id]["started_at"] = time.time()
-        _save_job(_jobs[job_id])
+def _is_pid_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
 
-    proc = subprocess.Popen(
-        cmd,
-        cwd=str(CLI.parent.parent),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-    )
-    lines: list[str] = []
-    for line in proc.stdout:
-        lines.append(line.rstrip())
+
+def _finalize_job(job_id: str, rc: int) -> None:
+    """Rename .json.processing → .done and update in-memory state."""
+    proc_file = _job_processing_path(job_id)
+    done_file = _job_done_path(job_id)
+    try:
+        job = json.loads(proc_file.read_text())
+    except OSError:
         with _jobs_lock:
-            _jobs[job_id]["log"] = lines[-200:]
-
-    proc.wait()
+            job = dict(_jobs.get(job_id, {"id": job_id}))
+    job["returncode"] = rc
+    job["status"] = "done" if rc == 0 else "failed"
+    job["finished_at"] = time.time()
+    job["log"] = _read_log_tail(job_id)
+    done_file.write_text(json.dumps(job, indent=2))
+    proc_file.unlink(missing_ok=True)
     with _jobs_lock:
-        _jobs[job_id]["returncode"] = proc.returncode
-        _jobs[job_id]["status"] = "done" if proc.returncode == 0 else "failed"
-        _jobs[job_id]["finished_at"] = time.time()
-        _save_job(_jobs[job_id])
+        _jobs[job_id] = job
 
 
-def _next_pending() -> dict | None:
+def _monitor_job(job_id: str, pid: int, proc: subprocess.Popen | None = None) -> None:
+    """Block until the job process exits, keeping the .processing file up to date."""
+    proc_file = _job_processing_path(job_id)
+    rc_path = _job_rc_path(job_id)
+
+    while _is_pid_alive(pid) and not rc_path.exists():
+        log = _read_log_tail(job_id)
+        with _jobs_lock:
+            if job_id in _jobs:
+                _jobs[job_id]["log"] = log
+        try:
+            data = json.loads(proc_file.read_text())
+            data["log"] = log
+            proc_file.write_text(json.dumps(data, indent=2))
+        except OSError:
+            pass
+        time.sleep(1)
+
+    if proc is not None:
+        proc.wait()
+        rc = proc.returncode
+        try:
+            rc_path.write_text(str(rc))
+        except OSError:
+            pass
+    else:
+        try:
+            rc = int(rc_path.read_text().strip())
+        except (OSError, ValueError):
+            rc = -1
+
+    _finalize_job(job_id, rc)
+
+
+def _cleanup_old_jobs() -> None:
+    cutoff = time.time() - 86400  # 24 hours
     with _jobs_lock:
-        pending = [j for j in _jobs.values() if j["status"] == "pending" and j.get("cmd_args")]
-    if not pending:
-        return None
-    return min(pending, key=lambda j: j.get("created_at", 0))
+        stale = [
+            jid for jid, j in list(_jobs.items())
+            if j.get("status") in ("done", "failed")
+            and j.get("finished_at", j.get("created_at", 0)) < cutoff
+        ]
+        for jid in stale:
+            del _jobs[jid]
+            for path in (_job_done_path(jid), _job_log_path(jid), _job_rc_path(jid)):
+                path.unlink(missing_ok=True)
+
+
+def _pending_created_at(f: Path) -> float:
+    try:
+        return json.loads(f.read_text()).get("created_at", 0.0)
+    except (json.JSONDecodeError, OSError):
+        return 0.0
 
 
 def _executor_loop() -> None:
     global _executor_running
+    _cleanup_old_jobs()
     try:
+        # On startup: resume any job whose .processing file survived a restart.
+        for proc_file in JOBS_DIR.glob("*.json.processing"):
+            try:
+                job = json.loads(proc_file.read_text())
+            except (json.JSONDecodeError, OSError):
+                continue
+            job_id = job.get("id", "")
+            pid = job.get("pid")
+            if pid and _is_pid_alive(pid):
+                _monitor_job(job_id, pid)          # reattach: process still running
+            else:
+                _finalize_job(job_id, rc=-1)       # process died while we were down
+
+        # Pick up pending jobs one at a time until the queue is empty.
         while True:
-            job = _next_pending()
-            if job is None:
+            pending = sorted(JOBS_DIR.glob("*.json"), key=_pending_created_at)
+            if not pending:
                 break
-            _run_job(job["id"], job["cmd_args"])
+
+            job_file = pending[0]
+            try:
+                job = json.loads(job_file.read_text())
+            except (json.JSONDecodeError, OSError):
+                job_file.unlink(missing_ok=True)
+                continue
+
+            job_id = job["id"]
+            proc_file = _job_processing_path(job_id)
+            job_file.rename(proc_file)             # atomic: pending → processing
+
+            job["status"] = "running"
+            job["started_at"] = time.time()
+
+            with open(_job_log_path(job_id), "w") as log_f:
+                proc = subprocess.Popen(
+                    job["cmd_args"],
+                    cwd=str(CLI.parent.parent),
+                    stdout=log_f,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    start_new_session=True,
+                )
+
+            job["pid"] = proc.pid
+            proc_file.write_text(json.dumps(job, indent=2))
+            with _jobs_lock:
+                _jobs[job_id] = job
+
+            _monitor_job(job_id, proc.pid, proc=proc)
+
     finally:
         with _executor_lock:
             _executor_running = False
-        # A job may have arrived between the last _next_pending() and clearing
-        # the flag — kick off a new executor to pick it up if so.
-        if _next_pending():
+        if any(JOBS_DIR.glob("*.json")):
             _ensure_executor()
 
 
@@ -190,22 +307,80 @@ def _ensure_executor() -> None:
 
 
 def _submit(job_id: str, job_meta: dict, cmd: list[str]) -> None:
+    job = {
+        **job_meta,
+        "cmd": " ".join(cmd),
+        "cmd_args": cmd,
+        "status": "pending",
+        "log": [],
+        "created_at": time.time(),
+    }
     with _jobs_lock:
-        job = {
-            **job_meta,
-            "cmd": " ".join(cmd),   # display string
-            "cmd_args": cmd,         # execution list
-            "status": "pending",
-            "log": [],
-            "created_at": time.time(),
-        }
         _jobs[job_id] = job
-        _save_job(job)
+    _job_pending_path(job_id).write_text(json.dumps(job, indent=2))
     _ensure_executor()
 
 
-# Resume any pending jobs left over from a previous run
 _ensure_executor()
+
+
+# ── Daily scheduler ───────────────────────────────────────────────────────────
+
+DAILY_SYNC_HOUR = 4  # 04:00 local time — matches former cron job
+
+SCHEDULED_MARKETS = [
+    "BINANCE:BTC_USDT",
+    "BINANCE:ETH_USDT",
+    "BINANCE:XRP_USDT",
+    "GMO:BTC_JPY",
+    "GMO:ETH_JPY",
+    "GMO:XRP_JPY",
+]
+
+_next_scheduled_run: float = 0.0
+
+
+def _next_scheduled_time() -> float:
+    now = datetime.datetime.now()
+    candidate = now.replace(hour=DAILY_SYNC_HOUR, minute=0, second=0, microsecond=0)
+    if candidate <= now:
+        candidate += datetime.timedelta(days=1)
+    return candidate.timestamp()
+
+
+def _submit_daily_market_data() -> None:
+    for market in SCHEDULED_MARKETS:
+        job_id = str(uuid.uuid4())[:8]
+        cmd = [sys.executable, str(CLI), "market-data", "--market", market, "--days", "3"]
+        _submit(
+            job_id,
+            {"id": job_id, "type": "download", "label": f"daily sync {market}"},
+            cmd,
+        )
+
+
+def _scheduler_loop() -> None:
+    global _next_scheduled_run
+    while True:
+        _next_scheduled_run = _next_scheduled_time()
+        sleep_secs = _next_scheduled_run - time.time()
+        if sleep_secs > 0:
+            time.sleep(sleep_secs)
+        _submit_daily_market_data()
+
+
+threading.Thread(target=_scheduler_loop, daemon=True).start()
+
+
+@app.route("/api/scheduler")
+def api_scheduler():
+    next_ts = _next_scheduled_run
+    return jsonify({
+        "next_run": next_ts,
+        "next_run_iso": datetime.datetime.fromtimestamp(next_ts).isoformat() if next_ts else None,
+        "daily_sync_hour": DAILY_SYNC_HOUR,
+        "markets": SCHEDULED_MARKETS,
+    })
 
 
 # ── Backtest endpoints ────────────────────────────────────────────────────────
