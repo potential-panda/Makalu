@@ -62,6 +62,13 @@ def _read_log_tail(job_id: str) -> list[str]:
         return []
 
 
+def _atomic_write(path: Path, content: str) -> None:
+    """Write content atomically: write to .tmp then rename, so the file is never half-written."""
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(content)
+    tmp.rename(path)
+
+
 def _load_jobs() -> None:
     """Load all jobs from disk into the in-memory cache at startup."""
     seen: set[str] = set()
@@ -168,7 +175,7 @@ def _finalize_job(job_id: str, rc: int) -> None:
     done_file = _job_done_path(job_id)
     try:
         job = json.loads(proc_file.read_text())
-    except OSError:
+    except (OSError, ValueError):
         with _jobs_lock:
             job = dict(_jobs.get(job_id, {"id": job_id}))
     job["returncode"] = rc
@@ -194,8 +201,8 @@ def _monitor_job(job_id: str, pid: int, proc: subprocess.Popen | None = None) ->
         try:
             data = json.loads(proc_file.read_text())
             data["log"] = log
-            proc_file.write_text(json.dumps(data, indent=2))
-        except OSError:
+            _atomic_write(proc_file, json.dumps(data, indent=2))
+        except (OSError, ValueError):
             pass
         time.sleep(1)
 
@@ -244,9 +251,13 @@ def _executor_loop() -> None:
         for proc_file in JOBS_DIR.glob("*.json.processing"):
             try:
                 job = json.loads(proc_file.read_text())
-            except (json.JSONDecodeError, OSError):
+                job_id = job["id"]
+            except (json.JSONDecodeError, KeyError, OSError):
+                # Corrupted file (e.g. 0-byte from interrupted write) — extract
+                # the job ID from the filename and mark failed so the queue unblocks.
+                job_id = proc_file.name.split(".")[0]
+                _finalize_job(job_id, rc=-1)
                 continue
-            job_id = job.get("id", "")
             pid = job.get("pid")
             if pid and _is_pid_alive(pid):
                 _monitor_job(job_id, pid)          # reattach: process still running
@@ -284,7 +295,7 @@ def _executor_loop() -> None:
                 )
 
             job["pid"] = proc.pid
-            proc_file.write_text(json.dumps(job, indent=2))
+            _atomic_write(proc_file, json.dumps(job, indent=2))
             with _jobs_lock:
                 _jobs[job_id] = job
 
