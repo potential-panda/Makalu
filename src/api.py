@@ -193,27 +193,42 @@ def _monitor_job(job_id: str, pid: int, proc: subprocess.Popen | None = None) ->
     proc_file = _job_processing_path(job_id)
     rc_path = _job_rc_path(job_id)
 
-    while _is_pid_alive(pid) and not rc_path.exists():
-        log = _read_log_tail(job_id)
-        with _jobs_lock:
-            if job_id in _jobs:
-                _jobs[job_id]["log"] = log
-        try:
-            data = json.loads(proc_file.read_text())
-            data["log"] = log
-            _atomic_write(proc_file, json.dumps(data, indent=2))
-        except (OSError, ValueError):
-            pass
-        time.sleep(1)
-
     if proc is not None:
-        proc.wait()
+        # We own this process: use proc.poll() which calls waitpid(WNOHANG) and
+        # reaps the child.  os.kill(pid, 0) would return True for zombies and
+        # deadlock here, because we only call proc.wait() after the loop.
+        while proc.poll() is None:
+            log = _read_log_tail(job_id)
+            with _jobs_lock:
+                if job_id in _jobs:
+                    _jobs[job_id]["log"] = log
+            try:
+                data = json.loads(proc_file.read_text())
+                data["log"] = log
+                _atomic_write(proc_file, json.dumps(data, indent=2))
+            except (OSError, ValueError):
+                pass
+            time.sleep(1)
         rc = proc.returncode
         try:
             rc_path.write_text(str(rc))
         except OSError:
             pass
     else:
+        # Reattach: process is not our child (spawned by a previous API instance),
+        # so it cannot be a zombie here.  _is_pid_alive is correct.
+        while _is_pid_alive(pid) and not rc_path.exists():
+            log = _read_log_tail(job_id)
+            with _jobs_lock:
+                if job_id in _jobs:
+                    _jobs[job_id]["log"] = log
+            try:
+                data = json.loads(proc_file.read_text())
+                data["log"] = log
+                _atomic_write(proc_file, json.dumps(data, indent=2))
+            except (OSError, ValueError):
+                pass
+            time.sleep(1)
         try:
             rc = int(rc_path.read_text().strip())
         except (OSError, ValueError):
