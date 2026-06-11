@@ -2,6 +2,7 @@
 
 import json
 import os
+import shlex
 import subprocess
 import threading
 import time
@@ -20,17 +21,22 @@ _CLI = Path(__file__).parent.parent / "cli.py"
 #   {id}.log              → subprocess stdout (written while running)
 #   {id}.rc               → exit code (written by executor before finalising)
 
+
 def _pending_path(job_id: str) -> Path:
     return JOBS_DIR / f"{job_id}.json"
+
 
 def _processing_path(job_id: str) -> Path:
     return JOBS_DIR / f"{job_id}.json.processing"
 
+
 def _done_path(job_id: str) -> Path:
     return JOBS_DIR / f"{job_id}.done"
 
+
 def _log_path(job_id: str) -> Path:
     return JOBS_DIR / f"{job_id}.log"
+
 
 def _rc_path(job_id: str) -> Path:
     return JOBS_DIR / f"{job_id}.rc"
@@ -177,9 +183,9 @@ class JobExecutor:
         cutoff = time.time() - 86400
         with self._jobs_lock:
             stale = [
-                jid for jid, j in list(self._jobs.items())
-                if j.get("status") in ("done", "failed")
-                and j.get("finished_at", j.get("created_at", 0)) < cutoff
+                jid
+                for jid, j in list(self._jobs.items())
+                if j.get("status") in ("done", "failed") and j.get("finished_at", j.get("created_at", 0)) < cutoff
             ]
             for jid in stale:
                 del self._jobs[jid]
@@ -224,9 +230,14 @@ class JobExecutor:
                 job["status"] = "running"
                 job["started_at"] = time.time()
 
+                rc_file = _rc_path(job_id)
+                # Wrap in bash so the subprocess writes the .rc file itself;
+                # the rc survives an API restart during the job.
+                shell_cmd = f"{shlex.join(job['cmd_args'])}; echo $? > {shlex.quote(str(rc_file))}"
+
                 with open(_log_path(job_id), "w") as log_f:
                     proc = subprocess.Popen(
-                        job["cmd_args"],
+                        ["bash", "-c", shell_cmd],
                         cwd=str(_CLI.parent.parent),
                         stdout=log_f,
                         stderr=subprocess.STDOUT,
