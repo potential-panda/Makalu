@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-exec python /home/lulurun/workspace/Makalu/cli.py query "$@"
+exec python /home/lulurun/workspace/Makalu/src/cli.py query "$@"

@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-exec python /home/lulurun/workspace/Makalu/cli.py setup-backtest-env "$@"
+exec python /home/lulurun/workspace/Makalu/src/cli.py setup-backtest-env "$@"

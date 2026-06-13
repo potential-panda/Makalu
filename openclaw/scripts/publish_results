@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-exec python /home/lulurun/workspace/Makalu/cli.py publish-results "$@"
+exec python /home/lulurun/workspace/Makalu/src/cli.py publish-results "$@"

@@ -1,0 +1,217 @@
+# Data Pipeline — Market Data, Populate, Scan, Evict
+
+All commands use the Makalu CLI:
+```bash
+python /home/lulurun/workspace/Makalu/src/cli.py <subcommand> [args]
+```
+
+---
+
+## Data Flow (strict order)
+
+```
+S3 raw msgpack files  (market-data download)
+        │
+        ▼
+bronze/  Trade + OrderBook     ← populate bronze
+        │
+        ├──▶ MarketPrice        ← populate MarketPrice  (silver)
+        │         └──▶ VolSpread   (gold)
+        │         └──▶ LeadLag     (gold, needs two markets)
+        ├──▶ BookState          ← populate BookState    (silver)
+        ├──▶ BookChange         ← populate BookChange   (silver)
+        └──▶ TradeAggression    ← populate TradeAggression (silver)
+```
+
+Always populate in order — a dataset cannot be populated before its source exists.
+
+---
+
+## Subcommands
+
+### market-data — download raw msgpack from S3
+
+Downloads raw market data files to `/panda/market-data/`. Run **before** `populate bronze`.
+Idempotent — skips files already on disk.
+
+```bash
+# All standard markets, last 3 days (default)
+python src/cli.py market-data
+
+# Last N days
+python src/cli.py market-data --days 7
+
+# Single market
+python src/cli.py market-data --market GMO:BTC_JPY --days 1
+python src/cli.py market-data --market BINANCE:BTC_USDT --days 3
+```
+
+Standard markets: BINANCE BTC/ETH/XRP USDT, GMO BTC/ETH/XRP JPY.
+
+Output JSON: `{status, markets, dates, downloaded, merged, skipped, errors}`
+
+Exec timeout: 300 s.
+
+---
+
+### data-check — inspect availability (READ-ONLY)
+
+Always run before populate to find missing date ranges. Never modifies data.
+
+```bash
+python src/cli.py data-check \
+  --dataset Trade --exchange GMO --symbol BTC_JPY \
+  --start 2026-01-01 --end 2026-03-17
+```
+
+Output includes: min date, max date, total days, **missing date ranges**.
+
+Omit `--start`/`--end` to see all available dates. Omit `--exchange`/`--symbol` for progressive discovery.
+
+For datasets with extra partitions:
+```bash
+# MarketPrice / VolSpread require --execution-size
+python src/cli.py data-check \
+  --dataset MarketPrice --exchange GMO --symbol BTC_JPY \
+  --start 2026-01-01 --end 2026-03-17 --execution-size 0.002
+```
+
+---
+
+### populate — convert or derive parquet files
+
+Idempotent — safe to re-run on already-populated dates (no harm, just redundant work).
+
+```bash
+# Bronze (raw tick data)
+python src/cli.py populate bronze \
+  --exchange GMO --symbol BTC_JPY --start 2026-03-13 --end 2026-03-17
+
+# Silver
+python src/cli.py populate MarketPrice \
+  --exchange GMO --symbol BTC_JPY --start 2026-03-13 --end 2026-03-17 \
+  --execution-size 0.002
+
+python src/cli.py populate BookState \
+  --exchange GMO --symbol BTC_JPY --start 2026-03-13 --end 2026-03-17
+
+python src/cli.py populate BookChange \
+  --exchange GMO --symbol BTC_JPY --start 2026-03-13 --end 2026-03-17
+
+python src/cli.py populate TradeAggression \
+  --exchange GMO --symbol BTC_JPY --start 2026-03-13 --end 2026-03-17
+
+# Gold
+python src/cli.py populate VolSpread \
+  --exchange GMO --symbol BTC_JPY --start 2026-03-13 --end 2026-03-17 \
+  --execution-size 0.002
+```
+
+Exec timeout: 7200 s (populate can be slow for large date ranges).
+
+#### execution_size by asset
+
+`MarketPrice`, `VolSpread`, `LeadLag` are partitioned by `execution_size`.
+Using the wrong value creates a mismatched partition.
+
+| Asset | execution_size |
+|-------|---------------|
+| BTC   | 0.002         |
+| ETH   | 0.2           |
+| XRP   | 150           |
+
+---
+
+### scan — register new files in the manifest
+
+Run after every populate to keep the query manifest in sync.
+
+```bash
+python src/cli.py scan
+```
+
+---
+
+### evict — delete files past retention (dry-run by default)
+
+```bash
+python src/cli.py evict            # dry-run: shows what would be deleted
+python src/cli.py evict --apply    # actually deletes — NEVER run without user confirmation
+```
+
+---
+
+### metrics-data — push prod trading metrics to InfluxDB
+
+Standalone — downloads 5-min metrics from S3 and pushes to InfluxDB. Looks back 28 days.
+
+```bash
+python src/cli.py metrics-data              # all hosts
+python src/cli.py metrics-data --host orion-01
+```
+
+Requires InfluxDB to be running (see `doc/local_infra.md`).
+
+---
+
+## Smart Populate Pattern
+
+**Always follow this when populating any dataset:**
+
+1. Run `data-check` over the full requested date range to find exactly which dates are missing.
+2. From the output, identify:
+   - Internal gaps within the existing range
+   - The tail: dates after the max available date up to the requested end
+3. Build the minimal set of populate calls — one per contiguous missing range.
+   Do NOT populate dates that already exist on disk.
+4. Show ALL planned populate commands to the user before asking for confirmation.
+5. Only after the user confirms, execute them in order.
+6. Run `scan` after the last populate.
+
+Example plan to show the user:
+```
+I need to run 2 populate commands:
+  1. populate bronze --start 2026-02-21 --end 2026-02-28  (gap)
+  2. populate bronze --start 2026-03-13 --end 2026-03-17  (tail)
+Proceed? [y/N]
+```
+
+---
+
+## Full Data Refresh Workflow
+
+```bash
+# 1. Download raw source files
+python src/cli.py market-data --days 7
+
+# 2. Check what's already on disk
+python src/cli.py data-check --dataset Trade --exchange GMO --symbol BTC_JPY \
+  --start 2026-01-01 --end 2026-03-17
+
+# 3. Populate missing bronze (after confirming with user)
+python src/cli.py populate bronze \
+  --exchange GMO --symbol BTC_JPY --start 2026-03-13 --end 2026-03-17
+
+# 4. Populate silver
+python src/cli.py populate MarketPrice \
+  --exchange GMO --symbol BTC_JPY --start 2026-03-13 --end 2026-03-17 \
+  --execution-size 0.002
+
+# 5. Sync manifest
+python src/cli.py scan
+
+# 6. Push trading metrics to InfluxDB
+python src/cli.py metrics-data
+```
+
+---
+
+## Key Rules
+
+- `market-data` before `populate bronze` — source files must exist first
+- `data-check` before any populate — never populate blindly
+- Only populate **missing** date ranges — never re-populate dates already on disk
+- `to_dt` for populate: at most today − 2 days (market-data cron delivers yesterday at ~2am)
+  Missing today and yesterday is expected — do not attempt to populate them
+- Run `scan` after every populate
+- `evict --apply` always requires explicit user confirmation

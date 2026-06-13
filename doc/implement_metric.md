@@ -137,7 +137,7 @@ elif dataset == "MyMetric":
 
 The CLI automatically accepts the new dataset name:
 ```bash
-python cli.py populate MyMetric --exchange GMO --symbol BTC_JPY --start 2026-01-01 --end 2026-01-07
+python /home/lulurun/workspace/Makalu/src/cli.py populate MyMetric --exchange GMO --symbol BTC_JPY --start 2026-01-01 --end 2026-01-07
 ```
 
 ---
@@ -177,18 +177,18 @@ Grain: per order book update
 
 ```bash
 # 1. Ensure bronze data exists
-python cli.py data-check --dataset OrderBook --exchange GMO --symbol BTC_JPY \
+python /home/lulurun/workspace/Makalu/src/cli.py data-check --dataset OrderBook --exchange GMO --symbol BTC_JPY \
   --start 2026-01-01 --end 2026-01-07
 
 # 2. Populate the new metric
-python cli.py populate MyMetric --exchange GMO --symbol BTC_JPY \
+python /home/lulurun/workspace/Makalu/src/cli.py populate MyMetric --exchange GMO --symbol BTC_JPY \
   --start 2026-01-01 --end 2026-01-07
 
 # 3. Register in manifest
-python cli.py scan
+python /home/lulurun/workspace/Makalu/src/cli.py scan
 
 # 4. Query to verify
-python cli.py query --sql "SELECT * FROM mymetric WHERE exchange='GMO' AND symbol='BTC_JPY' AND date='2026-01-01' LIMIT 10"
+python /home/lulurun/workspace/Makalu/src/cli.py query --sql "SELECT * FROM mymetric WHERE exchange='GMO' AND symbol='BTC_JPY' AND date='2026-01-01' LIMIT 10"
 ```
 
 Note: the SQL view name is the **lowercase** dataset name (`MyMetric` → `mymetric`).
