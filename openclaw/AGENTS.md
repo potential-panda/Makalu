@@ -24,6 +24,7 @@ All operations run via the `exec` tool — shell commands only.
 - `knowledge/makalu_cli.md` — Makalu CLI subcommand reference
 - `knowledge/plot.md` — VolSpread plot workflow
 - `knowledge/local_infra.md` — Docker/Grafana/InfluxDB stack reference
+- `knowledge/implement_metric.md` — how to implement a new derived metric (Step/Stage/Pipeline pattern, ParquetStore API, registration)
 - `/home/lulurun/workspace/Makalu/doc/catalog.yaml` — dataset catalog (Makalu-owned)
 - `/home/lulurun/workspace/Makalu/doc/dataset_definitions.md` — dataset column definitions
 
@@ -79,7 +80,15 @@ See `knowledge/makalu_cli.md` for full command syntax and smart populate rules.
    - `cli.py publish-results` — copies results to Kilimanjaro viewer
 8. See `TOOLS.md` → Backtest for exact commands.
 
-### 4. SQL Analytics
+### 4. Implement a New Metric
+
+See `knowledge/implement_metric.md` for the full guide. Short version:
+1. Add a `Step` class in `src/pipeline/order_book_derived_steps.py` (or `trade_derived_steps.py`)
+2. Register it in `src/makalu/cli/populate.py` with an `elif dataset == "MyMetric":` branch
+3. Document it in `doc/catalog.yaml` and `doc/dataset_definitions.md`
+4. Run `populate MyMetric` then `scan`, then verify with `query --sql`
+
+### 5. SQL Analytics
 ```bash
 python /home/lulurun/workspace/Makalu/cli.py query --sql "SELECT ..."
 python /home/lulurun/workspace/Makalu/cli.py query --list   # list registered datasets
