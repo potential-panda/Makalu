@@ -19,7 +19,7 @@ Returns JSON: `{columns, row_count, rows}` — rows capped at 200.
 
 ---
 
-## SQL Rules
+## 1 SQL Rules
 
 1. **SELECT only** — no INSERT, UPDATE, DELETE, CREATE, DROP.
 2. **Always filter** by `exchange`, `symbol`, and `date` range — avoids full scans.
@@ -41,9 +41,9 @@ Returns JSON: `{columns, row_count, rows}` — rows capped at 200.
 
 ---
 
-## Example Queries
+## 2 Example Queries
 
-### Bronze — raw trades
+### 2.1 Bronze — raw trades
 ```sql
 SELECT ts, side, price, size
 FROM trade
@@ -53,7 +53,7 @@ ORDER BY ts
 LIMIT 100
 ```
 
-### Bronze — order book snapshot
+### 2.2 Bronze — order book snapshot
 ```sql
 SELECT ts, bid0_price, bid0_qty, ask0_price, ask0_qty
 FROM orderbook
@@ -62,7 +62,7 @@ WHERE exchange='GMO' AND symbol='BTC_JPY'
 LIMIT 50
 ```
 
-### Silver — execution prices
+### 2.3 Silver — execution prices
 ```sql
 SELECT ts, bid, ask, mid, spread_bps
 FROM marketprice
@@ -73,7 +73,7 @@ ORDER BY ts
 LIMIT 100
 ```
 
-### Gold — VolSpread (always include param_id and execution_size)
+### 2.4 Gold — VolSpread (always include param_id and execution_size)
 ```sql
 SELECT ts, mid, volatility, spread_pct_ema
 FROM volspread
@@ -87,7 +87,7 @@ LIMIT 200
 
 ---
 
-## data-check for Availability (Not SQL)
+## 3 data-check for Availability (Not SQL)
 
 For checking whether data **exists** for a date range, prefer `data-check` over SQL — it reads the filesystem directly and is faster and more reliable:
 
@@ -101,7 +101,7 @@ Output includes missing date ranges. Use this before any populate. See `doc/data
 
 ---
 
-## Dataset Reference
+## 4 Dataset Reference
 
 - **Column definitions**: `doc/dataset_definitions.md`
 - **Full catalog with paths**: `doc/catalog.yaml`

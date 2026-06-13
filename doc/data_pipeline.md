@@ -7,7 +7,7 @@ python /home/lulurun/workspace/Makalu/src/cli.py <subcommand> [args]
 
 ---
 
-## Data Flow (strict order)
+## 1 Data Flow (strict order)
 
 ```
 S3 raw msgpack files  (market-data download)
@@ -27,9 +27,9 @@ Always populate in order — a dataset cannot be populated before its source exi
 
 ---
 
-## Subcommands
+## 2 Subcommands
 
-### market-data — download raw msgpack from S3
+### 2.1 market-data — download raw msgpack from S3
 
 Downloads raw market data files to `/panda/market-data/`. Run **before** `populate bronze`.
 Idempotent — skips files already on disk.
@@ -52,9 +52,7 @@ Output JSON: `{status, markets, dates, downloaded, merged, skipped, errors}`
 
 Exec timeout: 300 s.
 
----
-
-### data-check — inspect availability (READ-ONLY)
+### 2.2 data-check — inspect availability (READ-ONLY)
 
 Always run before populate to find missing date ranges. Never modifies data.
 
@@ -76,9 +74,7 @@ python src/cli.py data-check \
   --start 2026-01-01 --end 2026-03-17 --execution-size 0.002
 ```
 
----
-
-### populate — convert or derive parquet files
+### 2.3 populate — convert or derive parquet files
 
 Idempotent — safe to re-run on already-populated dates (no harm, just redundant work).
 
@@ -120,9 +116,7 @@ Using the wrong value creates a mismatched partition.
 | ETH   | 0.2           |
 | XRP   | 150           |
 
----
-
-### scan — register new files in the manifest
+### 2.4 scan — register new files in the manifest
 
 Run after every populate to keep the query manifest in sync.
 
@@ -130,18 +124,14 @@ Run after every populate to keep the query manifest in sync.
 python src/cli.py scan
 ```
 
----
-
-### evict — delete files past retention (dry-run by default)
+### 2.5 evict — delete files past retention (dry-run by default)
 
 ```bash
 python src/cli.py evict            # dry-run: shows what would be deleted
 python src/cli.py evict --apply    # actually deletes — NEVER run without user confirmation
 ```
 
----
-
-### metrics-data — push prod trading metrics to InfluxDB
+### 2.6 metrics-data — push prod trading metrics to InfluxDB
 
 Standalone — downloads 5-min metrics from S3 and pushes to InfluxDB. Looks back 28 days.
 
@@ -154,7 +144,7 @@ Requires InfluxDB to be running (see `doc/local_infra.md`).
 
 ---
 
-## Smart Populate Pattern
+## 3 Smart Populate Pattern
 
 **Always follow this when populating any dataset:**
 
@@ -178,7 +168,7 @@ Proceed? [y/N]
 
 ---
 
-## Full Data Refresh Workflow
+## 4 Full Data Refresh Workflow
 
 ```bash
 # 1. Download raw source files
@@ -206,7 +196,7 @@ python src/cli.py metrics-data
 
 ---
 
-## Key Rules
+## 5 Key Rules
 
 - `market-data` before `populate bronze` — source files must exist first
 - `data-check` before any populate — never populate blindly

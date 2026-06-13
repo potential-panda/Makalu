@@ -12,7 +12,7 @@ All column names used in queries must have an entry here.
 
 ---
 
-## Bronze Layer
+## 1 Bronze Layer
 
 Raw structured data. No derived analytics.
 
@@ -87,7 +87,7 @@ Grain: per order book update
 
 ---
 
-## Silver Layer
+## 2 Silver Layer
 
 Point-in-time derived metrics. No rolling windows.
 
@@ -145,7 +145,7 @@ Windows: multiple (e.g. 1s, 5s, 10s — parameterised per run)
 
 ---
 
-## Gold Layer
+## 3 Gold Layer
 
 Window-based and statistical signals. Building blocks for features.
 
@@ -220,7 +220,7 @@ param combination and returns mixed results. Discover available values first:
 
 ---
 
-## Feature Layer
+## 4 Feature Layer
 
 ML-ready features. All columns are normalised and dimensionless unless stated.
 Grain: tick-level (aligned to order book updates).
@@ -337,7 +337,7 @@ Partitioned by: `exchange`, `symbol`
 
 ---
 
-## Research Layer
+## 5 Research Layer
 
 Experiment outputs. Not canonical — may change between runs.
 

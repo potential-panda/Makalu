@@ -1,11 +1,11 @@
 # Plot and Grafana Export
 
-## VolSpread Plot
+## 1 VolSpread Plot
 
 Plots `volatility` (red) and `spread_pct_ema` (blue) over a date range.
 High volatility relative to spread_pct_ema = favourable trading conditions.
 
-### Step 1 — list available param_ids
+### 1.1 Step 1 — list available param_ids
 
 Always do this first to confirm data exists and discover param_ids:
 ```bash
@@ -14,10 +14,10 @@ python /home/lulurun/workspace/Makalu/src/cli.py plot \
 ```
 
 Two outcomes:
-- **Data exists**: output lists param_ids (e.g. `vs_60_300_300_1s`). Proceed to step 2.
-- **No data**: VolSpread not populated. Follow the populate flow below.
+- **Data exists**: output lists param_ids (e.g. `vs_60_300_300_1s`). Proceed to 1.2.
+- **No data**: VolSpread not populated. Follow section 2.
 
-### Step 2 — generate PNG
+### 1.2 Step 2 — generate PNG
 
 ```bash
 python /home/lulurun/workspace/Makalu/src/cli.py plot \
@@ -29,9 +29,9 @@ python /home/lulurun/workspace/Makalu/src/cli.py plot \
 
 Default param_id: `vs_60_300_300_1s`
 
-If the plot reports no data, treat as missing data and follow the populate flow below.
+If the plot reports no data, treat as missing data and follow section 2.
 
-### param_id naming
+### 1.3 param_id naming
 
 `vs_{shift}_{lookback}_{ema_span}_1s`
 
@@ -44,7 +44,7 @@ If the plot reports no data, treat as missing data and follow the populate flow 
 
 ---
 
-## VolSpread Populate Flow
+## 2 VolSpread Populate Flow
 
 VolSpread depends on MarketPrice, which depends on bronze. Populate in order:
 
@@ -76,14 +76,14 @@ $CLI populate VolSpread --exchange GMO --symbol BTC_JPY \
 # 7. Sync manifest
 $CLI scan
 
-# 8. Retry --list-params then proceed to step 2 above
+# 8. Retry --list-params then proceed to section 1
 ```
 
 `data-check` and `populate` for VolSpread always require `--execution-size`. Without it the command will not find the correct partition.
 
 ---
 
-## Grafana Export
+## 3 Grafana Export
 
 Pushes parquet data to InfluxDB and returns a Grafana dashboard URL.
 Requires InfluxDB to be running — check first with `docker-observability` (see `doc/local_infra.md`).
@@ -99,7 +99,7 @@ python /home/lulurun/workspace/Makalu/src/cli.py grafana-export \
 
 Output: `{"bucket": "makalu_VolSpread", "measurement": "VolSpread", "grafana_url": "http://..."}`
 
-### Optional args by dataset
+### 3.1 Optional args by dataset
 
 | Arg | Required for |
 |-----|-------------|

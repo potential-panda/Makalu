@@ -1,6 +1,6 @@
 # Local Infrastructure
 
-## Docker Stack: Grafana + InfluxDB
+## 1 Docker Stack: Grafana + InfluxDB
 
 Defined in `/panda-infra/Infra/docker/grafana/docker-compose.yml`.
 
@@ -9,7 +9,7 @@ Defined in `/panda-infra/Infra/docker/grafana/docker-compose.yml`.
 | InfluxDB | 8086 | Time-series DB — receives backtest metrics and trading metrics |
 | Grafana  | 3000 | Dashboard — reads from InfluxDB |
 
-### Check health
+### 1.1 Check health
 
 ```bash
 python /home/lulurun/workspace/Makalu/src/cli.py docker-observability --format text
@@ -19,13 +19,13 @@ python /home/lulurun/workspace/Makalu/src/cli.py docker-observability
 
 Output fields: `influxdb_up`, `grafana_up`, `healthy`, `warnings`, `docker_ps`.
 
-### Start the stack (if down)
+### 1.2 Start the stack (if down)
 
 ```bash
 cd /panda-infra/Infra/docker/grafana && docker compose up -d
 ```
 
-### When InfluxDB must be up
+### 1.3 When InfluxDB must be up
 
 - `grafana-export` — pushes Parquet data to InfluxDB
 - `metrics-data` — pushes prod trading metrics to InfluxDB
@@ -33,14 +33,14 @@ cd /panda-infra/Infra/docker/grafana && docker compose up -d
 
 If InfluxDB is down before a backtest: warn the user, ask whether to start it or proceed anyway (backtest will run but metrics won't be saved).
 
-### When Grafana must be up
+### 1.4 When Grafana must be up
 
 - Viewing any Grafana dashboard
 - `grafana-export` returns a Grafana URL — only useful if Grafana is running
 
 ---
 
-## Key Paths
+## 2 Key Paths
 
 | Resource | Path |
 |----------|------|

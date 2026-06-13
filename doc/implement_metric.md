@@ -1,4 +1,4 @@
-## Implementing a New Derived Metric
+# Implementing a New Derived Metric
 
 New metrics are implemented as pipeline **Steps** in `src/pipeline/`, registered in
 `src/makalu/cli/populate.py`, and documented in `doc/catalog.yaml` and
@@ -6,7 +6,7 @@ New metrics are implemented as pipeline **Steps** in `src/pipeline/`, registered
 
 ---
 
-### Pipeline Architecture
+## 1 Pipeline Architecture
 
 ```
 Pipeline
@@ -18,7 +18,7 @@ Pipeline
 `Stage → Step` in order. A Stage loads the source parquet/msgpack data once and
 passes it to all its Steps via a `StageContext`.
 
-**Source → Stage mapping:**
+### 1.1 Source → Stage mapping
 
 | Source data | Stage class | stage_context attribute |
 |-------------|-------------|------------------------|
@@ -30,7 +30,7 @@ All Stage classes are in `src/pipeline/stages.py`.
 
 ---
 
-### Step Interface
+## 2 Step Interface
 
 Implement `Step` from `pipeline.framework`:
 
@@ -43,7 +43,7 @@ class PopulateMyMetricStep(Step):
         self.my_param = my_param
 
     def populate(self, pipeline_context: PipelineContext, stage_context) -> None:
-        # 1. Create a parquet writer (see ParquetStore factory methods below)
+        # 1. Create a parquet writer (see section 3 for factory methods)
         store = pipeline_context.parquet_store.create_single_market(
             "MyMetric", stage_context.market
         )
@@ -62,7 +62,6 @@ class PopulateMyMetricStep(Step):
             # Skip rows outside the populate date range
             if not stage_context.populate_dt_range.is_within(ob.get_ts()):
                 continue
-            # Compute your fields
             fields = {
                 "my_value": ob.mid * self.my_param,
             }
@@ -76,7 +75,7 @@ handles it as the row index.
 
 ---
 
-### ParquetStore Factory Methods
+## 3 ParquetStore Factory Methods
 
 Call these on `pipeline_context.parquet_store` to get a writer:
 
@@ -93,7 +92,7 @@ Import `Layer` if needed: `from qate.store.parquet_store import Layer`
 
 ---
 
-### Full Example: OrderBook-derived Silver Metric
+## 4 Full Example: OrderBook-derived Silver Metric
 
 **File:** `src/pipeline/order_book_derived_steps.py` (add to existing file)
 
@@ -122,7 +121,7 @@ class PopulateMyMetricStep(Step):
 
 ---
 
-### Register in populate.py
+## 5 Register in populate.py
 
 `src/makalu/cli/populate.py` — add an `elif` branch in `execute_single_market`:
 
@@ -137,14 +136,15 @@ elif dataset == "MyMetric":
 
 The CLI automatically accepts the new dataset name:
 ```bash
-python /home/lulurun/workspace/Makalu/src/cli.py populate MyMetric --exchange GMO --symbol BTC_JPY --start 2026-01-01 --end 2026-01-07
+python /home/lulurun/workspace/Makalu/src/cli.py populate MyMetric \
+  --exchange GMO --symbol BTC_JPY --start 2026-01-01 --end 2026-01-07
 ```
 
 ---
 
-### Document the New Dataset
+## 6 Document the New Dataset
 
-**`doc/catalog.yaml`** — add an entry:
+### 6.1 doc/catalog.yaml
 
 ```yaml
 - dataset_name: MyMetric
@@ -157,7 +157,9 @@ python /home/lulurun/workspace/Makalu/src/cli.py populate MyMetric --exchange GM
   path_template: /panda/makalu-data/silver/dataset=MyMetric/exchange={exchange}/symbol={symbol}/date={date}/data.parquet
 ```
 
-**`doc/dataset_definitions.md`** — add a section under the appropriate layer:
+### 6.2 doc/dataset_definitions.md
+
+Add a section under the appropriate layer:
 
 ```markdown
 ### dataset=MyMetric
@@ -173,29 +175,31 @@ Grain: per order book update
 
 ---
 
-### End-to-End Workflow
+## 7 End-to-End Workflow
 
 ```bash
 # 1. Ensure bronze data exists
-python /home/lulurun/workspace/Makalu/src/cli.py data-check --dataset OrderBook --exchange GMO --symbol BTC_JPY \
+python /home/lulurun/workspace/Makalu/src/cli.py data-check \
+  --dataset OrderBook --exchange GMO --symbol BTC_JPY \
   --start 2026-01-01 --end 2026-01-07
 
 # 2. Populate the new metric
-python /home/lulurun/workspace/Makalu/src/cli.py populate MyMetric --exchange GMO --symbol BTC_JPY \
-  --start 2026-01-01 --end 2026-01-07
+python /home/lulurun/workspace/Makalu/src/cli.py populate MyMetric \
+  --exchange GMO --symbol BTC_JPY --start 2026-01-01 --end 2026-01-07
 
 # 3. Register in manifest
 python /home/lulurun/workspace/Makalu/src/cli.py scan
 
 # 4. Query to verify
-python /home/lulurun/workspace/Makalu/src/cli.py query --sql "SELECT * FROM mymetric WHERE exchange='GMO' AND symbol='BTC_JPY' AND date='2026-01-01' LIMIT 10"
+python /home/lulurun/workspace/Makalu/src/cli.py query \
+  --sql "SELECT * FROM mymetric WHERE exchange='GMO' AND symbol='BTC_JPY' AND date='2026-01-01' LIMIT 10"
 ```
 
 Note: the SQL view name is the **lowercase** dataset name (`MyMetric` → `mymetric`).
 
 ---
 
-### Key Rules
+## 8 Key Rules
 
 - Always call `store.close()` — it flushes the parquet buffer
 - Skip rows where `stage_context.populate_dt_range.is_within(ts)` is False — the stage
