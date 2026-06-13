@@ -1,91 +1,57 @@
 # Makalu
 
-Data pipeline for market microstructure feature engineering and ML model training.
+Market data pipeline and backtest orchestration for the **orion** algorithmic trading strategy. Trades BTC/ETH/XRP spot on GMO exchange using BINANCE as the signal market.
 
-## Overview
+## What it does
 
-Makalu is a comprehensive data pipeline that processes high-frequency market data (order books and trades) to generate machine learning features for scalping and microstructure-based trading strategies.
+- Downloads raw tick data (trades + order book) from S3
+- Converts and stores it as a layered parquet data warehouse
+- Derives microstructure metrics (MarketPrice, VolSpread, BookState, etc.)
+- Runs backtests via the Himalaya engine
+- Exposes a job queue API (port 9776) with a daily data-sync scheduler
 
-## Features
+## Data warehouse layers
 
-### Data Processing Stages
+```
+bronze   Raw Trade + OrderBook tick data
+silver   Derived per-tick metrics: MarketPrice, BookState, BookChange, TradeAggression
+gold     Window-based signals: VolSpread, LeadLag, Chart_*
+```
 
-1. **MarketDataStage**: Processes raw market data from msgpack files
-   - Trade data ingestion
-   - OrderBook snapshots (10Hz for Binance)
-   - Market price calculations
-   - Order imbalance metrics (volume, weighted, depth)
-   - Microprice computations
-   - BookChange tracking
-
-2. **TradeDerivedStage**: Generates trade-derived metrics
-   - Candle bars (time-based OHLCV)
-   - Heikin-Ashi bars
-   - Range bars
-   - Trade aggression metrics (multi-window: 1s, 3s, 5s)
-
-3. **FeatureStage**: Builds ML-ready feature set
-   - Aligns data from multiple sources
-   - Computes derived features (microprice_offset_bps, vwap_offset_bps)
-   - Rolling/EMA aggregates (1s, 3s, 5s windows)
-   - Cross-window features
-   - Interaction features
-   - Outputs to Parquet format
-
-### Feature Categories
-
-- **Trade Aggression**: volume imbalance, count imbalance, VWAP, dominant size buckets
-- **OrderBook State**: spread, volume imbalance, weighted imbalance, depth imbalance, microprice
-- **BookChange**: net depth changes, pull/refill rates, best price movements
-- **Derived Features**: offset calculations, rolling statistics, cross-window comparisons
-- **Interaction Features**: sign agreement, spread-conditioned signals
+Data lives at `/panda/makalu-data/`. Raw msgpack source files at `/panda/market-data/`.
 
 ## Installation
 
 ```bash
-# Clone the repository
 git clone git@github.com:potential-panda/Makalu.git
 cd Makalu
-
-# Install dependencies
 pip install -e .
 ```
 
-## Usage
+## CLI
 
 ```bash
-# Run the full pipeline
-python src/pipeline.py --market BINANCE:BTC_USDT --from-dt 20250101 --to-dt 20250107
+python src/cli.py <subcommand> [args]
+
+# Examples
+python src/cli.py market-data --market GMO:BTC_JPY --days 3
+python src/cli.py populate bronze --exchange GMO --symbol BTC_JPY --start 2026-01-01 --end 2026-01-07
+python src/cli.py data-check --dataset Trade --exchange GMO --symbol BTC_JPY
+python src/cli.py query --sql "SELECT ts, price FROM trade WHERE exchange='GMO' AND symbol='BTC_JPY' AND date='2026-01-01' LIMIT 10"
 ```
-
-### Pipeline Arguments
-
-- `--market`: Market in format EXCHANGE:SYMBOL (e.g., BINANCE:BTC_USDT)
-- `--from-dt`: Start date in YYYYMMDD format
-- `--to-dt`: End date in YYYYMMDD format
-
 
 ## Documentation
 
-See [doc/spec.md](doc/spec.md) for comprehensive specification including:
-- TradeAggression implementation details
-- OrderBook metrics
-- BookChange tracking
-- ML feature engineering guide
-- Label computation strategies
-
-Dataset reference files owned by Makalu:
-- `doc/catalog.yaml` — dataset inventory, layer, grain, and partition columns
-- `doc/dataset_definitions.md` — column-level dataset definitions
-
-## Grafana Dashboards
-
-Pre-configured dashboards in `grafana/`:
-- `trade_aggression.json`: Trade flow visualization
-- `order_book.json`: OrderBook state metrics
-- `book_change.json`: Liquidity behavior
-- `chart.json`: OHLCV charts
-
-## License
-
-MIT
+| Audience | File |
+|----------|------|
+| Human overview | this file |
+| Claude Code entry point | `CLAUDE.md` |
+| Codex / other agents entry point | `Agent.md` |
+| Data pipeline operations | `doc/data_pipeline.md` |
+| SQL querying | `doc/querying.md` |
+| Backtest workflow | `doc/backtest.md` |
+| VolSpread plots + Grafana export | `doc/plot.md` |
+| Local infra (Docker / InfluxDB) | `doc/local_infra.md` |
+| Implementing new metrics | `doc/implement_metric.md` |
+| Dataset column definitions | `doc/dataset_definitions.md` |
+| Dataset catalog | `doc/catalog.yaml` |
