@@ -26,6 +26,12 @@ SUBCOMMANDS
   populate      WRITE.      Convert or derive parquet files. Idempotent (safe to re-run).
   market-data   WRITE.      Download raw msgpack market data from S3 to /panda/market-data/.
                 Idempotent. Run this before 'populate bronze'.
+  market-data-s3
+                READ-ONLY.  Inspect raw market-data availability in S3.
+                Cached locally; use --refresh to rescan S3.
+  market-data-cleanup
+                DESTRUCTIVE. Delete raw msgpack files already populated to bronze.
+                Always dry-run by default; requires --apply to delete.
   metrics-data  WRITE.      Download 5-min trading metrics from S3 and push to InfluxDB.
                 Idempotent. Looks back up to 28 days for missing intervals.
   scan          WRITE.      Register existing parquet files into the manifest database.
@@ -63,7 +69,23 @@ from qate.env import sys_env
 from qate.env.env import Env
 from qate.env.env_name import EnvName
 
-from makalu.cli import arb_spot, backtest, data_check, evict, grafana_export, infra, market_data, metrics_data, trading_chart, plot, populate, query, scan
+from makalu.cli import (
+    arb_spot,
+    backtest,
+    data_check,
+    evict,
+    grafana_export,
+    infra,
+    market_data,
+    market_data_cleanup,
+    market_data_s3,
+    metrics_data,
+    plot,
+    populate,
+    query,
+    scan,
+    trading_chart,
+)
 
 ENV_NAME = EnvName.LUIGI_MARIO
 
@@ -89,6 +111,8 @@ def main():
     arb_spot.register_cli(sub)
     populate.register_cli(sub)
     market_data.register_cli(sub)
+    market_data_s3.register_cli(sub)
+    market_data_cleanup.register_cli(sub)
     metrics_data.register_cli(sub)
     plot.register_cli(sub)
     grafana_export.register_cli(sub)

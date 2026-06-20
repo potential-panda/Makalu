@@ -2,8 +2,9 @@ import argparse
 import json
 import math
 import os
-from datetime import datetime, timedelta
-from logging import getLogger
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from datetime import date, datetime, timedelta
+from logging import WARNING, getLogger
 from pathlib import Path
 
 import msgpack
@@ -88,6 +89,10 @@ def _list_market_files(s3, market: Market, target_dates: list[str] | None) -> di
 def _merge_two_sources(paths: list[Path], market: Market) -> list:
     loader = MarketDataLoader(market)
     series = [loader.load(p) for p in paths]
+    if len(series) != 2:
+        raise ValueError(f"Expected exactly 2 source files to merge, got {len(series)}")
+    if not series[0] or not series[1]:
+        raise ValueError("Cannot merge empty source file")
 
     start_ts = math.floor(min(s[0][1].get_ts() for s in series))
     end_ts = math.ceil(max(s[-1][1].get_ts() for s in series)) + 1.0
@@ -114,45 +119,127 @@ def _merge_two_sources(paths: list[Path], market: Market) -> list:
     return [_serialize(x) for x in merged]
 
 
-def _process_market(s3, market: Market, target_dates: list[str] | None, stats: dict) -> None:
+def _download_or_merge_one(task: dict) -> dict:
+    getLogger("qate").setLevel(WARNING)
+    market = Market(ExchangeName[task["exchange"]], Symbol[task["symbol"]])
+    dist = Path(task["dist"])
+    items = task["items"]
+    keep_merge_cache = task["keep_merge_cache"]
+
+    if dist.exists():
+        return {"status": "skipped", "path": str(dist)}
+
+    s3 = get_s3_client()
+    if len(items) == 1:
+        item = items[0]
+        tmp = download(s3, item["bucket"], item["name"], Path(DOWNLOAD_TMP_DIR))
+        os.rename(tmp, dist)
+        return {"status": "downloaded", "path": str(dist)}
+
+    if len(items) != 2:
+        raise ValueError(f"{dist.name}: expected 1 or 2 source files, got {len(items)}")
+
+    merge_paths = []
+    for item in items:
+        local_name = item["name"][:-4] if item["name"].endswith(".bz2") else item["name"]
+        tmp = Path(MERGE_TMP_DIR) / local_name
+        merge_paths.append(tmp)
+        if not tmp.exists():
+            dl = download(s3, item["bucket"], item["name"], Path(DOWNLOAD_TMP_DIR))
+            os.rename(dl, tmp)
+
+    merged = _merge_two_sources(merge_paths, market)
+    with open(dist, "wb") as f:
+        f.write(b"".join(msgpack.packb(row, use_bin_type=True) for row in merged))
+    if not keep_merge_cache:
+        for path in merge_paths:
+            try:
+                path.unlink()
+            except FileNotFoundError:
+                pass
+    return {"status": "merged", "path": str(dist), "rows": len(merged)}
+
+
+def _process_market(
+    s3,
+    market: Market,
+    target_dates: list[str] | None,
+    stats: dict,
+    workers: int,
+    keep_merge_cache: bool,
+) -> None:
     label = f"{market.exchange_name.name}:{market.symbol.name}"
     LOG.info(f"Processing {label}")
     files = _list_market_files(s3, market, target_dates)
 
-    merge_count = 0
+    tasks = []
     for name, items in files.items():
         dist = Path(OUTPUT_DIR) / f"{name}.msgpack"
         if dist.exists():
             LOG.debug(f"Skip (exists): {dist.name}")
             stats["skipped"] += 1
             continue
+        tasks.append(
+            {
+                "exchange": market.exchange_name.name,
+                "symbol": market.symbol.name,
+                "dist": str(dist),
+                "items": [{"bucket": item.bucket, "name": item.name} for item in items],
+                "keep_merge_cache": keep_merge_cache,
+            }
+        )
 
-        if len(items) == 1:
-            item = items[0]
-            tmp = download(s3, item.bucket, item.name, Path(DOWNLOAD_TMP_DIR))
-            os.rename(tmp, dist)
-            stats["downloaded"] += 1
-            LOG.info(f"Downloaded: {dist.name}")
-        else:
-            merge_paths = []
-            for item in items:
-                local_name = item.name[:-4] if item.name.endswith(".bz2") else item.name
-                tmp = Path(MERGE_TMP_DIR) / local_name
-                merge_paths.append(tmp)
-                if not tmp.exists():
-                    dl = download(s3, item.bucket, item.name, Path(DOWNLOAD_TMP_DIR))
-                    os.rename(dl, tmp)
+    if not tasks:
+        LOG.info(f"{label}: all target files already exist")
+        return
 
-            merged = _merge_two_sources(merge_paths, market)
-            with open(dist, "wb") as f:
-                f.write(b"".join(msgpack.packb(row, use_bin_type=True) for row in merged))
-            stats["merged"] += 1
-            LOG.info(f"Merged: {dist.name}")
+    LOG.info(f"{label}: processing {len(tasks)} missing file(s) with {workers} worker(s)")
+    with ProcessPoolExecutor(max_workers=workers) as executor:
+        future_to_task = {executor.submit(_download_or_merge_one, task): task for task in tasks}
+        for idx, future in enumerate(as_completed(future_to_task), 1):
+            task = future_to_task[future]
+            try:
+                result = future.result()
+                status = result["status"]
+                stats[status] += 1
+                if status == "merged":
+                    LOG.debug(f"Merged: {Path(result['path']).name} ({result['rows']} rows)")
+                elif status == "downloaded":
+                    LOG.debug(f"Downloaded: {Path(result['path']).name}")
+            except Exception as e:
+                LOG.error(f"Error processing {task['dist']}: {e}")
+                stats["errors"] += 1
 
-            merge_count += 1
-            if merge_count >= 100:
-                LOG.warning(f"Reached merge limit for {label}")
-                break
+            if idx % 10 == 0 or idx == len(tasks):
+                LOG.info(f"{label}: {idx}/{len(tasks)} missing file(s) processed")
+
+
+def _parse_cli_date(value: str) -> date:
+    if "-" in value:
+        return date.fromisoformat(value)
+    return datetime.strptime(value, "%Y%m%d").date()
+
+
+def _target_dates(args) -> list[str]:
+    if args.start or args.end:
+        if not args.start or not args.end:
+            raise ValueError("--start and --end must be provided together")
+        start = _parse_cli_date(args.start)
+        end = _parse_cli_date(args.end)
+        if end < start:
+            raise ValueError("--end must be >= --start")
+        dates = []
+        cur = start
+        while cur <= end:
+            dates.append(cur.strftime("%Y%m%d"))
+            cur += timedelta(days=1)
+        return dates
+
+    today = datetime.now()
+    return [
+        (today - timedelta(days=i)).strftime("%Y%m%d")
+        for i in range(args.days, 0, -1)
+    ]
 
 
 def execute(args) -> None:
@@ -169,11 +256,7 @@ def execute(args) -> None:
     else:
         markets = DEFAULT_MARKETS
 
-    today = datetime.now()
-    target_dates = [
-        (today - timedelta(days=i)).strftime("%Y%m%d")
-        for i in range(args.days, 0, -1)
-    ]
+    target_dates = _target_dates(args)
     LOG.info(f"Target dates: {target_dates}")
 
     s3 = get_s3_client()
@@ -181,7 +264,7 @@ def execute(args) -> None:
 
     for market in markets:
         try:
-            _process_market(s3, market, target_dates, stats)
+            _process_market(s3, market, target_dates, stats, args.workers, args.keep_merge_cache)
         except Exception as e:
             LOG.error(f"Error processing {market}: {e}")
             stats["errors"] += 1
@@ -207,6 +290,7 @@ def register_cli(sub) -> None:
             "Examples:\n"
             "  python cli.py market-data                           # all markets, last 3 days\n"
             "  python cli.py market-data --days 7                  # all markets, last 7 days\n"
+            "  python cli.py market-data --start 2025-07-01 --end 2025-07-31\n"
             "  python cli.py market-data --market GMO:BTC_JPY      # single market, last 3 days\n"
             "  python cli.py market-data --market BINANCE:XRP_USDT --days 1"
         ),
@@ -222,6 +306,26 @@ def register_cli(sub) -> None:
         type=int,
         default=3,
         metavar="N",
-        help="Number of trailing days to download (default: 3).",
+        help="Number of trailing days to download when --start/--end are omitted (default: 3).",
+    )
+    p.add_argument(
+        "--start",
+        help="Start date YYYY-MM-DD or YYYYMMDD. Must be used with --end.",
+    )
+    p.add_argument(
+        "--end",
+        help="End date YYYY-MM-DD or YYYYMMDD. Must be used with --start.",
+    )
+    p.add_argument(
+        "--workers",
+        type=int,
+        default=4,
+        metavar="N",
+        help="Parallel download/merge workers per market (default: 4).",
+    )
+    p.add_argument(
+        "--keep-merge-cache",
+        action="store_true",
+        help="Keep decompressed source files in /panda/tmp_merge after successful two-source merges.",
     )
     p.set_defaults(func=execute)

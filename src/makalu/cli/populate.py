@@ -1,6 +1,6 @@
 import argparse
 import sys
-from logging import getLogger
+from logging import WARNING, getLogger
 
 import qate.env.sys_env as sys_env
 from qate.core.model import Market
@@ -59,6 +59,7 @@ BRONZE_BATCH_DAYS = 3  # days loaded into memory at once before flushing to parq
 
 
 def execute_bronze(args):
+    getLogger("qate").setLevel(WARNING)
     market = Market.from_str(f"{args.exchange}:{args.symbol}")
     dt_range = DtRange.from_strings(args.start, args.end)
     dt_range = DtRange(dt_range._start_dt, dt_range._end_dt, TimeFormat.YYYYMMDD)

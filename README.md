@@ -20,6 +20,15 @@ gold     Window-based signals: VolSpread, LeadLag, Chart_*
 
 Data lives at `/panda/makalu-data/`. Raw msgpack source files at `/panda/market-data/`.
 
+## Data availability
+
+Treat **2025-07-01** as the official start date for reliable market data. Older
+raw or parquet files may exist, but may have collection or correctness problems.
+
+Known global outage: **2026-04-02 through 2026-04-09 inclusive**. Market data
+collectors crashed during this window, so assume all markets are unavailable or
+unusable for raw data, derived data, research, and backtests.
+
 ## Installation
 
 ```bash

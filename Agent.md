@@ -50,6 +50,11 @@ python /home/lulurun/workspace/Makalu/src/cli.py query \
   --sql "SELECT ts, price, size FROM trade WHERE exchange='GMO' AND symbol='BTC_JPY' AND date='2026-03-01' LIMIT 10"
 ```
 
+## Critical Data Availability Facts
+
+- Official reliable data start date: **2025-07-01**. Raw or parquet data before 2025-07-01 may exist, but assume it may have collection or correctness problems unless the user explicitly says older data is acceptable.
+- Known global outage: **2026-04-02 through 2026-04-09 inclusive**. Market data collectors crashed during this window. Assume raw and derived market data are unavailable or unusable for all markets, and do not try to backfill it by re-running `market-data` or `populate`.
+
 ---
 
 ## Core Workflows (quick reference)

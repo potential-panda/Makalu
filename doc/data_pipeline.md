@@ -1,4 +1,4 @@
-# Data Pipeline — Market Data, Populate, Scan, Evict
+# Data Pipeline — Market Data, Populate, Cleanup, Scan, Evict
 
 All commands use the Makalu CLI:
 ```bash
@@ -27,6 +27,23 @@ Always populate in order — a dataset cannot be populated before its source exi
 
 ---
 
+## 1.1 Data Availability Assumptions
+
+Treat **2025-07-01** as the official start date for reliable Makalu market data.
+Raw files before 2025-07-01 may exist in S3 or local storage, but they may have
+collection or correctness problems. Do not assume pre-2025-07-01 data is valid
+for research, features, labels, or backtests unless the user explicitly confirms
+that older data is acceptable.
+
+Known global outage:
+
+- **2026-04-02 through 2026-04-09 inclusive**: market data collectors crashed.
+  Assume raw and derived market data are unavailable or unusable for all markets
+  during this window. Do not try to fill this range by re-running `market-data`
+  or `populate`; treat it as a structural data gap.
+
+---
+
 ## 2 Subcommands
 
 ### 2.1 market-data — download raw msgpack from S3
@@ -41,6 +58,9 @@ python src/cli.py market-data
 # Last N days
 python src/cli.py market-data --days 7
 
+# Exact date window
+python src/cli.py market-data --start 2025-07-01 --end 2025-07-31
+
 # Single market
 python src/cli.py market-data --market GMO:BTC_JPY --days 1
 python src/cli.py market-data --market BINANCE:BTC_USDT --days 3
@@ -51,6 +71,36 @@ Standard markets: BINANCE BTC/ETH/XRP USDT, GMO BTC/ETH/XRP JPY.
 Output JSON: `{status, markets, dates, downloaded, merged, skipped, errors}`
 
 Exec timeout: 300 s.
+
+### 2.1.1 market-data-s3 — inspect raw S3 availability (READ-ONLY)
+
+Lists available raw market-data markets and date ranges in S3 without
+downloading files. A full scan paginates S3 prefixes across all known raw
+market-data hosts, so the inventory is cached at:
+
+```bash
+/panda/makalu-data/.cache/market_data_s3_inventory.json
+```
+
+Use the cache:
+
+```bash
+python src/cli.py market-data-s3
+python src/cli.py market-data-s3 --market GMO:BTC_SPOT
+```
+
+Refresh the cache from S3:
+
+```bash
+python src/cli.py market-data-s3 --refresh
+```
+
+Check a specific window for a market:
+
+```bash
+python src/cli.py market-data-s3 \
+  --market GMO:BTC_SPOT --start 2026-04-01 --end 2026-04-15
+```
 
 ### 2.2 data-check — inspect availability (READ-ONLY)
 
@@ -142,6 +192,31 @@ python src/cli.py metrics-data --host orion-01
 
 Requires InfluxDB to be running (see `doc/local_infra.md`).
 
+### 2.7 market-data-cleanup — delete raw msgpack already in bronze
+
+Deletes raw files from `/panda/market-data/` only when the same exchange,
+symbol, and date exist in **both** bronze `Trade` and bronze `OrderBook`.
+Keeps the most recent 3 calendar days by default.
+
+Dry-run by default:
+
+```bash
+python src/cli.py market-data-cleanup
+python src/cli.py market-data-cleanup --market GMO:BTC_JPY
+```
+
+Apply after reviewing the dry-run output:
+
+```bash
+python src/cli.py market-data-cleanup --apply
+```
+
+Optional retention override:
+
+```bash
+python src/cli.py market-data-cleanup --keep-days 7
+```
+
 ---
 
 ## 3 Smart Populate Pattern
@@ -199,9 +274,12 @@ python src/cli.py metrics-data
 ## 5 Key Rules
 
 - `market-data` before `populate bronze` — source files must exist first
+- Reliable data starts on 2025-07-01; older data may exist but should be treated as suspect
+- 2026-04-02 through 2026-04-09 is a known global collector outage; do not try to backfill it
 - `data-check` before any populate — never populate blindly
 - Only populate **missing** date ranges — never re-populate dates already on disk
 - `to_dt` for populate: at most today − 2 days (market-data cron delivers yesterday at ~2am)
   Missing today and yesterday is expected — do not attempt to populate them
 - Run `scan` after every populate
+- `market-data-cleanup` is dry-run by default; only use `--apply` after reviewing the files
 - `evict --apply` always requires explicit user confirmation

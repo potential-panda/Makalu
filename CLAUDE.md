@@ -38,6 +38,11 @@ All technical reference lives in `doc/`. Read the relevant file before starting 
 | Docker/InfluxDB/Grafana infrastructure | `doc/local_infra.md` |
 | Implementing a new derived metric | `doc/implement_metric.md` |
 
+## Data Availability Facts
+
+- Official reliable data start date: **2025-07-01**. Data before 2025-07-01 may exist, but treat it as potentially incorrect unless the user explicitly approves using it.
+- Known global outage: **2026-04-02 through 2026-04-09 inclusive**. The market data collectors crashed during this window. Assume all raw and derived market data are unavailable or unusable for every market, and do not attempt to backfill that range by re-running `market-data` or `populate`.
+
 ## Behaviour Rules
 
 - **Read before answering data questions.** This warehouse contains live data past your training cutoff. Run `data-check` or a SQL query — never answer from memory.
