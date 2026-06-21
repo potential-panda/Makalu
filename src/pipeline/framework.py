@@ -12,6 +12,19 @@ CHUNK_SIZE = 3
 LOG = getLogger(__name__)
 
 
+class NoDataForChunk(Exception):
+    """Raise from a Stage.before() when the underlying read genuinely has no
+    data for this chunk (e.g. a real gap in upstream raw data collection,
+    confirmed for real: BINANCE/ETH_USDT bronze is missing an entire month,
+    2026-03-29..2026-04-30, and several other markets have scattered
+    week-long gaps). Pipeline.process() catches this per-chunk and skips
+    forward, rather than the whole populate command crashing on the first
+    missing day and never reaching any later, available data -- confirmed
+    for real: a single populate call spanning ~90 days with one missing
+    week in the middle never got anywhere near the later dates before this
+    fix, regardless of how long it ran."""
+
+
 @dataclass
 class StageContext:
     populate_dt_range: DtRange
@@ -88,12 +101,21 @@ class Pipeline:
     def process(self, dt_range: DtRange):
         chunks = dt_range.chunks(CHUNK_SIZE)
         total_chunks = len(chunks)
+        skipped_chunks = []
         for i, chunk in enumerate(chunks):
             chunk_start_time = time.time()
             LOG.info(
                 f"Starting pipeline process for chunk {i + 1}/{total_chunks} ({chunk.start_str} to {chunk.end_str})"
             )
-            for s in self._stages:
-                s.run(chunk, self._context)
+            try:
+                for s in self._stages:
+                    s.run(chunk, self._context)
+            except NoDataForChunk as e:
+                LOG.warning(f"Chunk {i + 1}/{total_chunks} ({chunk.start_str} to {chunk.end_str}) skipped: {e}")
+                skipped_chunks.append((chunk.start_str, chunk.end_str))
+                continue
             chunk_end_time = time.time()
             LOG.info(f"Chunk {i + 1}/{total_chunks} processed in {chunk_end_time - chunk_start_time:.2f} seconds.")
+
+        if skipped_chunks:
+            LOG.warning(f"Skipped {len(skipped_chunks)}/{total_chunks} chunk(s) with no data: {skipped_chunks}")

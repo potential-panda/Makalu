@@ -11,14 +11,31 @@ from labeling.triple_barrier import ts_index
 from lead_lag.lead_lag import prepare_returns
 
 from .execution_price_derived_steps import Context as ExecutionPriceDerivedContext
-from .framework import PipelineContext, Stage, StageContext
+from .framework import NoDataForChunk, PipelineContext, Stage, StageContext
 from .lead_lag_steps import Context as LeadLagContext
 from .market_data_steps import Context as MarketDataContext
 from .order_book_derived_steps import Context as OrderBookDerivedContext
+from .return_steps import Context as ReturnContext
 from .trade_derived_steps import Context as TradeDerivedContext
 from .triple_barrier_steps import Context as TripleBarrierContext
 
 LOG = getLogger(__name__)
+
+
+def _safe_read(read_fn, *args, label: str = "", **kwargs):
+    """Confirmed for real: when no parquet partition exists for a date
+    range (an upstream raw-data gap -- e.g. BINANCE/ETH_USDT bronze is
+    missing all of 2026-03-29..2026-04-30), qate's read() returns a fully
+    empty, columnless DataFrame and then crashes with KeyError('ts')
+    trying to filter it by timestamp, rather than returning an empty
+    result cleanly. Converts that into NoDataForChunk so
+    Pipeline.process() can skip this chunk and continue to the next one,
+    instead of the whole populate command crashing on the first gap and
+    never reaching any later, available data."""
+    try:
+        return read_fn(*args, **kwargs)
+    except KeyError as e:
+        raise NoDataForChunk(f"{label}: no data for this range ({e})") from e
 
 
 class MarketDataStage(Stage):
@@ -65,7 +82,7 @@ class OrderBookDerivedStage(Stage):
             f"from {compute_dt_range.start_str} to {compute_dt_range.end_str}"
         )
         store = pipeline_context.parquet_store.create_order_book(self.market)
-        order_books = store.read_order_books(compute_dt_range)
+        order_books = _safe_read(store.read_order_books, compute_dt_range, label=f"OrderBook {self.market.id}")
 
         end_time = time.time()
         LOG.info(f"OrderBookDerivedStage: Found {len(order_books)} objects in {end_time - start_time:.2f} seconds.")
@@ -89,7 +106,7 @@ class TradeDerivedStage(Stage):
             f"from {compute_dt_range.start_str} to {compute_dt_range.end_str}"
         )
         store = pipeline_context.parquet_store.create_trade(self.market)
-        trades = store.read_trades(compute_dt_range)
+        trades = _safe_read(store.read_trades, compute_dt_range, label=f"Trade {self.market.id}")
 
         end_time = time.time()
         LOG.info(f"TradeDerivedStage: Found {len(trades)} objects in {end_time - start_time:.2f} seconds.")
@@ -112,7 +129,7 @@ class LabelingStage(Stage):
             self.execution_size_str,
         )
         read_range = DtRange(dt_range.start_dt - timedelta(hours=8), dt_range.end_dt + timedelta(hours=8))
-        df = parquet_store.read(read_range)
+        df = _safe_read(parquet_store.read, read_range, label=f"ExecutionPrice {self.market.id}")
 
         return TripleBarrierContext(
             dt_range,
@@ -132,14 +149,16 @@ class LeadLagStage(Stage):
     def before(self, dt_range: DtRange, pipeline_context: PipelineContext) -> StageContext:
         read_range = DtRange(dt_range.start_dt - timedelta(hours=8), dt_range.end_dt)
 
-        df_lead = pipeline_context.parquet_store.create_execution_price(
-            self.market_lead,
-            self.execution_size_str,
-        ).read(read_range)
-        df_lag = pipeline_context.parquet_store.create_execution_price(
-            self.market_lag,
-            self.execution_size_str,
-        ).read(read_range)
+        df_lead = _safe_read(
+            pipeline_context.parquet_store.create_execution_price(self.market_lead, self.execution_size_str).read,
+            read_range,
+            label=f"ExecutionPrice {self.market_lead.id}",
+        )
+        df_lag = _safe_read(
+            pipeline_context.parquet_store.create_execution_price(self.market_lag, self.execution_size_str).read,
+            read_range,
+            label=f"ExecutionPrice {self.market_lag.id}",
+        )
 
         LOG.info(
             f"LeadLagStep: Loaded {len(df_lead)} prices for {self.market_lead.id},"
@@ -170,11 +189,47 @@ class ExecutionPriceDerivedStage(Stage):
             self.execution_size_str,
         )
         read_range = DtRange(dt_range.start_dt - timedelta(hours=8), dt_range.end_dt)
-        df = parquet_store.read(read_range)
+        df = _safe_read(parquet_store.read, read_range, label=f"ExecutionPrice {self.market.id}")
         df = df.sort_index()
         df = ts_index(df)
 
         return ExecutionPriceDerivedContext(
+            dt_range,
+            self.market,
+            self.execution_size_str,
+            df,
+        )
+
+
+class ReturnDerivedStage(Stage):
+    """Forward returns need FUTURE data beyond dt_range.end -- unlike the
+    backward-only pad ExecutionPriceDerivedStage uses for VolSpread, this
+    pads the read range forward by max_horizon_sec too. Without this, the
+    last max_horizon_sec of every populate call would have a permanently
+    missing return: ReturnStep's "idempotent, later dates do not affect
+    earlier ones" populate model means a later populate call never goes
+    back to fill in an earlier gap."""
+
+    def __init__(self, market: Market, execution_size_str: str, max_horizon_sec: int):
+        super().__init__()
+        self.market = market
+        self.execution_size_str = execution_size_str
+        self.max_horizon_sec = max_horizon_sec
+
+    def before(self, dt_range: DtRange, pipeline_context: PipelineContext) -> StageContext:
+        parquet_store = pipeline_context.parquet_store.create_execution_price(
+            self.market,
+            self.execution_size_str,
+        )
+        read_range = DtRange(
+            dt_range.start_dt - timedelta(hours=1),
+            dt_range.end_dt + timedelta(seconds=self.max_horizon_sec),
+        )
+        df = _safe_read(parquet_store.read, read_range, label=f"ExecutionPrice {self.market.id}")
+        df = df.sort_index()
+        df = ts_index(df)
+
+        return ReturnContext(
             dt_range,
             self.market,
             self.execution_size_str,

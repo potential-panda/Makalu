@@ -125,6 +125,26 @@ def execute_volspread(args):
     LOG.info("Done.")
 
 
+def execute_return(args):
+    from pipeline.framework import Pipeline
+    from pipeline.return_steps import ReturnConfig, ReturnStep
+    from pipeline.stages import ReturnDerivedStage
+
+    market = Market.from_str(f"{args.exchange}:{args.symbol}")
+    dt_range = DtRange.from_strings(args.start, args.end)
+    horizons_sec = tuple(int(h) for h in args.horizons.split(","))
+    config = ReturnConfig(horizons_sec=horizons_sec, execution_size_str=args.execution_size)
+
+    pipeline = Pipeline(MarketDataStore(sys_env.MARKET_DATA_DIR), ParquetStore(sys_env.PARQUET_ROOT_DIR))
+    pipeline.stage(
+        ReturnDerivedStage(market, args.execution_size, max_horizon_sec=max(horizons_sec)).step(ReturnStep(config))
+    )
+
+    LOG.info(f"Populating Return: {market.id} (execution_size={args.execution_size}, horizons={horizons_sec}) {args.start} → {args.end}")
+    pipeline.process(dt_range)
+    LOG.info("Done.")
+
+
 def execute_leadlag(args):
     from lead_lag.lead_lag import LEAD_LAG_CONFIG_MID, LEAD_LAG_CONFIG_NEARHFT
     from pipeline.framework import Pipeline
@@ -132,13 +152,36 @@ def execute_leadlag(args):
     from pipeline.market_pair import EXECUTION_SIZE, LEAD_LAG_PAIRS
     from pipeline.stages import LeadLagStage
 
-    pair = LEAD_LAG_PAIRS.get(args.pair)
-    if pair is None:
-        LOG.error(f"Unknown pair '{args.pair}'. Known: {list(LEAD_LAG_PAIRS)}")
+    # --pair is the original shorthand for the 4 known BINANCE->GMO-margin
+    # relationships LEAD_LAG_PAIRS encodes -- that dict is also load-bearing
+    # for silver.py's feature pipeline and training/config.py's ML training
+    # config, so it's deliberately left untouched. --lead-market/--lag-market
+    # is a separate, explicit path for any other pair (e.g. BINANCE->GMO
+    # spot, or same-exchange pairs), added because Kilimanjaro needed
+    # lead-lag for markets LEAD_LAG_PAIRS doesn't cover and never will.
+    if args.pair and (args.lead_market or args.lag_market):
+        LOG.error("--pair is mutually exclusive with --lead-market/--lag-market.")
+        sys.exit(1)
+    if args.pair:
+        pair = LEAD_LAG_PAIRS.get(args.pair)
+        if pair is None:
+            LOG.error(f"Unknown pair '{args.pair}'. Known: {list(LEAD_LAG_PAIRS)}")
+            sys.exit(1)
+        market_lead, market_lag = pair
+    elif args.lead_market and args.lag_market:
+        market_lead = Market.from_str(args.lead_market)
+        market_lag = Market.from_str(args.lag_market)
+    else:
+        LOG.error("Pass either --pair, or both --lead-market and --lag-market.")
         sys.exit(1)
 
-    market_lead, market_lag = pair
-    execution_size = EXECUTION_SIZE.get(market_lag.symbol)
+    execution_size = args.execution_size or EXECUTION_SIZE.get(market_lag.symbol)
+    if execution_size is None:
+        LOG.error(
+            f"No execution_size found for {market_lag.id} in pipeline.market_pair.EXECUTION_SIZE "
+            "-- pass --execution-size explicitly."
+        )
+        sys.exit(1)
     dt_range = DtRange.from_strings(args.start, args.end)
 
     pipeline = Pipeline(MarketDataStore(sys_env.MARKET_DATA_DIR), ParquetStore(sys_env.PARQUET_ROOT_DIR))
@@ -218,6 +261,19 @@ _DATASET_META = {
         "example": "python cli.py populate VolSpread --exchange GMO --symbol BTC_JPY --start 2026-01-01 "
         "--end 2026-01-07 --execution-size 0.002",
     },
+    "Return": {
+        "help": "Populate forward mid-price returns at fixed horizons from MarketPrice (research layer)",
+        "description": (
+            "Computes simple forward returns of mid price at fixed horizons\n"
+            "(e.g. return_30s, return_120s, return_300s), resampled to a regular grid first.\n"
+            "A stable, widely-reusable quantity shared across many signal-scanning purposes,\n"
+            "rather than each consumer recomputing the same forward join independently.\n\n"
+            "Prerequisite: MarketPrice must be populated for the same market and execution_size,\n"
+            "through at least (end date + max horizon)."
+        ),
+        "example": "python cli.py populate Return --exchange GMO --symbol BTC_JPY --start 2026-01-01 "
+        "--end 2026-01-07 --execution-size 0.002 --horizons 30,120,300",
+    },
     "LeadLag": {
         "help": "Populate lead-lag cross-correlation metrics between a BINANCE lead and GMO lag market (gold layer)",
         "description": (
@@ -269,6 +325,22 @@ def _register_volspread(sub: argparse.ArgumentParser) -> argparse.ArgumentParser
     return p
 
 
+def _register_return(sub: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    p = _register_dataset_single_market(sub, "Return")
+    p.add_argument(
+        "--execution-size",
+        required=True,
+        dest="execution_size",
+        help="Execution size matching the MarketPrice partition to read from, e.g. 0.002.",
+    )
+    p.add_argument(
+        "--horizons",
+        default="30,120,300",
+        help="Comma-separated forward horizons in seconds, e.g. 30,120,300.",
+    )
+    return p
+
+
 def _register_leadlag(sub: argparse.ArgumentParser) -> argparse.ArgumentParser:
     meta = _DATASET_META["LeadLag"]
     p = sub.add_parser(
@@ -278,7 +350,10 @@ def _register_leadlag(sub: argparse.ArgumentParser) -> argparse.ArgumentParser:
         epilog=f"Example:\n  {meta['example']}",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("--pair", required=True, help="Asset pair key: btc, eth, xrp, sol")
+    p.add_argument("--pair", default=None, help="Asset pair key: btc, eth, xrp, sol (mutually exclusive with --lead-market/--lag-market)")
+    p.add_argument("--lead-market", default=None, help="Explicit lead market as EXCHANGE:SYMBOL, e.g. BINANCE:BTC_USDT -- for any pair --pair doesn't cover")
+    p.add_argument("--lag-market", default=None, help="Explicit lag market as EXCHANGE:SYMBOL, e.g. GMO:BTC_SPOT")
+    p.add_argument("--execution-size", dest="execution_size", default=None, help="Overrides pipeline.market_pair.EXECUTION_SIZE's lookup for the lag market, if needed")
     p.add_argument("--start", required=True, help="Start date YYYY-MM-DD")
     p.add_argument("--end", help="End date YYYY-MM-DD (defaults to --start if omitted)")
     return p
@@ -295,6 +370,7 @@ def register_cli(parser: argparse.ArgumentParser):
             "Run 'python cli.py scan' after populating to update the manifest.\n\n"
             "Data flow:\n"
             "  bronze → MarketPrice → VolSpread\n"
+            "  bronze → MarketPrice → Return\n"
             "  bronze → BookState / BookChange / TradeAggression\n"
             "  MarketPrice (both markets) → LeadLag"
         ),
@@ -308,4 +384,5 @@ def register_cli(parser: argparse.ArgumentParser):
     _register_dataset_single_market(sub, "TradeAggression").set_defaults(func=execute_single_market)
     _register_market_price(sub).set_defaults(func=execute_single_market)
     _register_volspread(sub).set_defaults(func=execute_volspread)
+    _register_return(sub).set_defaults(func=execute_return)
     _register_leadlag(sub).set_defaults(func=execute_leadlag)
