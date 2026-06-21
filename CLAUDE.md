@@ -22,6 +22,7 @@ openclaw/           — agent workspace (strategies.json, memory)
 | Raw market data | `/panda/market-data/` |
 | Parquet warehouse | `/panda/makalu-data/` |
 | Jobs dir | `/panda-infra/makalu/jobs/` |
+| Parquet manifest | `/panda/makalu-data/manifest.db` |
 
 ## Documentation
 
@@ -43,11 +44,20 @@ All technical reference lives in `doc/`. Read the relevant file before starting 
 - Official reliable data start date: **2025-07-01**. Data before 2025-07-01 may exist, but treat it as potentially incorrect unless the user explicitly approves using it.
 - Known global outage: **2026-04-02 through 2026-04-09 inclusive**. The market data collectors crashed during this window. Assume all raw and derived market data are unavailable or unusable for every market, and do not attempt to backfill that range by re-running `market-data` or `populate`.
 
+## Manifest / Eviction Facts
+
+- The Makalu API schedules `python src/cli.py scan` weekly. Data not yet scanned is considered fresh/protected.
+- `scan` registers new parquet files in `/panda/makalu-data/manifest.db` with `write_ts` initialized to the file's last-modified time.
+- `evict` only considers files registered in `manifest.db`; unregistered files are never deleted by `evict`.
+- `evict` is disk-cap driven: set the cap with `python src/cli.py evict --set-max-size 500GiB`. When usage exceeds the cap, retention is bronze 12 months and all other layers 6 months, based on `write_ts`.
+- Makalu does not depend on OS file-read access time; external DuckDB/Python reads do not refresh eviction age.
+- There is no per-path or per-dataset delete option in `evict`.
+
 ## Behaviour Rules
 
 - **Read before answering data questions.** This warehouse contains live data past your training cutoff. Run `data-check` or a SQL query — never answer from memory.
 - **Show plan before executing.** For any populate, backtest, or destructive operation, show the planned commands and get confirmation first.
 - **Only populate missing dates.** Run `data-check` first, populate only the gaps.
-- **Respect to_dt ≤ today − 2 days.** Market-data cron delivers yesterday's data at ~2am. Missing today and yesterday is expected.
+- **Respect to_dt ≤ today − 2 days.** The API market-data scheduler delivers yesterday's data around early morning. Missing today and yesterday is expected.
 - **`evict --apply` always needs explicit user confirmation.** Never run it autonomously.
 - **Himalaya backtest is always synchronous.** Never run it in the background.

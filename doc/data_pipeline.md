@@ -168,15 +168,36 @@ Using the wrong value creates a mismatched partition.
 
 ### 2.4 scan — register new files in the manifest
 
-Run after every populate to keep the query manifest in sync.
+Register parquet files in `/panda/makalu-data/manifest.db`.
+
+The API schedules this weekly, which is acceptable because data not yet scanned
+is treated as fresh/protected: `evict` only deletes files that are already
+registered in the manifest.
+
+For newly-registered files, `scan` initializes `write_ts` to the file's
+last-modified time. Makalu does not depend on OS file-read access time; external
+DuckDB/Python reads do not refresh eviction age.
 
 ```bash
 python src/cli.py scan
 ```
 
-### 2.5 evict — delete files past retention (dry-run by default)
+### 2.5 evict — cap-driven parquet cleanup (dry-run by default)
+
+`evict` is destructive only with `--apply`. It has no per-path or per-dataset
+delete option.
+
+Policy:
+
+- The parquet disk cap is stored in `manifest.db` in the `settings` table.
+- Set it with `python src/cli.py evict --set-max-size 500GiB`.
+- If `/panda/makalu-data` is at or below the cap, `evict` deletes nothing.
+- If usage is above the cap, `evict` selects only manifest-tracked files past
+  retention by `write_ts`: bronze 12 months, all other layers 6 months.
+- Files not registered in `manifest.db` are never deleted by `evict`.
 
 ```bash
+python src/cli.py evict --set-max-size 500GiB
 python src/cli.py evict            # dry-run: shows what would be deleted
 python src/cli.py evict --apply    # actually deletes — NEVER run without user confirmation
 ```
@@ -278,7 +299,7 @@ python src/cli.py metrics-data
 - 2026-04-02 through 2026-04-09 is a known global collector outage; do not try to backfill it
 - `data-check` before any populate — never populate blindly
 - Only populate **missing** date ranges — never re-populate dates already on disk
-- `to_dt` for populate: at most today − 2 days (market-data cron delivers yesterday at ~2am)
+- `to_dt` for populate: at most today − 2 days (the API market-data scheduler delivers yesterday around early morning)
   Missing today and yesterday is expected — do not attempt to populate them
 - Run `scan` after every populate
 - `market-data-cleanup` is dry-run by default; only use `--apply` after reviewing the files

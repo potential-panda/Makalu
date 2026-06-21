@@ -8,6 +8,7 @@ datasets:
   # Bronze Layer — /panda/makalu-data/bronze/
   # Raw structured data derived directly from msgpack archives.
   # No analytics. No derived metrics.
+  # Bronze contains only Trade and OrderBook.
   # ---------------------------------------------------------------------------
 
   - dataset_name: Trade
@@ -28,8 +29,13 @@ datasets:
     source_dataset: null
     path_template: /panda/makalu-data/bronze/dataset=OrderBook/exchange={exchange}/symbol={symbol}/date={date}/data.parquet
 
+  # ---------------------------------------------------------------------------
+  # Silver Layer — /panda/makalu-data/silver/
+  # Point-in-time derived metrics and rolling trade-flow metrics.
+  # ---------------------------------------------------------------------------
+
   - dataset_name: BookChange
-    layer: bronze
+    layer: silver
     description: >
       Per-update diff of the order book. Captures depth deltas, pull rates,
       and refill rates at multiple depth levels (k). Derived from consecutive
@@ -38,10 +44,10 @@ datasets:
     primary_timestamp: ts
     partition_columns: [exchange, symbol]
     source_dataset: OrderBook
-    path_template: /panda/makalu-data/bronze/dataset=BookChange/exchange={exchange}/symbol={symbol}/date={date}/data.parquet
+    path_template: /panda/makalu-data/silver/dataset=BookChange/exchange={exchange}/symbol={symbol}/date={date}/data.parquet
 
   - dataset_name: BookState
-    layer: bronze
+    layer: silver
     description: >
       Snapshot-level microstructure state: best bid/ask, spread, volume
       imbalances, and microprice at multiple depth levels.
@@ -49,12 +55,7 @@ datasets:
     primary_timestamp: ts
     partition_columns: [exchange, symbol]
     source_dataset: OrderBook
-    path_template: /panda/makalu-data/bronze/dataset=BookState/exchange={exchange}/symbol={symbol}/date={date}/data.parquet
-
-  # ---------------------------------------------------------------------------
-  # Silver Layer — /panda/makalu-data/silver/
-  # Point-in-time derived metrics. No rolling windows.
-  # ---------------------------------------------------------------------------
+    path_template: /panda/makalu-data/silver/dataset=BookState/exchange={exchange}/symbol={symbol}/date={date}/data.parquet
 
   - dataset_name: MarketPrice
     layer: silver

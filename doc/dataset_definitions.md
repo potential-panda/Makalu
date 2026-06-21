@@ -15,6 +15,7 @@ All column names used in queries must have an entry here.
 ## 1 Bronze Layer
 
 Raw structured data. No derived analytics.
+The bronze layer contains only `Trade` and `OrderBook`.
 
 ### dataset=Trade
 
@@ -44,6 +45,10 @@ Grain: per order book update
 | `ask{i}_qty` | Quantity at i-th ask level |
 
 ---
+
+## 2 Silver Layer
+
+Derived metrics from bronze data.
 
 ### dataset=BookChange
 
@@ -86,10 +91,6 @@ Grain: per order book update
 | `microprice_k{k}` | `(bid_qty * ask_price + ask_qty * bid_price) / (bid_qty + ask_qty)` within top-k levels |
 
 ---
-
-## 2 Silver Layer
-
-Point-in-time derived metrics. No rolling windows.
 
 ### dataset=MarketPrice
 

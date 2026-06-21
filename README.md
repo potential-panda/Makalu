@@ -8,7 +8,7 @@ Market data pipeline and backtest orchestration for the **orion** algorithmic tr
 - Converts and stores it as a layered parquet data warehouse
 - Derives microstructure metrics (MarketPrice, VolSpread, BookState, etc.)
 - Runs backtests via the Himalaya engine
-- Exposes a job queue API (port 9776) with a daily data-sync scheduler
+- Exposes a job queue API (port 9776) with daily data-sync and weekly manifest-scan schedulers
 
 ## Data warehouse layers
 
@@ -18,7 +18,18 @@ silver   Derived per-tick metrics: MarketPrice, BookState, BookChange, TradeAggr
 gold     Window-based signals: VolSpread, LeadLag, Chart_*
 ```
 
+The bronze layer contains only `Trade` and `OrderBook`. All other datasets are
+derived and live in silver, gold, feature, or research layers.
+
 Data lives at `/panda/makalu-data/`. Raw msgpack source files at `/panda/market-data/`.
+
+`/panda/makalu-data/manifest.db` tracks parquet file metadata for eviction:
+path, row count, file size, and write timestamp. The API schedules
+`python src/cli.py scan` weekly; data that has not been scanned yet is treated
+as fresh/protected because `evict` only deletes files registered in the
+manifest. Makalu does not depend on OS file-read access time. The parquet disk
+cap is stored in the manifest settings table and can be set with
+`python src/cli.py evict --set-max-size 500GiB`.
 
 ## Data availability
 

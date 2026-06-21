@@ -10,12 +10,23 @@ LOG = getLogger(__name__)
 MANIFEST_PATH = "/panda/makalu-data/manifest.db"
 ROOT = Path(sys_env.get_parquet_root_dir())
 
-RETENTION_DAYS: dict[str, int] = {
-    "bronze": 180,
-    "silver": 180,
-    "gold": 180,
-    "feature": 90,
-    "research": 7,
+MAX_SIZE_SETTING = "max_size_bytes"
+BRONZE_RETENTION_DAYS = 365
+OTHER_LAYER_RETENTION_DAYS = 180
+SIZE_UNITS = {
+    "b": 1,
+    "k": 1_000,
+    "kb": 1_000,
+    "m": 1_000_000,
+    "mb": 1_000_000,
+    "g": 1_000_000_000,
+    "gb": 1_000_000_000,
+    "t": 1_000_000_000_000,
+    "tb": 1_000_000_000_000,
+    "kib": 1024,
+    "mib": 1024**2,
+    "gib": 1024**3,
+    "tib": 1024**4,
 }
 
 
@@ -26,39 +37,148 @@ def _infer_layer(path: str) -> str | None:
         return None
 
 
-def _last_activity(record: dict) -> float:
-    return max(record["write_ts"], record["read_ts"] or 0.0)
+def _tracked_age_timestamp(record: dict) -> float:
+    return record["write_ts"]
+
+
+def _retention_days(layer: str) -> int:
+    return BRONZE_RETENTION_DAYS if layer == "bronze" else OTHER_LAYER_RETENTION_DAYS
+
+
+def _ensure_settings_table(manifest: Manifest) -> None:
+    manifest._conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS settings (
+            key   TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )
+        """
+    )
+    manifest._conn.commit()
+
+
+def _get_setting(manifest: Manifest, key: str) -> str | None:
+    row = manifest._conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+    return row[0] if row else None
+
+
+def _set_setting(manifest: Manifest, key: str, value: str) -> None:
+    manifest._conn.execute(
+        """
+        INSERT INTO settings (key, value)
+        VALUES (?, ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+        """,
+        (key, value),
+    )
+    manifest._conn.commit()
+
+
+def _parse_size(value: str) -> int:
+    text = value.strip().lower()
+    if not text:
+        raise ValueError("empty size")
+
+    number = []
+    unit = []
+    for ch in text:
+        if ch.isdigit() or ch == ".":
+            if unit:
+                raise ValueError(f"invalid size: {value}")
+            number.append(ch)
+        elif ch.isspace():
+            continue
+        else:
+            unit.append(ch)
+
+    if not number:
+        raise ValueError(f"invalid size: {value}")
+    multiplier = SIZE_UNITS.get("".join(unit) or "b")
+    if multiplier is None:
+        raise ValueError(f"unknown size unit in {value!r}; use bytes, GB, GiB, TB, or TiB")
+    return int(float("".join(number)) * multiplier)
+
+
+def _format_size(num_bytes: int) -> str:
+    value = float(num_bytes)
+    for unit in ("B", "KiB", "MiB", "GiB", "TiB"):
+        if value < 1024 or unit == "TiB":
+            return f"{value:.1f} {unit}" if unit != "B" else f"{int(value)} B"
+        value /= 1024
+    return f"{num_bytes} B"
+
+
+def _actual_root_size() -> int:
+    total = 0
+    for path in ROOT.rglob("data.parquet"):
+        try:
+            total += path.stat().st_size
+        except FileNotFoundError:
+            continue
+    return total
 
 
 def execute(args):
     manifest = Manifest(MANIFEST_PATH)
+    _ensure_settings_table(manifest)
+
+    if args.set_max_size:
+        try:
+            max_size = _parse_size(args.set_max_size)
+        except ValueError as e:
+            manifest.close()
+            raise SystemExit(str(e)) from e
+        _set_setting(manifest, MAX_SIZE_SETTING, str(max_size))
+        LOG.info(f"Set Makalu parquet disk cap to {_format_size(max_size)}.")
+
+    max_size_value = _get_setting(manifest, MAX_SIZE_SETTING)
+    if not max_size_value:
+        LOG.info("No Makalu parquet disk cap is configured. Nothing to evict.")
+        LOG.info("Set one with: python cli.py evict --set-max-size 500GiB")
+        manifest.close()
+        return
+
+    max_size = int(max_size_value)
+    current_size = _actual_root_size()
+    LOG.info(f"Makalu parquet usage: {_format_size(current_size)} / cap {_format_size(max_size)}")
+    if current_size <= max_size:
+        LOG.info("Usage is below cap. Nothing to evict.")
+        manifest.close()
+        return
+
     records = manifest.get_all()
     now = time.time()
     to_delete = []
 
     for r in records:
         layer = _infer_layer(r["path"])
-        if not layer or layer not in RETENTION_DAYS:
+        if not layer:
             continue
-        cutoff = now - RETENTION_DAYS[layer] * 86_400
-        if _last_activity(r) < cutoff:
+        retention_days = _retention_days(layer)
+        cutoff = now - retention_days * 86_400
+        if _tracked_age_timestamp(r) < cutoff:
             to_delete.append(r)
 
     if not to_delete:
-        LOG.info("Nothing to evict.")
+        LOG.info(
+            "Usage is above cap, but no manifest-tracked files exceed the retention "
+            f"thresholds: bronze {BRONZE_RETENTION_DAYS} days, other layers "
+            f"{OTHER_LAYER_RETENTION_DAYS} days."
+        )
         manifest.close()
         return
 
     total_size = sum(r["file_size"] for r in to_delete)
-    LOG.info(f"{'Action':<14} {'Layer':<10} {'Age (days)':>10}  Path")
+    LOG.info(f"{'Action':<14} {'Layer':<10} {'Age (days)':>10} {'Keep (days)':>11}  Path")
     LOG.info("-" * 80)
     for r in to_delete:
         layer = _infer_layer(r["path"])
-        age_days = int((now - _last_activity(r)) / 86_400)
+        age_days = int((now - _tracked_age_timestamp(r)) / 86_400)
+        retention_days = _retention_days(layer or "")
         action = "DELETE" if args.apply else "WOULD DELETE"
-        LOG.info(f"{action:<14} {layer:<10} {age_days:>10}d  {r['path']}")
+        LOG.info(f"{action:<14} {layer:<10} {age_days:>10}d {retention_days:>11}d  {r['path']}")
 
-    LOG.info(f"Total: {len(to_delete)} file(s), {total_size / 1_048_576:.1f} MB")
+    LOG.info(f"Total: {len(to_delete)} file(s), {_format_size(total_size)}")
 
     if not args.apply:
         LOG.info("Dry-run. Run with --apply to delete.")
@@ -90,23 +210,31 @@ def execute(args):
 def register_cli(sub):
     p = sub.add_parser(
         "evict",
-        help="Delete files past retention policy (DESTRUCTIVE — dry-run by default)",
+        help="Delete stale manifest-tracked files when parquet usage exceeds the configured cap",
         description=(
-            "Reads the manifest and deletes parquet files whose last activity\n"
-            "(write or read timestamp) exceeds the retention limit for their layer.\n\n"
-            "Retention policy:\n"
-            "  bronze / silver / gold : 180 days\n"
-            "  feature                :  90 days\n"
-            "  research               :   7 days\n\n"
+            "Reads /panda/makalu-data/manifest.db and only considers files registered there.\n"
+            "Files that are not in the manifest are never deleted by evict.\n\n"
+            "Eviction is disk-cap driven: if /panda/makalu-data is above the configured\n"
+            "cap, evict selects manifest-tracked files by write_ts age:\n"
+            "  bronze      : 12 months (365 days)\n"
+            "  other layers:  6 months (180 days)\n"
+            "Makalu does not use OS file-read access time for eviction.\n\n"
+            "There is no per-path or per-dataset delete option in this command.\n"
             "IMPORTANT: Always run without --apply first to review what would be deleted.\n"
-            "Prerequisite: run 'scan' first to ensure the manifest is up to date."
+            "Prerequisite: run 'scan' periodically to keep the manifest up to date."
         ),
         epilog=(
             "Examples:\n"
+            "  python cli.py evict --set-max-size 500GiB\n"
             "  python cli.py evict             # dry-run: show what would be deleted\n"
             "  python cli.py evict --apply     # actually delete"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     p.add_argument("--apply", action="store_true", help="Actually delete files (default: dry-run)")
+    p.add_argument(
+        "--set-max-size",
+        metavar="SIZE",
+        help="Persist the Makalu parquet disk cap in manifest.db, e.g. 500GiB or 1TiB",
+    )
     p.set_defaults(func=execute)

@@ -73,6 +73,14 @@ python /home/lulurun/workspace/Makalu/src/cli.py populate bronze \
 python /home/lulurun/workspace/Makalu/src/cli.py scan
 ```
 
+Manifest policy:
+- `/panda/makalu-data/manifest.db` is the source of truth for eviction metadata.
+- The Makalu API schedules `scan` weekly; data not yet scanned is considered fresh/protected.
+- `scan` registers new parquet files with `write_ts` set to the file's last-modified time.
+- `evict` only deletes manifest-tracked files when `/panda/makalu-data` is above its configured cap. Retention is bronze 12 months, all other layers 6 months, based on `write_ts`.
+- Makalu does not depend on OS file-read access time; external DuckDB/Python reads do not refresh eviction age.
+- Set the cap with `python /home/lulurun/workspace/Makalu/src/cli.py evict --set-max-size 500GiB`.
+
 **3 — Run backtest** (see `doc/backtest.md` for full workflow)
 ```bash
 # Always: data-check → populate gaps → check docker → confirm → execute

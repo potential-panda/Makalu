@@ -35,8 +35,10 @@ SUBCOMMANDS
   metrics-data  WRITE.      Download 5-min trading metrics from S3 and push to InfluxDB.
                 Idempotent. Looks back up to 28 days for missing intervals.
   scan          WRITE.      Register existing parquet files into the manifest database.
-                Run once after populate to keep the manifest in sync.
-  evict         DESTRUCTIVE. Delete files that exceed the retention policy.
+                Scheduled weekly by the API; safe to run manually after populate.
+  evict         DESTRUCTIVE. If parquet usage exceeds the configured cap, delete
+                manifest-tracked files past retention: bronze 12 months,
+                all other layers 6 months.
                 Always dry-run by default; requires --apply to delete.
   grafana-export WRITE.     Push a date range of parquet data to InfluxDB and
                 return a Grafana dashboard URL. JSON output: {grafana_url, ...}.
@@ -53,10 +55,11 @@ TYPICAL WORKFLOW
        python cli.py populate MarketPrice --exchange GMO --symbol BTC_JPY --start 2026-01-01 --end 2026-01-07 \
           --execution-size 0.002
 
-  4. Update manifest after populating:
+  4. Update manifest after populating, or rely on the weekly scheduled scan:
        python cli.py scan
 
-  5. Periodically clean up old data:
+  5. Configure and periodically review parquet cleanup:
+       python cli.py evict --set-max-size 500GiB
        python cli.py evict           # dry-run: shows what would be deleted
        python cli.py evict --apply   # actually deletes
 """

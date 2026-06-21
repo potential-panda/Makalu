@@ -15,7 +15,7 @@ Full strategy configs: `openclaw/knowledge/strategies.json`
 ## 2 Date Rules
 
 - Format: `YYYYMMDD`
-- `to_dt` ≤ today − 2 days — the market-data cron runs at ~2am and delivers yesterday's data.
+- `to_dt` ≤ today − 2 days — the API market-data scheduler delivers yesterday's data around early morning.
   Before 2am, even yesterday may be missing. Always use today − 2 as the safe upper bound.
 - Missing today and yesterday is **expected and acceptable** — do not attempt to populate them.
 - Any other missing dates within the requested range must be populated before running.

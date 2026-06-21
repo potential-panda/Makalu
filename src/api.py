@@ -112,7 +112,9 @@ executor.kickoff()
 
 # ── Daily scheduler ───────────────────────────────────────────────────────────
 
-DAILY_SYNC_HOUR = 4  # 04:00 local time — matches former cron job
+DAILY_SYNC_HOUR = 4  # 04:00 local time
+WEEKLY_SCAN_WEEKDAY = 6  # Sunday, Python weekday numbering: Monday=0
+WEEKLY_SCAN_HOUR = 5
 
 SCHEDULED_MARKETS = [
     "BINANCE:BTC_USDT",
@@ -124,6 +126,7 @@ SCHEDULED_MARKETS = [
 ]
 
 _next_scheduled_run: float = 0.0
+_next_weekly_scan_run: float = 0.0
 
 
 def _next_scheduled_time() -> float:
@@ -131,6 +134,17 @@ def _next_scheduled_time() -> float:
     candidate = now.replace(hour=DAILY_SYNC_HOUR, minute=0, second=0, microsecond=0)
     if candidate <= now:
         candidate += datetime.timedelta(days=1)
+    return candidate.timestamp()
+
+
+def _next_weekly_scan_time() -> float:
+    now = datetime.datetime.now()
+    days_ahead = (WEEKLY_SCAN_WEEKDAY - now.weekday()) % 7
+    candidate = (now + datetime.timedelta(days=days_ahead)).replace(
+        hour=WEEKLY_SCAN_HOUR, minute=0, second=0, microsecond=0
+    )
+    if candidate <= now:
+        candidate += datetime.timedelta(days=7)
     return candidate.timestamp()
 
 
@@ -145,6 +159,16 @@ def _submit_daily_market_data() -> None:
         )
 
 
+def _submit_weekly_scan() -> None:
+    job_id = str(uuid.uuid4())[:8]
+    cmd = [sys.executable, str(CLI), "scan"]
+    _submit(
+        job_id,
+        {"id": job_id, "type": "scan", "label": "weekly manifest scan"},
+        cmd,
+    )
+
+
 def _scheduler_loop() -> None:
     global _next_scheduled_run
     while True:
@@ -155,16 +179,32 @@ def _scheduler_loop() -> None:
         _submit_daily_market_data()
 
 
+def _weekly_scan_loop() -> None:
+    global _next_weekly_scan_run
+    while True:
+        _next_weekly_scan_run = _next_weekly_scan_time()
+        sleep_secs = _next_weekly_scan_run - time.time()
+        if sleep_secs > 0:
+            time.sleep(sleep_secs)
+        _submit_weekly_scan()
+
+
 threading.Thread(target=_scheduler_loop, daemon=True).start()
+threading.Thread(target=_weekly_scan_loop, daemon=True).start()
 
 
 @app.route("/api/scheduler")
 def api_scheduler():
     next_ts = _next_scheduled_run
+    next_scan_ts = _next_weekly_scan_run
     return jsonify({
         "next_run": next_ts,
         "next_run_iso": datetime.datetime.fromtimestamp(next_ts).isoformat() if next_ts else None,
         "daily_sync_hour": DAILY_SYNC_HOUR,
+        "next_weekly_scan": next_scan_ts,
+        "next_weekly_scan_iso": datetime.datetime.fromtimestamp(next_scan_ts).isoformat() if next_scan_ts else None,
+        "weekly_scan_weekday": WEEKLY_SCAN_WEEKDAY,
+        "weekly_scan_hour": WEEKLY_SCAN_HOUR,
         "markets": SCHEDULED_MARKETS,
     })
 

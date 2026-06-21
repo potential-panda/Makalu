@@ -154,7 +154,7 @@ OUTPUT FORMAT (when all partitions are provided)
   Total    : N days on disk
   Missing  : N days          (optionally followed by date ranges of missing days)
 
-Available datasets (bronze/silver only — feature/research layers excluded):
+Available datasets (feature/research layers excluded):
   Trade, OrderBook                                    bronze — raw tick data
   BookChange, BookState, TradeAggression, MarketPrice silver — derived metrics
   Chart_CANDLE, Chart_HEIKIN_ASHI, Chart_RANGE        gold   — bar charts
