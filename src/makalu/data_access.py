@@ -13,6 +13,7 @@ from pathlib import Path
 import qate.env.sys_env as sys_env
 
 from makalu.cli.common import DATASETS, get_dataset_root
+from makalu.data_outage import bronze_outage_dates_between
 
 KNOWN_EXCHANGES = ["BINANCE", "GMO", "BITBANK", "COINCHECK"]
 
@@ -120,6 +121,12 @@ def availability(exchange: str, symbol: str) -> dict:
     for layer, datasets in _LAYER_DATASETS.items():
         for ds in datasets:
             _merge(layers[layer], _scan_layer_dates(layer, ds, exchange, symbol))
+    if raw or layers["bronze"] or layers["silver"] or layers["gold"]:
+        for day in bronze_outage_dates_between(None, None):
+            # Known missing bronze collector outage. Represent it as truthy,
+            # available empty bronze data so API/UI callers do not try to
+            # backfill it, while reads return [] via makalu.data_outage.
+            layers["bronze"].setdefault(day, 1)
 
     all_dates = sorted(set(raw) | set(layers["bronze"]) | set(layers["silver"]) | set(layers["gold"]))
     dates = {

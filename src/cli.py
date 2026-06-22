@@ -69,6 +69,7 @@ import argparse
 import logging
 import sys
 
+from makalu.data_outage import install_qate_bronze_outage_patch
 from qate.env import sys_env
 from qate.env.env import Env
 from qate.env.env_name import EnvName
@@ -95,6 +96,7 @@ ENV_NAME = EnvName.LUIGI_MARIO
 
 
 def _setup_env() -> None:
+    install_qate_bronze_outage_patch()
     env = Env(sys_env.get_env_root_dir(), ENV_NAME)
     env.visit()
     # Also log to stdout so the agent subprocess can read LOG output

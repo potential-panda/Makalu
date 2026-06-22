@@ -12,7 +12,10 @@ from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory
 
 from makalu.data_access import availability, global_stats, list_markets
+from makalu.data_outage import install_qate_bronze_outage_patch
 from makalu.job_executor import JobExecutor
+
+install_qate_bronze_outage_patch()
 
 WEB_DIR = Path(__file__).parent.parent / "web"
 CLI = Path(__file__).parent / "cli.py"

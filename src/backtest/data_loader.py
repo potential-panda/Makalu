@@ -11,6 +11,8 @@ from qate.core.model import Market, OrderBook, Trade
 from qate.store.parquet_store import ParquetStore
 from qate.util.dt_range import DtRange
 
+from makalu.data_outage import install_qate_bronze_outage_patch
+
 LOG = logging.getLogger(__name__)
 
 
@@ -28,6 +30,7 @@ class BacktestDataLoader:
     """Loads market data from parquet stores for backtesting."""
 
     def __init__(self, config: BacktestDataConfig):
+        install_qate_bronze_outage_patch()
         self.config = config
         self.parquet_store = ParquetStore(config.parquet_root)
 

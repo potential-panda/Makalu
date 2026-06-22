@@ -3,6 +3,8 @@ from datetime import date, timedelta
 from logging import getLogger
 from pathlib import Path
 
+from makalu.data_outage import filter_bronze_outage_missing_dates
+
 from .common import DATASETS, get_dataset_root
 
 LOG = getLogger(__name__)
@@ -110,7 +112,7 @@ def execute(args):
         LOG.warning(f"No parquet files found under {path}")
         return
 
-    missing = _missing_dates(dates, args.start, args.end)
+    missing = filter_bronze_outage_missing_dates(dataset, _missing_dates(dates, args.start, args.end))
 
     partition_desc = " / ".join(f"{k}={provided[k]}" for k in keys)
     print(f"Dataset : {dataset}")
