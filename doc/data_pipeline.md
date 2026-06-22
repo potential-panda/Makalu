@@ -38,9 +38,9 @@ that older data is acceptable.
 Known global outage:
 
 - **2026-04-02 through 2026-04-09 inclusive**: market data collectors crashed.
-  Assume raw and derived market data are unavailable or unusable for all markets
-  during this window. Do not try to fill this range by re-running `market-data`
-  or `populate`; treat it as a structural data gap.
+  Bronze `Trade` and `OrderBook` reads model this range as available-but-empty,
+  so downstream consumers see empty data. Do not try to fill this range by
+  re-running `market-data` or `populate`; treat it as a structural data gap.
 
 ---
 
@@ -176,9 +176,9 @@ Using the wrong value creates a mismatched partition.
 
 Register parquet files in `/panda/makalu-data/manifest.db`.
 
-The API schedules this weekly, which is acceptable because data not yet scanned
-is treated as fresh/protected: `evict` only deletes files that are already
-registered in the manifest.
+The API schedules weekly maintenance that runs `scan` and then `evict --apply`.
+This is acceptable because data not yet scanned is treated as fresh/protected:
+`evict` only deletes files that are already registered in the manifest.
 
 For newly-registered files, `scan` initializes `write_ts` to the file's
 last-modified time. Makalu does not depend on OS file-read access time; external

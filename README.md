@@ -8,7 +8,7 @@ Market data pipeline and backtest orchestration for the **orion** algorithmic tr
 - Converts and stores it as a layered parquet data warehouse
 - Derives microstructure metrics (MarketPrice, VolSpread, BookState, etc.)
 - Runs backtests via the Himalaya engine
-- Exposes a job queue API (port 9776) with daily data-sync and weekly manifest-scan schedulers
+- Exposes a job queue API (port 9776) with daily data-sync and weekly scan+evict maintenance schedulers
 
 ## Data warehouse layers
 
@@ -24,9 +24,10 @@ derived and live in silver, gold, feature, or research layers.
 Data lives at `/panda/makalu-data/`. Raw msgpack source files at `/panda/market-data/`.
 
 `/panda/makalu-data/manifest.db` tracks parquet file metadata for eviction:
-path, row count, file size, and write timestamp. The API schedules
-`python src/cli.py scan` weekly; data that has not been scanned yet is treated
-as fresh/protected because `evict` only deletes files registered in the
+path, row count, file size, and write timestamp. The API schedules weekly
+maintenance that runs `python src/cli.py scan` and then
+`python src/cli.py evict --apply`. Data that has not been scanned yet is
+treated as fresh/protected because `evict` only deletes files registered in the
 manifest. Makalu does not depend on OS file-read access time. The parquet disk
 cap is stored in the manifest settings table and can be set with
 `python src/cli.py evict --set-max-size 500GiB`.
@@ -37,8 +38,9 @@ Treat **2025-07-01** as the official start date for reliable market data. Older
 raw or parquet files may exist, but may have collection or correctness problems.
 
 Known global outage: **2026-04-02 through 2026-04-09 inclusive**. Market data
-collectors crashed during this window, so assume all markets are unavailable or
-unusable for raw data, derived data, research, and backtests.
+collectors crashed during this window. Bronze `Trade` and `OrderBook` reads
+model the gap as available-but-empty so downstream callers see empty data
+instead of needing their own outage special case.
 
 ## Installation
 

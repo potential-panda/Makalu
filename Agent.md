@@ -53,7 +53,7 @@ python /home/lulurun/workspace/Makalu/src/cli.py query \
 ## Critical Data Availability Facts
 
 - Official reliable data start date: **2025-07-01**. Raw or parquet data before 2025-07-01 may exist, but assume it may have collection or correctness problems unless the user explicitly says older data is acceptable.
-- Known global outage: **2026-04-02 through 2026-04-09 inclusive**. Market data collectors crashed during this window. Assume raw and derived market data are unavailable or unusable for all markets, and do not try to backfill it by re-running `market-data` or `populate`.
+- Known global outage: **2026-04-02 through 2026-04-09 inclusive**. Market data collectors crashed during this window. Bronze `Trade` and `OrderBook` reads model this range as available-but-empty, so consumers see empty data and should not try to backfill it by re-running `market-data` or `populate`.
 
 ---
 
@@ -75,7 +75,7 @@ python /home/lulurun/workspace/Makalu/src/cli.py scan
 
 Manifest policy:
 - `/panda/makalu-data/manifest.db` is the source of truth for eviction metadata.
-- The Makalu API schedules `scan` weekly; data not yet scanned is considered fresh/protected.
+- The Makalu API schedules weekly maintenance: `scan`, then `evict --apply`; data not yet scanned is considered fresh/protected.
 - `scan` registers new parquet files with `write_ts` set to the file's last-modified time.
 - `evict` only deletes manifest-tracked files when `/panda/makalu-data` is above its configured cap. Retention is bronze 12 months, all other layers 6 months, based on `write_ts`.
 - Makalu does not depend on OS file-read access time; external DuckDB/Python reads do not refresh eviction age.
