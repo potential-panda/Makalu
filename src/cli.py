@@ -23,7 +23,8 @@ DATA FLOW (must be populated in this order)
 SUBCOMMANDS
 -----------
   data-check    READ-ONLY.  Inspect what parquet data is on disk. Safe to run anytime.
-  populate      WRITE.      Convert or derive parquet files. Idempotent (safe to re-run).
+  populate      WRITE.      Convert or derive parquet files. Skips writes whose
+                target data.parquet already exists; use --recreate to overwrite.
   market-data   WRITE.      Download raw msgpack market data from S3 to /panda/market-data/.
                 Idempotent. Run this before 'populate bronze'.
   market-data-s3

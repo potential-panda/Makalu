@@ -126,12 +126,18 @@ python src/cli.py data-check \
 
 ### 2.3 populate — convert or derive parquet files
 
-Idempotent — safe to re-run on already-populated dates (no harm, just redundant work).
+Idempotent — each populate writer skips a write when its target `data.parquet`
+already exists. Use `--recreate` only when you intentionally want to overwrite
+existing target files.
 
 ```bash
 # Bronze (raw tick data)
 python src/cli.py populate bronze \
   --exchange GMO --symbol BTC_JPY --start 2026-03-13 --end 2026-03-17
+
+# Overwrite existing target data.parquet files only when explicitly requested
+python src/cli.py populate bronze \
+  --exchange GMO --symbol BTC_JPY --start 2026-03-13 --end 2026-03-17 --recreate
 
 # Silver
 python src/cli.py populate MarketPrice \
@@ -298,7 +304,7 @@ python src/cli.py metrics-data
 - Reliable data starts on 2025-07-01; older data may exist but should be treated as suspect
 - 2026-04-02 through 2026-04-09 is a known global collector outage; do not try to backfill it
 - `data-check` before any populate — never populate blindly
-- Only populate **missing** date ranges — never re-populate dates already on disk
+- Only populate **missing** date ranges when planning work. The CLI also skips any existing target `data.parquet` at write time; use `--recreate` only for intentional overwrites.
 - `to_dt` for populate: at most today − 2 days (the API market-data scheduler delivers yesterday around early morning)
   Missing today and yesterday is expected — do not attempt to populate them
 - Run `scan` after every populate

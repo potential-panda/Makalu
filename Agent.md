@@ -103,7 +103,7 @@ python /home/lulurun/workspace/Makalu/src/cli.py query --sql "SELECT ..."
 ## Guardrails
 
 - Show ALL planned commands to the user and confirm before executing populate, backtest, or evict
-- Only populate missing date ranges — never re-populate dates already on disk
+- Only populate missing date ranges when planning work. `populate` also skips any existing target `data.parquet` at write time; use `--recreate` only for intentional overwrites.
 - `to_dt` for populate and backtest: at most today − 2 days
 - `evict --apply` always requires explicit user confirmation
 - Never run multiple backtests in parallel (memory constraint)

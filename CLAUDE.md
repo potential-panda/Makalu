@@ -57,7 +57,7 @@ All technical reference lives in `doc/`. Read the relevant file before starting 
 
 - **Read before answering data questions.** This warehouse contains live data past your training cutoff. Run `data-check` or a SQL query — never answer from memory.
 - **Show plan before executing.** For any populate, backtest, or destructive operation, show the planned commands and get confirmation first.
-- **Only populate missing dates.** Run `data-check` first, populate only the gaps.
+- **Only populate missing dates.** Run `data-check` first. `populate` also skips any existing target `data.parquet` at write time; use `--recreate` only for intentional overwrites.
 - **Respect to_dt ≤ today − 2 days.** The API market-data scheduler delivers yesterday's data around early morning. Missing today and yesterday is expected.
 - **`evict --apply` always needs explicit user confirmation.** Never run it autonomously.
 - **Himalaya backtest is always synchronous.** Never run it in the background.

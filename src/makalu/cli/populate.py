@@ -11,6 +11,42 @@ from qate.util.dt_range import DtRange, TimeFormat
 LOG = getLogger(__name__)
 
 
+class PopulateParquetStore(ParquetStore):
+    """ParquetStore variant used by populate commands.
+
+    The populate contract is common across all datasets: each store knows the
+    exact target data.parquet path at flush time. Unless --recreate is set, an
+    existing target file is left untouched and only that write is skipped.
+    """
+
+    def __init__(self, root_dir: str, recreate: bool = False):
+        super().__init__(root_dir)
+        self.recreate = recreate
+
+    def _m(self, store):
+        store = super()._m(store)
+        original_flush = store.flush
+
+        def flush_without_overwrite():
+            if not store._buffer:
+                return
+            parquet_path = store._get_parquet_path(store._current_time_key)
+            if parquet_path.exists() and not self.recreate:
+                LOG.info("Skip existing parquet: %s", parquet_path)
+                store._buffer.clear()
+                return
+            original_flush()
+
+        store.flush = flush_without_overwrite
+        return store
+
+
+def _create_parquet_store(args) -> ParquetStore:
+    if args.recreate:
+        LOG.info("--recreate set; existing parquet files may be overwritten.")
+    return PopulateParquetStore(sys_env.PARQUET_ROOT_DIR, recreate=args.recreate)
+
+
 def execute_single_market(args):
     from pipeline.framework import Pipeline
     from pipeline.order_book_derived_steps import (
@@ -23,9 +59,8 @@ def execute_single_market(args):
 
     market = Market.from_str(f"{args.exchange}:{args.symbol}")
     dt_range = DtRange.from_strings(args.start, args.end)
-
     market_data_store = MarketDataStore(sys_env.MARKET_DATA_DIR)
-    parquet_store = ParquetStore(sys_env.PARQUET_ROOT_DIR)
+    parquet_store = _create_parquet_store(args)
     pipeline = Pipeline(market_data_store, parquet_store)
 
     dataset = args.dataset
@@ -71,7 +106,7 @@ def execute_bronze(args):
     LOG.info(f"  Output : {sys_env.PARQUET_ROOT_DIR}")
     LOG.info(f"  Days   : {len(days)} in {n_batches} batch(es) of {BRONZE_BATCH_DAYS}")
 
-    parquet_store = ParquetStore(sys_env.PARQUET_ROOT_DIR)
+    parquet_store = _create_parquet_store(args)
     trade_store = parquet_store.create_trade(market)
     ob_store = parquet_store.create_order_book(market)
     total_trades = total_obs = 0
@@ -111,7 +146,7 @@ def execute_volspread(args):
     market = Market.from_str(f"{args.exchange}:{args.symbol}")
     dt_range = DtRange.from_strings(args.start, args.end)
 
-    pipeline = Pipeline(MarketDataStore(sys_env.MARKET_DATA_DIR), ParquetStore(sys_env.PARQUET_ROOT_DIR))
+    pipeline = Pipeline(MarketDataStore(sys_env.MARKET_DATA_DIR), _create_parquet_store(args))
     pipeline.stage(
         ExecutionPriceDerivedStage(market, args.execution_size)
         .step(VolSpreadStep(VolSpreadConfig(60, 300, 120)))
@@ -135,7 +170,7 @@ def execute_return(args):
     horizons_sec = tuple(int(h) for h in args.horizons.split(","))
     config = ReturnConfig(horizons_sec=horizons_sec, execution_size_str=args.execution_size)
 
-    pipeline = Pipeline(MarketDataStore(sys_env.MARKET_DATA_DIR), ParquetStore(sys_env.PARQUET_ROOT_DIR))
+    pipeline = Pipeline(MarketDataStore(sys_env.MARKET_DATA_DIR), _create_parquet_store(args))
     pipeline.stage(
         ReturnDerivedStage(market, args.execution_size, max_horizon_sec=max(horizons_sec)).step(ReturnStep(config))
     )
@@ -184,7 +219,7 @@ def execute_leadlag(args):
         sys.exit(1)
     dt_range = DtRange.from_strings(args.start, args.end)
 
-    pipeline = Pipeline(MarketDataStore(sys_env.MARKET_DATA_DIR), ParquetStore(sys_env.PARQUET_ROOT_DIR))
+    pipeline = Pipeline(MarketDataStore(sys_env.MARKET_DATA_DIR), _create_parquet_store(args))
     pipeline.stage(
         LeadLagStage(market_lead, market_lag, execution_size)
         .step(LeadLagStep(config=LEAD_LAG_CONFIG_NEARHFT))
@@ -204,7 +239,8 @@ _DATASET_META = {
             "  Trade     — one row per exchange trade (price, size, side)\n"
             "  OrderBook — full 20-level order book snapshots\n\n"
             "Source file pattern: {MARKET_DATA_DIR}/{exchange}_{symbol}_{YYYYMMDD}.msgpack\n"
-            "This is always the FIRST step. All silver datasets depend on this."
+            "This is always the FIRST step. All silver datasets depend on this.\n\n"
+            "Existing target data.parquet files are skipped by default. Use --recreate to overwrite."
         ),
         "example": "python cli.py populate bronze --exchange GMO --symbol BTC_JPY --start 2026-01-01 --end 2026-01-07",
     },
@@ -300,6 +336,11 @@ def _register_dataset_single_market(sub: argparse.ArgumentParser, dataset: str) 
     p.add_argument("--symbol", required=True, help="Symbol name, e.g. BTC_JPY, BTC_USDT")
     p.add_argument("--start", required=True, help="Start date YYYY-MM-DD")
     p.add_argument("--end", help="End date YYYY-MM-DD (defaults to --start if omitted)")
+    p.add_argument(
+        "--recreate",
+        action="store_true",
+        help="Overwrite existing target data.parquet files instead of skipping them.",
+    )
     return p
 
 
@@ -356,6 +397,11 @@ def _register_leadlag(sub: argparse.ArgumentParser) -> argparse.ArgumentParser:
     p.add_argument("--execution-size", dest="execution_size", default=None, help="Overrides pipeline.market_pair.EXECUTION_SIZE's lookup for the lag market, if needed")
     p.add_argument("--start", required=True, help="Start date YYYY-MM-DD")
     p.add_argument("--end", help="End date YYYY-MM-DD (defaults to --start if omitted)")
+    p.add_argument(
+        "--recreate",
+        action="store_true",
+        help="Overwrite existing target data.parquet files instead of skipping them.",
+    )
     return p
 
 
@@ -366,7 +412,9 @@ def register_cli(parser: argparse.ArgumentParser):
         description=(
             "Populate parquet datasets from raw msgpack files (bronze) or by deriving\n"
             "metrics from already-populated bronze data (silver/gold).\n\n"
-            "All commands are idempotent — safe to re-run. Later dates do not affect earlier ones.\n"
+            "All commands are idempotent: if a target data.parquet already exists, that write is skipped.\n"
+            "Use --recreate to overwrite existing target files.\n"
+            "Later dates do not affect earlier ones.\n"
             "Run 'python cli.py scan' after populating to update the manifest.\n\n"
             "Data flow:\n"
             "  bronze → MarketPrice → VolSpread\n"
