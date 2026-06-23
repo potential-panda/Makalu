@@ -137,8 +137,21 @@ def execute_bronze(args):
     LOG.info("Done.")
 
 
-def execute_volspread(args):
+def _volspread_configs():
+    # Single source of truth for both execute_volspread (what's actually
+    # populated) and execute_activity_curve (what gets read back to build
+    # the curve) -- kept in sync with src/silver.py's own VolSpreadStep list.
     from feature_engineering.volatility import VolSpreadConfig
+
+    return [
+        VolSpreadConfig(60, 300, 120),
+        VolSpreadConfig(60, 900, 300),
+        VolSpreadConfig(180, 900, 300),
+        VolSpreadConfig(300, 900, 300),
+    ]
+
+
+def execute_volspread(args):
     from pipeline.execution_price_derived_steps import VolSpreadStep
     from pipeline.framework import Pipeline
     from pipeline.stages import ExecutionPriceDerivedStage
@@ -147,17 +160,39 @@ def execute_volspread(args):
     dt_range = DtRange.from_strings(args.start, args.end)
 
     pipeline = Pipeline(MarketDataStore(sys_env.MARKET_DATA_DIR), _create_parquet_store(args))
-    pipeline.stage(
-        ExecutionPriceDerivedStage(market, args.execution_size)
-        .step(VolSpreadStep(VolSpreadConfig(60, 300, 120)))
-        .step(VolSpreadStep(VolSpreadConfig(60, 900, 300)))
-        .step(VolSpreadStep(VolSpreadConfig(180, 900, 300)))
-        .step(VolSpreadStep(VolSpreadConfig(300, 900, 300)))
-    )
+    stage = ExecutionPriceDerivedStage(market, args.execution_size)
+    for config in _volspread_configs():
+        stage = stage.step(VolSpreadStep(config))
+    pipeline.stage(stage)
 
     LOG.info(f"Populating VolSpread: {market.id} (execution_size={args.execution_size}) {args.start} → {args.end}")
     pipeline.process(dt_range)
     LOG.info("Done.")
+
+
+def execute_activity_curve(args):
+    from datetime import datetime, timezone
+
+    from qate.store.parquet_store import Layer
+
+    from pipeline.curve_steps import build_activity_curve_rows
+
+    market = Market.from_str(f"{args.exchange}:{args.symbol}")
+    dt_range = DtRange.from_strings(args.start, args.end)
+    param_ids = [c.param_id for c in _volspread_configs()]
+    parquet_store = _create_parquet_store(args)
+
+    LOG.info(f"Building ActivityCurve: {market.id} (execution_size={args.execution_size}) trained on {args.start} → {args.end}")
+    rows = build_activity_curve_rows(parquet_store, market, args.execution_size, param_ids, dt_range, args.bin_size)
+
+    n_days = len(dt_range.days)
+    param_id = f"bin{args.bin_size}s_z{n_days}d_es{args.execution_size}"
+    store = parquet_store.create_single_market("ActivityCurve", market, layer=Layer.GOLD, param_id=param_id)
+    now_ts = datetime.now(timezone.utc).timestamp()
+    for row in rows:
+        store.add(now_ts, row)
+    store.close()
+    LOG.info(f"Done. param_id={param_id}")
 
 
 def execute_return(args):
@@ -180,20 +215,20 @@ def execute_return(args):
     LOG.info("Done.")
 
 
-def execute_leadlag(args):
-    from lead_lag.lead_lag import LEAD_LAG_CONFIG_MID, LEAD_LAG_CONFIG_NEARHFT
-    from pipeline.framework import Pipeline
-    from pipeline.lead_lag_steps import LeadLagStep
-    from pipeline.market_pair import EXECUTION_SIZE, LEAD_LAG_PAIRS
-    from pipeline.stages import LeadLagStage
+def _resolve_leadlag_markets(args) -> tuple[Market, Market, str]:
+    """Shared --pair / --lead-market+--lag-market resolution for both
+    execute_leadlag and execute_leadlag_curve.
 
-    # --pair is the original shorthand for the 4 known BINANCE->GMO-margin
-    # relationships LEAD_LAG_PAIRS encodes -- that dict is also load-bearing
-    # for silver.py's feature pipeline and training/config.py's ML training
-    # config, so it's deliberately left untouched. --lead-market/--lag-market
-    # is a separate, explicit path for any other pair (e.g. BINANCE->GMO
-    # spot, or same-exchange pairs), added because Kilimanjaro needed
-    # lead-lag for markets LEAD_LAG_PAIRS doesn't cover and never will.
+    --pair is the original shorthand for the 4 known BINANCE->GMO-margin
+    relationships LEAD_LAG_PAIRS encodes -- that dict is also load-bearing
+    for silver.py's feature pipeline and training/config.py's ML training
+    config, so it's deliberately left untouched. --lead-market/--lag-market
+    is a separate, explicit path for any other pair (e.g. BINANCE->GMO
+    spot, or same-exchange pairs), added because Kilimanjaro needed
+    lead-lag for markets LEAD_LAG_PAIRS doesn't cover and never will.
+    """
+    from pipeline.market_pair import EXECUTION_SIZE, LEAD_LAG_PAIRS
+
     if args.pair and (args.lead_market or args.lag_market):
         LOG.error("--pair is mutually exclusive with --lead-market/--lag-market.")
         sys.exit(1)
@@ -217,6 +252,16 @@ def execute_leadlag(args):
             "-- pass --execution-size explicitly."
         )
         sys.exit(1)
+    return market_lead, market_lag, execution_size
+
+
+def execute_leadlag(args):
+    from lead_lag.lead_lag import LEAD_LAG_CONFIG_MID, LEAD_LAG_CONFIG_NEARHFT
+    from pipeline.framework import Pipeline
+    from pipeline.lead_lag_steps import LeadLagStep
+    from pipeline.stages import LeadLagStage
+
+    market_lead, market_lag, execution_size = _resolve_leadlag_markets(args)
     dt_range = DtRange.from_strings(args.start, args.end)
 
     pipeline = Pipeline(MarketDataStore(sys_env.MARKET_DATA_DIR), _create_parquet_store(args))
@@ -229,6 +274,32 @@ def execute_leadlag(args):
     LOG.info(f"Populating LeadLag: {market_lead.id} → {market_lag.id} {args.start} → {args.end}")
     pipeline.process(dt_range)
     LOG.info("Done.")
+
+
+def execute_leadlag_curve(args):
+    from datetime import datetime, timezone
+
+    from lead_lag.lead_lag import LEAD_LAG_CONFIG_MID, LEAD_LAG_CONFIG_NEARHFT
+    from qate.store.parquet_store import Layer
+
+    from pipeline.curve_steps import build_leadlag_curve_rows
+
+    market_lead, market_lag, _execution_size = _resolve_leadlag_markets(args)
+    dt_range = DtRange.from_strings(args.start, args.end)
+    param_ids = [LEAD_LAG_CONFIG_NEARHFT.param_id(), LEAD_LAG_CONFIG_MID.param_id()]
+    parquet_store = _create_parquet_store(args)
+
+    LOG.info(f"Building LeadLagCurve: {market_lead.id} → {market_lag.id} trained on {args.start} → {args.end}")
+    rows = build_leadlag_curve_rows(parquet_store, market_lead, market_lag, param_ids, dt_range, args.bin_size)
+
+    n_days = len(dt_range.days)
+    param_id = f"bin{args.bin_size}s_z{n_days}d"
+    store = parquet_store.create_cross_market("LeadLagCurve", market_lead, market_lag, layer=Layer.GOLD, param_id=param_id)
+    now_ts = datetime.now(timezone.utc).timestamp()
+    for row in rows:
+        store.add(now_ts, row)
+    store.close()
+    LOG.info(f"Done. param_id={param_id}")
 
 
 _DATASET_META = {
@@ -320,6 +391,33 @@ _DATASET_META = {
         ),
         "example": "python cli.py populate LeadLag --pair btc --start 2026-01-01 --end 2026-01-07",
     },
+    "ActivityCurve": {
+        "help": "Populate a weekly (day-of-week x time-of-day) volatility+spread activity curve from VolSpread (gold layer)",
+        "description": (
+            "Combines VolSpread's volatility AND spread_pct_ema columns (z-score normalized\n"
+            "per config, then averaged) into one weekly mean+std curve, binned by\n"
+            "(day_of_week, time_of_day // --bin-size). --start/--end is the TRAINING window\n"
+            "(how many trailing days of VolSpread data the curve is built from); the curve\n"
+            "itself is written under a date= partition for the day this command was run, so\n"
+            "re-running it later produces a new snapshot rather than overwriting the old one.\n\n"
+            "Prerequisite: VolSpread must already be populated for the same market, execution_size,\n"
+            "and the same --start/--end window."
+        ),
+        "example": "python cli.py populate ActivityCurve --exchange GMO --symbol BTC_JPY "
+        "--start 2026-01-01 --end 2026-01-14 --execution-size 0.002",
+    },
+    "LeadLagCurve": {
+        "help": "Populate a weekly (day-of-week x time-of-day) lead-lag-strength curve from LeadLag (gold layer)",
+        "description": (
+            "Same weekly mean+std curve as ActivityCurve, but built from LeadLag's ll_max_corr*\n"
+            "columns (absolute correlation strength) instead of VolSpread. --start/--end is the\n"
+            "TRAINING window; the curve is written under a date= partition for the day this\n"
+            "command was run.\n\n"
+            "Prerequisite: LeadLag must already be populated for the same market pair and the\n"
+            "same --start/--end window."
+        ),
+        "example": "python cli.py populate LeadLagCurve --pair btc --start 2026-01-01 --end 2026-01-14",
+    },
 }
 
 
@@ -405,6 +503,54 @@ def _register_leadlag(sub: argparse.ArgumentParser) -> argparse.ArgumentParser:
     return p
 
 
+def _register_activity_curve(sub: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    p = _register_dataset_single_market(sub, "ActivityCurve")
+    p.add_argument(
+        "--execution-size",
+        required=True,
+        dest="execution_size",
+        help="Execution size matching the VolSpread partition to read from, e.g. 0.002.",
+    )
+    p.add_argument(
+        "--bin-size",
+        type=int,
+        default=300,
+        dest="bin_size",
+        help="Curve time bin width in seconds; must evenly divide 86400 (default: 300).",
+    )
+    return p
+
+
+def _register_leadlag_curve(sub: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    meta = _DATASET_META["LeadLagCurve"]
+    p = sub.add_parser(
+        "LeadLagCurve",
+        help=meta["help"],
+        description=meta["description"],
+        epilog=f"Example:\n  {meta['example']}",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p.add_argument("--pair", default=None, help="Asset pair key: btc, eth, xrp, sol (mutually exclusive with --lead-market/--lag-market)")
+    p.add_argument("--lead-market", default=None, help="Explicit lead market as EXCHANGE:SYMBOL, e.g. BINANCE:BTC_USDT")
+    p.add_argument("--lag-market", default=None, help="Explicit lag market as EXCHANGE:SYMBOL, e.g. GMO:BTC_SPOT")
+    p.add_argument("--execution-size", dest="execution_size", default=None, help="Overrides pipeline.market_pair.EXECUTION_SIZE's lookup for the lag market, if needed")
+    p.add_argument("--start", required=True, help="Start date YYYY-MM-DD")
+    p.add_argument("--end", help="End date YYYY-MM-DD (defaults to --start if omitted)")
+    p.add_argument(
+        "--bin-size",
+        type=int,
+        default=300,
+        dest="bin_size",
+        help="Curve time bin width in seconds; must evenly divide 86400 (default: 300).",
+    )
+    p.add_argument(
+        "--recreate",
+        action="store_true",
+        help="Overwrite existing target data.parquet files instead of skipping them.",
+    )
+    return p
+
+
 def register_cli(parser: argparse.ArgumentParser):
     p = parser.add_parser(
         "populate",
@@ -417,10 +563,10 @@ def register_cli(parser: argparse.ArgumentParser):
             "Later dates do not affect earlier ones.\n"
             "Run 'python cli.py scan' after populating to update the manifest.\n\n"
             "Data flow:\n"
-            "  bronze → MarketPrice → VolSpread\n"
+            "  bronze → MarketPrice → VolSpread → ActivityCurve\n"
             "  bronze → MarketPrice → Return\n"
             "  bronze → BookState / BookChange / TradeAggression\n"
-            "  MarketPrice (both markets) → LeadLag"
+            "  MarketPrice (both markets) → LeadLag → LeadLagCurve"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -434,3 +580,5 @@ def register_cli(parser: argparse.ArgumentParser):
     _register_volspread(sub).set_defaults(func=execute_volspread)
     _register_return(sub).set_defaults(func=execute_return)
     _register_leadlag(sub).set_defaults(func=execute_leadlag)
+    _register_activity_curve(sub).set_defaults(func=execute_activity_curve)
+    _register_leadlag_curve(sub).set_defaults(func=execute_leadlag_curve)

@@ -146,6 +146,37 @@ datasets:
     source_dataset: MarketPrice
     path_template: /panda/makalu-data/gold/dataset=VolSpread/exchange={exchange}/symbol={symbol}/execution_size={execution_size}/param_id={param_id}/date={date}/data.parquet
 
+  - dataset_name: ActivityCurve
+    layer: gold
+    description: >
+      Weekly (day_of_week x time-of-day bin) volatility+spread activity curve,
+      combining VolSpread's volatility and spread_pct_ema columns (z-score
+      normalized per config, then averaged) into one mean+std curve per bin,
+      min-max normalized to [0, 1]. Each populate run is a new date= snapshot
+      (the day the curve was trained), not a continuous time series -- read
+      the most recent date= partition. param_id encodes bin size, training
+      window length in days, and execution_size, e.g. bin300s_z19d_es0.002.
+    grain: one row per (day_of_week, bucket_index) -- 7 * (86400/bin_size_sec) rows per snapshot
+    primary_timestamp: ts
+    partition_columns: [exchange, symbol, param_id]
+    source_dataset: VolSpread
+    path_template: /panda/makalu-data/gold/dataset=ActivityCurve/exchange={exchange}/symbol={symbol}/param_id={param_id}/date={date}/data.parquet
+
+  - dataset_name: LeadLagCurve
+    layer: gold
+    description: >
+      Weekly (day_of_week x time-of-day bin) lead-lag-strength curve -- same
+      shape and snapshot-per-populate-run convention as ActivityCurve, built
+      from LeadLag's ll_max_corr* columns (absolute correlation strength,
+      z-score normalized per window/span config, then averaged) instead of
+      VolSpread. param_id encodes bin size and training window length in days,
+      e.g. bin300s_z19d.
+    grain: one row per (day_of_week, bucket_index) -- 7 * (86400/bin_size_sec) rows per snapshot
+    primary_timestamp: ts
+    partition_columns: [market_a, market_b, param_id]
+    source_dataset: LeadLag
+    path_template: /panda/makalu-data/gold/dataset=LeadLagCurve/market_a={market_a}/market_b={market_b}/param_id={param_id}/date={date}/data.parquet
+
   # ---------------------------------------------------------------------------
   # Feature Layer — /panda/makalu-data/feature/
   # ML-ready feature tables. Tick-level, aligned to order book updates.

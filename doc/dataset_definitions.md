@@ -221,6 +221,58 @@ param combination and returns mixed results. Discover available values first:
 
 ---
 
+### dataset=ActivityCurve
+
+Source: VolSpread
+Grain: one row per (day_of_week, bucket_index) — a weekly snapshot, not a time series
+Partitioned by: `exchange`, `symbol`, `param_id`
+
+Built by `populate ActivityCurve` (see `src/pipeline/curve_steps.py::build_activity_curve_rows`,
+core binning math in `src/active_score/weekly_curve.py::aggregate_weekly`). For each VolSpread
+param_id config, both the `volatility` and `spread_pct_ema` columns are resampled to 1-min,
+z-score normalized, then all of those normalized series are combined and binned by
+`(day_of_week, time_of_day // bin_size_sec)`. Mean is min-max normalized to [0, 1]; std is scaled
+by the same factor. `--start`/`--end` is the *training window* (how much trailing VolSpread
+history the curve is built from) — the `date=` partition itself is the day the command was run,
+so re-running later adds a new snapshot rather than overwriting the old one. A consumer should
+read the most recent `date=` partition for a given `param_id`.
+
+`param_id` format: `bin{bin_size_sec}s_z{n_training_days}d_es{execution_size}`, e.g. `bin300s_z19d_es0.002`.
+
+| Column | Definition |
+|--------|------------|
+| `ts` | Timestamp of the populate run that produced this snapshot (all rows in one snapshot share the same date) |
+| `day_of_week` | 0=Monday .. 6=Sunday |
+| `bucket_index` | `0 .. (86400/bin_size_sec - 1)`, time-of-day bucket |
+| `score_mean` | Mean of the combined normalized vol+spread series in this bin, min-max normalized to [0, 1] over the whole week |
+| `score_std` | Std of the combined normalized series in this bin, scaled by the same min-max factor as `score_mean` |
+
+---
+
+### dataset=LeadLagCurve
+
+Source: LeadLag
+Grain: one row per (day_of_week, bucket_index) — a weekly snapshot, not a time series
+Partitioned by: `market_a`, `market_b`, `param_id`
+
+Same weekly-curve construction as ActivityCurve (`src/pipeline/curve_steps.py::build_leadlag_curve_rows`),
+but built from LeadLag's `ll_max_corr_*` columns (absolute value — sign/direction isn't relevant to
+"is this a good time to trade the relationship") instead of VolSpread. Whichever `ll_max_corr_*`
+suffixes are actually present in the populated LeadLag param_id(s) are discovered from the data and
+all combined, rather than hardcoded.
+
+`param_id` format: `bin{bin_size_sec}s_z{n_training_days}d`, e.g. `bin300s_z19d`.
+
+| Column | Definition |
+|--------|------------|
+| `ts` | Timestamp of the populate run that produced this snapshot |
+| `day_of_week` | 0=Monday .. 6=Sunday |
+| `bucket_index` | `0 .. (86400/bin_size_sec - 1)`, time-of-day bucket |
+| `corr_mean` | Mean of the combined normalized \|ll_max_corr\| series in this bin, min-max normalized to [0, 1] |
+| `corr_std` | Std of the combined normalized series in this bin, scaled by the same min-max factor as `corr_mean` |
+
+---
+
 ## 4 Feature Layer
 
 ML-ready features. All columns are normalised and dimensionless unless stated.
