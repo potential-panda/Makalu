@@ -171,8 +171,6 @@ def execute_volspread(args):
 
 
 def execute_activity_curve(args):
-    from datetime import datetime, timezone
-
     from qate.store.parquet_store import Layer
 
     from pipeline.curve_steps import build_activity_curve_rows
@@ -188,9 +186,14 @@ def execute_activity_curve(args):
     n_days = len(dt_range.days)
     param_id = f"bin{args.bin_size}s_z{n_days}d_es{args.execution_size}"
     store = parquet_store.create_single_market("ActivityCurve", market, layer=Layer.GOLD, param_id=param_id)
-    now_ts = datetime.now(timezone.utc).timestamp()
+    # Partitioned by the as-of date the window itself describes (dt_range's
+    # end), not by whenever this command happens to run -- otherwise
+    # backfilling many historical windows in one sitting (exactly what
+    # learning the right Z refresh cadence needs) would dump every result
+    # into a single today's-date partition instead of one per as-of date.
+    as_of_ts = dt_range.end_ts
     for row in rows:
-        store.add(now_ts, row)
+        store.add(as_of_ts, row)
     store.close()
     LOG.info(f"Done. param_id={param_id}")
 
@@ -277,8 +280,6 @@ def execute_leadlag(args):
 
 
 def execute_leadlag_curve(args):
-    from datetime import datetime, timezone
-
     from lead_lag.lead_lag import LEAD_LAG_CONFIG_MID, LEAD_LAG_CONFIG_NEARHFT
     from qate.store.parquet_store import Layer
 
@@ -295,9 +296,11 @@ def execute_leadlag_curve(args):
     n_days = len(dt_range.days)
     param_id = f"bin{args.bin_size}s_z{n_days}d"
     store = parquet_store.create_cross_market("LeadLagCurve", market_lead, market_lag, layer=Layer.GOLD, param_id=param_id)
-    now_ts = datetime.now(timezone.utc).timestamp()
+    # See execute_activity_curve's comment -- same as-of-date partitioning
+    # reasoning applies here.
+    as_of_ts = dt_range.end_ts
     for row in rows:
-        store.add(now_ts, row)
+        store.add(as_of_ts, row)
     store.close()
     LOG.info(f"Done. param_id={param_id}")
 
@@ -398,8 +401,10 @@ _DATASET_META = {
             "per config, then averaged) into one weekly mean+std curve, binned by\n"
             "(day_of_week, time_of_day // --bin-size). --start/--end is the TRAINING window\n"
             "(how many trailing days of VolSpread data the curve is built from); the curve\n"
-            "itself is written under a date= partition for the day this command was run, so\n"
-            "re-running it later produces a new snapshot rather than overwriting the old one.\n\n"
+            "is written under a date= partition equal to --end -- the as-of date this window\n"
+            "describes, NOT the day the command happens to run -- so backfilling many\n"
+            "historical windows in one sitting produces one correctly-dated snapshot per\n"
+            "window instead of colliding on a single today's-date partition.\n\n"
             "Prerequisite: VolSpread must already be populated for the same market, execution_size,\n"
             "and the same --start/--end window."
         ),
@@ -411,8 +416,8 @@ _DATASET_META = {
         "description": (
             "Same weekly mean+std curve as ActivityCurve, but built from LeadLag's ll_max_corr*\n"
             "columns (absolute correlation strength) instead of VolSpread. --start/--end is the\n"
-            "TRAINING window; the curve is written under a date= partition for the day this\n"
-            "command was run.\n\n"
+            "TRAINING window; the curve is written under a date= partition equal to --end (see\n"
+            "ActivityCurve's help for why this isn't the day the command runs).\n\n"
             "Prerequisite: LeadLag must already be populated for the same market pair and the\n"
             "same --start/--end window."
         ),

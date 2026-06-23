@@ -233,9 +233,14 @@ param_id config, both the `volatility` and `spread_pct_ema` columns are resample
 z-score normalized, then all of those normalized series are combined and binned by
 `(day_of_week, time_of_day // bin_size_sec)`. Mean is min-max normalized to [0, 1]; std is scaled
 by the same factor. `--start`/`--end` is the *training window* (how much trailing VolSpread
-history the curve is built from) — the `date=` partition itself is the day the command was run,
-so re-running later adds a new snapshot rather than overwriting the old one. A consumer should
-read the most recent `date=` partition for a given `param_id`.
+history the curve is built from) — the `date=` partition equals `--end`: the as-of date the
+window describes, **not** the day the command happened to run. This matters for backfilling:
+running the populate command many times in one sitting with different historical `--start`/`--end`
+windows produces one correctly-dated snapshot per window, not a collision on a single partition.
+Re-running the *same* window later (e.g. to fix a bug) targets the same `date=` partition as
+before — skip-existing/`--recreate` semantics apply meaningfully to "redo this specific
+snapshot," not "create an unrelated new one." A consumer wanting the current curve should read
+the most recent `date=` partition for a given `param_id`.
 
 `param_id` format: `bin{bin_size_sec}s_z{n_training_days}d_es{execution_size}`, e.g. `bin300s_z19d_es0.002`.
 

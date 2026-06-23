@@ -153,9 +153,13 @@ datasets:
       combining VolSpread's volatility and spread_pct_ema columns (z-score
       normalized per config, then averaged) into one mean+std curve per bin,
       min-max normalized to [0, 1]. Each populate run is a new date= snapshot
-      (the day the curve was trained), not a continuous time series -- read
-      the most recent date= partition. param_id encodes bin size, training
-      window length in days, and execution_size, e.g. bin300s_z19d_es0.002.
+      equal to --end (the as-of date the training window describes), NOT the
+      day the command happened to run -- backfilling many historical windows
+      in one sitting produces one correctly-dated snapshot per window, not a
+      collision on a single today's-date partition. Not a continuous time
+      series -- read the most recent date= partition for "current". param_id
+      encodes bin size, training window length in days, and execution_size,
+      e.g. bin300s_z19d_es0.002.
     grain: one row per (day_of_week, bucket_index) -- 7 * (86400/bin_size_sec) rows per snapshot
     primary_timestamp: ts
     partition_columns: [exchange, symbol, param_id]
