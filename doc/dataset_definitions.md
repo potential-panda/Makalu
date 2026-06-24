@@ -278,6 +278,32 @@ all combined, rather than hardcoded.
 
 ---
 
+### dataset=Chart_RANGE
+
+Source: Trade
+Grain: per bar (variable time -- a new bar closes whenever price moves by `box_size_rate` from the bar's open, not on a fixed interval)
+Partitioned by: `exchange`, `symbol`, `param_id`
+
+Built by `pipeline.trade_derived_steps.PopulateRangeBarStep` / `qate.trading.chart.RangeBarBuilder`, the same
+range-bar builder `orion`'s `v6`/`v601` live strategy variants use. `param_id` format: `rate_<value>`, e.g.
+`--box-size-rate 0.0015` → `rate_150` (`value = box_size_rate * 100_000`).
+
+| Column | Definition |
+|--------|------------|
+| `ts` | Bar close timestamp (Unix seconds, float) |
+| `open` | First trade price in the bar |
+| `high` | Highest trade price in the bar |
+| `low` | Lowest trade price in the bar |
+| `close` | Last trade price in the bar (the price that triggered the bar to close) |
+| `volume` | Sum of trade sizes in the bar |
+| `tick_count` | Number of trades in the bar |
+
+Sibling datasets `Chart_CANDLE` (fixed time interval) and `Chart_HEIKIN_ASHI` (smoothed candle) share this same
+column shape, built by `PopulateCandleBarStep`/`PopulateHeikinAshiBarStep` -- not yet wired into the `populate`
+CLI (only `Chart_RANGE` is, as of this writing).
+
+---
+
 ## 4 Feature Layer
 
 ML-ready features. All columns are normalised and dimensionless unless stated.

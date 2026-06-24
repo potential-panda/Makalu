@@ -258,6 +258,22 @@ def _resolve_leadlag_markets(args) -> tuple[Market, Market, str]:
     return market_lead, market_lag, execution_size
 
 
+def execute_chart_range(args):
+    from pipeline.framework import Pipeline
+    from pipeline.stages import TradeDerivedStage
+    from pipeline.trade_derived_steps import PopulateRangeBarStep
+
+    market = Market.from_str(f"{args.exchange}:{args.symbol}")
+    dt_range = DtRange.from_strings(args.start, args.end)
+
+    pipeline = Pipeline(MarketDataStore(sys_env.MARKET_DATA_DIR), _create_parquet_store(args))
+    pipeline.stage(TradeDerivedStage(market).step(PopulateRangeBarStep(box_size_rate=args.box_size_rate)))
+
+    LOG.info(f"Populating Chart_RANGE: {market.id} (box_size_rate={args.box_size_rate}) {args.start} → {args.end}")
+    pipeline.process(dt_range)
+    LOG.info("Done.")
+
+
 def execute_leadlag(args):
     from lead_lag.lead_lag import LEAD_LAG_CONFIG_MID, LEAD_LAG_CONFIG_NEARHFT
     from pipeline.framework import Pipeline
@@ -394,6 +410,17 @@ _DATASET_META = {
         ),
         "example": "python cli.py populate LeadLag --pair btc --start 2026-01-01 --end 2026-01-07",
     },
+    "Chart_RANGE": {
+        "help": "Populate range bars (price-triggered, not time-triggered) from Trade (gold layer)",
+        "description": (
+            "Each bar closes when price moves by --box-size-rate (as a fraction of the bar's\n"
+            "open price) from the bar's open -- not on a fixed time interval. param_id encodes\n"
+            "the rate as rate_<value>, e.g. --box-size-rate 0.0025 -> rate_250.\n\n"
+            "Prerequisite: bronze (Trade) must already be populated for this market."
+        ),
+        "example": "python cli.py populate Chart_RANGE --exchange GMO --symbol BTC_JPY "
+        "--box-size-rate 0.0015 --start 2026-01-01 --end 2026-01-07",
+    },
     "ActivityCurve": {
         "help": "Populate a weekly (day-of-week x time-of-day) volatility+spread activity curve from VolSpread (gold layer)",
         "description": (
@@ -508,6 +535,18 @@ def _register_leadlag(sub: argparse.ArgumentParser) -> argparse.ArgumentParser:
     return p
 
 
+def _register_chart_range(sub: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    p = _register_dataset_single_market(sub, "Chart_RANGE")
+    p.add_argument(
+        "--box-size-rate",
+        type=float,
+        required=True,
+        dest="box_size_rate",
+        help="Fraction of a bar's open price that triggers closing it, e.g. 0.0015.",
+    )
+    return p
+
+
 def _register_activity_curve(sub: argparse.ArgumentParser) -> argparse.ArgumentParser:
     p = _register_dataset_single_market(sub, "ActivityCurve")
     p.add_argument(
@@ -571,6 +610,7 @@ def register_cli(parser: argparse.ArgumentParser):
             "  bronze → MarketPrice → VolSpread → ActivityCurve\n"
             "  bronze → MarketPrice → Return\n"
             "  bronze → BookState / BookChange / TradeAggression\n"
+            "  bronze (Trade) → Chart_RANGE / Chart_CANDLE / Chart_HEIKIN_ASHI\n"
             "  MarketPrice (both markets) → LeadLag → LeadLagCurve"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -585,5 +625,6 @@ def register_cli(parser: argparse.ArgumentParser):
     _register_volspread(sub).set_defaults(func=execute_volspread)
     _register_return(sub).set_defaults(func=execute_return)
     _register_leadlag(sub).set_defaults(func=execute_leadlag)
+    _register_chart_range(sub).set_defaults(func=execute_chart_range)
     _register_activity_curve(sub).set_defaults(func=execute_activity_curve)
     _register_leadlag_curve(sub).set_defaults(func=execute_leadlag_curve)
