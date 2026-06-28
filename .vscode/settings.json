@@ -1,44 +1,46 @@
 {
-    "files.autoSave": "afterDelay",
-    "files.autoSaveDelay": 1000,
-    "files.trimTrailingWhitespace": true,
-    "files.insertFinalNewline": true,
-    "[python]": {
-        "editor.insertSpaces": true,
-        "editor.detectIndentation": true,
-        "editor.tabSize": 4,
-        "editor.formatOnSave": true,
-        "editor.codeActionsOnSave": {
-            "source.organizeImports": "explicit"
-        },
-        "editor.defaultFormatter": "ms-python.black-formatter",
+  "files.autoSave": "afterDelay",
+  "files.autoSaveDelay": 1000,
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "[python]": {
+    "editor.insertSpaces": true,
+    "editor.detectIndentation": true,
+    "editor.tabSize": 4,
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports.ruff": "explicit"
     },
-    "isort.args":["--profile", "black"],
-    "python.autoComplete.extraPaths": ["./src"],
-    "python.analysis.extraPaths": [
-        "./src",
-        "${workspaceFolder:potential-panda-core}/src"
-    ],
-    "terminal.integrated.env.linux": {
-        "PYTHONPATH": "${workspaceFolder:potential-panda-core}/src:${workspaceFolder}/src"
-    },
-    "black-formatter.args": [
-        "--line-length", "119"
-    ],
-    "flake8.args": [
-        "--max-line-length", "120"
-    ],
-    "jupyter.notebookFileRoot": "${workspaceFolder}/src",
-    "remote.autoForwardPortsFallback": 0,
-    "workbench.editor.enablePreview": false,
-    "workbench.editor.revealIfOpen": true,
-    "editor.fontFamily": "'Fira Code', 'JetBrains Mono', Consolas, monospace",
-    "python-envs.defaultEnvManager": "ms-python.python:pyenv",
-    "python-envs.pythonProjects": [
-        {
-            "path": "",
-            "envManager": "ms-python.python:pyenv",
-            "packageManager": "ms-python.python:pip"
-        }
-    ]
+    "editor.defaultFormatter": "charliermarsh.ruff"
+  },
+  "isort.args": ["--profile", "black"],
+  "python.autoComplete.extraPaths": ["./src"],
+  "python.analysis.extraPaths": [
+    "./src",
+    "${workspaceFolder:potential-panda-core}/src"
+  ],
+  "terminal.integrated.env.linux": {
+    "PYTHONPATH": "${workspaceFolder:potential-panda-core}/src:${workspaceFolder}/src"
+  },
+  "black-formatter.args": [
+    "--line-length",
+    "119"
+  ],
+  "flake8.args": [
+    "--max-line-length",
+    "120"
+  ],
+  "jupyter.notebookFileRoot": "${workspaceFolder}/src",
+  "remote.autoForwardPortsFallback": 0,
+  "workbench.editor.enablePreview": false,
+  "workbench.editor.revealIfOpen": true,
+  "editor.fontFamily": "'Fira Code', 'JetBrains Mono', Consolas, monospace",
+  "python-envs.defaultEnvManager": "ms-python.python:pyenv",
+  "python-envs.pythonProjects": [
+    {
+      "path": "",
+      "envManager": "ms-python.python:pyenv",
+      "packageManager": "ms-python.python:pip"
+    }
+  ]
 }
