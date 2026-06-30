@@ -25,10 +25,9 @@ class Context(StageContext):
 
 
 class PopulateMarketPriceStep(Step):
-    def __init__(self, execution_size_str: str, max_spread_bps: float = 10.0):
+    def __init__(self, execution_size_str: str):
         super().__init__()
         self.execution_size_str = execution_size_str
-        self.max_spread_bps = max_spread_bps
 
     def populate(self, pipeline_context: PipelineContext, stage_context: Context):
         parquet_store = pipeline_context.parquet_store.create_execution_price(
@@ -52,8 +51,6 @@ class PopulateMarketPriceStep(Step):
 
             market_price = order_book.market_price(float(self.execution_size_str))
             if not market_price:
-                continue
-            if market_price.spread_bps > self.max_spread_bps:
                 skip_count += 1
                 continue
 
