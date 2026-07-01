@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import List
 
 from qate.core.model import Market, OrderBook
+from qate.store.influx_store import InfluxdbWriter, convert_to_point
 from qate.trading import intent
 from qate.trading.book_change import BookChangeBuilder
 
@@ -65,6 +66,19 @@ class PopulateMarketPriceStep(Step):
             yield (order_book.get_ts(), fields)
             progress.update()
         LOG.info(f"PopulateMarketPriceStep: Processed {progress.cnt} objects, skipped {skip_count} objects")
+
+    def publish_to_influxdb(self, pipeline_context: PipelineContext, stage_context: Context, influxdb_writer: InfluxdbWriter) -> None:
+        count = skip_count = 0
+        for order_book in stage_context.order_books:
+            if not stage_context.populate_dt_range.is_within(order_book.get_ts()):
+                continue
+            market_price = order_book.market_price(float(self.execution_size_str))
+            if not market_price:
+                skip_count += 1
+                continue
+            influxdb_writer.add(convert_to_point(market_price.to_metric_object()))
+            count += 1
+        LOG.info(f"PopulateMarketPriceStep.publish_to_influxdb: wrote {count} points, skipped {skip_count}")
 
 
 class PopulateBookStateStep(Step):

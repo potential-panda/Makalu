@@ -2,6 +2,7 @@ import logging
 from dataclasses import dataclass
 
 from qate.core.model import Market, OrderBook, Trade
+from qate.store.influx_store import InfluxdbWriter, convert_to_point
 
 from .framework import PipelineContext, StageContext, Step, StepProgressLogger
 
@@ -34,6 +35,11 @@ class PopulateTradeStep(Step):
             progress.update()
         parquet_store.close()
         LOG.info(f"PopulateTradeStep: Wrote {progress.cnt} trades to Parquet store")
+
+    def publish_to_influxdb(self, pipeline_context: PipelineContext, stage_context: Context, influxdb_writer: InfluxdbWriter) -> None:
+        for trade in stage_context.trades:
+            influxdb_writer.add(convert_to_point(trade.to_metric_object()))
+        LOG.info(f"PopulateTradeStep.publish_to_influxdb: wrote {len(stage_context.trades)} points")
 
 
 class PopulateOrderBookStep(Step):
