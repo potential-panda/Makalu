@@ -87,6 +87,7 @@ from makalu.cli import (
     metrics_data,
     plot,
     populate,
+    publish,
     query,
     scan,
     trading_chart,
@@ -116,6 +117,7 @@ def main():
     data_check.register_cli(sub)
     arb_spot.register_cli(sub)
     populate.register_cli(sub)
+    publish.register_cli(sub)
     market_data.register_cli(sub)
     market_data_s3.register_cli(sub)
     market_data_cleanup.register_cli(sub)

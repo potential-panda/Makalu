@@ -4,8 +4,6 @@ from logging import WARNING, getLogger
 
 import qate.env.sys_env as sys_env
 from qate.core.model import Market
-from qate.store.influx_store import InfluxdbStore
-from qate.store.influx_store import convert_to_point
 from qate.store.market_data_store import MarketDataStore, partition_market_events
 from qate.store.parquet_store import ParquetStore
 from qate.util.dt_range import DtRange, TimeFormat
@@ -49,17 +47,8 @@ def _create_parquet_store(args) -> ParquetStore:
     return PopulateParquetStore(sys_env.PARQUET_ROOT_DIR, recreate=args.recreate)
 
 
-def _create_influxdb_writer(args):
-    """Returns an InfluxdbWriter if --publish-influxdb is set, else None."""
-    if not getattr(args, "publish_influxdb", False):
-        return None
-    bucket = args.influxdb_bucket
-    LOG.info(f"InfluxDB publish enabled → bucket={bucket}")
-    return InfluxdbStore(sys_env.get_influxdb()).create_writer(bucket, buffer_size=4096)
-
-
 def execute_single_market(args):
-    from pipeline.framework import Pipeline, PipelineContext
+    from pipeline.framework import Pipeline
     from pipeline.order_book_derived_steps import (
         PopulateBookChangeStep,
         PopulateBookStateStep,
@@ -72,8 +61,7 @@ def execute_single_market(args):
     dt_range = DtRange.from_strings(args.start, args.end)
     market_data_store = MarketDataStore(sys_env.MARKET_DATA_DIR)
     parquet_store = _create_parquet_store(args)
-    influxdb_writer = _create_influxdb_writer(args)
-    pipeline = Pipeline(market_data_store, parquet_store, influxdb_writer)
+    pipeline = Pipeline(market_data_store, parquet_store)
 
     dataset = args.dataset
     if dataset == "TradeAggression":
@@ -99,8 +87,6 @@ def execute_single_market(args):
 
     LOG.info(f"Populating {dataset}: {market.id}  {args.start} → {args.end}")
     pipeline.process(dt_range)
-    if influxdb_writer is not None:
-        influxdb_writer.close()
     LOG.info("Done.")
 
 
@@ -121,7 +107,6 @@ def execute_bronze(args):
     LOG.info(f"  Days   : {len(days)} in {n_batches} batch(es) of {BRONZE_BATCH_DAYS}")
 
     parquet_store = _create_parquet_store(args)
-    influxdb_writer = _create_influxdb_writer(args)
     trade_store = parquet_store.create_trade(market)
     ob_store = parquet_store.create_order_book(market)
     total_trades = total_obs = 0
@@ -138,8 +123,6 @@ def execute_bronze(args):
 
         for trade in trades:
             trade_store.add_trade(trade)
-            if influxdb_writer is not None:
-                influxdb_writer.add(convert_to_point(trade.to_metric_object()))
         for ob in order_books:
             ob_store.add_order_book(ob)
 
@@ -150,8 +133,6 @@ def execute_bronze(args):
 
     trade_store.close()
     ob_store.close()
-    if influxdb_writer is not None:
-        influxdb_writer.close()
     LOG.info(f"  Wrote  : {total_trades} trades, {total_obs} order books")
     LOG.info("Done.")
 
@@ -472,23 +453,6 @@ _DATASET_META = {
 }
 
 
-def _add_influxdb_args(p: argparse.ArgumentParser) -> argparse.ArgumentParser:
-    """Add --publish-influxdb / --influxdb-bucket to a subcommand parser."""
-    p.add_argument(
-        "--publish-influxdb",
-        action="store_true",
-        dest="publish_influxdb",
-        help="After populating Parquet, also write the data to InfluxDB (requires --influxdb-bucket).",
-    )
-    p.add_argument(
-        "--influxdb-bucket",
-        default="market_data",
-        dest="influxdb_bucket",
-        help="InfluxDB bucket to write to when --publish-influxdb is set (default: market_data).",
-    )
-    return p
-
-
 def _register_dataset_single_market(sub: argparse.ArgumentParser, dataset: str) -> argparse.ArgumentParser:
     meta = _DATASET_META[dataset]
     p = sub.add_parser(
@@ -653,11 +617,11 @@ def register_cli(parser: argparse.ArgumentParser):
     )
 
     sub = p.add_subparsers(dest="dataset", required=True)
-    _add_influxdb_args(_register_dataset_single_market(sub, "bronze")).set_defaults(func=execute_bronze)
+    _register_dataset_single_market(sub, "bronze").set_defaults(func=execute_bronze)
     _register_dataset_single_market(sub, "BookChange").set_defaults(func=execute_single_market)
     _register_dataset_single_market(sub, "BookState").set_defaults(func=execute_single_market)
     _register_dataset_single_market(sub, "TradeAggression").set_defaults(func=execute_single_market)
-    _add_influxdb_args(_register_market_price(sub)).set_defaults(func=execute_single_market)
+    _register_market_price(sub).set_defaults(func=execute_single_market)
     _register_volspread(sub).set_defaults(func=execute_volspread)
     _register_return(sub).set_defaults(func=execute_return)
     _register_leadlag(sub).set_defaults(func=execute_leadlag)

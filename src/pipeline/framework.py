@@ -1,10 +1,9 @@
 import time
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from logging import getLogger
-from typing import List, Optional
+from typing import List
 
-from qate.store.influx_store import InfluxdbWriter
 from qate.store.market_data_store import MarketDataStore
 from qate.store.parquet_store import ParquetStore
 from qate.util.dt_range import DtRange
@@ -35,7 +34,6 @@ class StageContext:
 class PipelineContext:
     market_data_store: MarketDataStore
     parquet_store: ParquetStore
-    influxdb_writer: Optional[InfluxdbWriter] = field(default=None)
 
 
 class StepProgressLogger:
@@ -57,9 +55,6 @@ class StepProgressLogger:
 class Step(ABC):
     @abstractmethod
     def populate(self, pipeline_context: PipelineContext, stage_context: StageContext):
-        pass
-
-    def publish_to_influxdb(self, pipeline_context: PipelineContext, stage_context: StageContext, influxdb_writer: InfluxdbWriter) -> None:
         pass
 
 
@@ -86,9 +81,6 @@ class Stage(ABC):
             step_start_time = time.time()
             LOG.info(f"Running step {s.__class__.__name__}...")
             s.populate(pipeline_context, stage_context)
-            if pipeline_context.influxdb_writer is not None:
-                LOG.info(f"Publishing {s.__class__.__name__} to InfluxDB...")
-                s.publish_to_influxdb(pipeline_context, stage_context, pipeline_context.influxdb_writer)
             step_end_time = time.time()
             LOG.info(f"Step {s.__class__.__name__} finished in {step_end_time - step_start_time:.2f} seconds.")
 
@@ -98,8 +90,8 @@ class Stage(ABC):
 
 
 class Pipeline:
-    def __init__(self, market_data_store: MarketDataStore, parquet_store: ParquetStore, influxdb_writer: Optional[InfluxdbWriter] = None):
-        self._context = PipelineContext(market_data_store, parquet_store, influxdb_writer)
+    def __init__(self, market_data_store: MarketDataStore, parquet_store: ParquetStore):
+        self._context = PipelineContext(market_data_store, parquet_store)
         self._stages: List[Stage] = []
 
     def stage(self, stage: Stage):
