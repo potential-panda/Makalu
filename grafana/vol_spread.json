@@ -1,0 +1,486 @@
+{
+  "uid": "makalu-vol-spread",
+  "title": "Makalu - VolSpread",
+  "description": "Volatility, spread, and vol/spread tradability ratio from the VolSpread gold dataset.",
+  "editable": true,
+  "graphTooltip": 1,
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "ef5hhuhvlf08wa"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 5,
+            "lineWidth": 1,
+            "pointSize": 3,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "unit": "bps"
+        }
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 16,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ef5hhuhvlf08wa"
+          },
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"VolSpread\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r.execution_size == \"${execution_size}\" and r.param_id == \"${param_id}\")\n  |> filter(fn: (r) => r._field == \"volatility_ema\" or r._field == \"volatility_raw\" or r._field == \"spread_pct_ema\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> map(fn: (r) => ({ r with _value: r._value * 10000.0 }))\n  |> yield(name: \"bps\")",
+          "refId": "A"
+        }
+      ],
+      "title": "Volatility vs Spread (bps)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "ef5hhuhvlf08wa"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 8,
+            "lineWidth": 1,
+            "pointSize": 3,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "green",
+                "value": 2
+              }
+            ]
+          },
+          "unit": "none"
+        }
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 16,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ef5hhuhvlf08wa"
+          },
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"VolSpread\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r.execution_size == \"${execution_size}\" and r.param_id == \"${param_id}\")\n  |> filter(fn: (r) => r._field == \"vol_spread_ratio\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> yield(name: \"ratio\")",
+          "refId": "A"
+        }
+      ],
+      "title": "Vol / Spread Ratio",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "ef5hhuhvlf08wa"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 5,
+            "lineWidth": 1,
+            "pointSize": 3,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "unit": "bps"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 9
+      },
+      "id": 3,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ef5hhuhvlf08wa"
+          },
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"VolSpread\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r.execution_size == \"${execution_size}\" and r.param_id == \"${param_id}\")\n  |> filter(fn: (r) => r._field == \"spread_bps\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> yield(name: \"spread_bps\")",
+          "refId": "A"
+        }
+      ],
+      "title": "Effective Spread (bps)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "ef5hhuhvlf08wa"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 5,
+            "lineWidth": 1,
+            "pointSize": 3,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "unit": "currencyJPY"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 9
+      },
+      "id": 4,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ef5hhuhvlf08wa"
+          },
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"VolSpread\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r.execution_size == \"${execution_size}\" and r.param_id == \"${param_id}\")\n  |> filter(fn: (r) => r._field == \"mid\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> yield(name: \"mid\")",
+          "refId": "A"
+        }
+      ],
+      "title": "Effective Mid Price",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "ef5hhuhvlf08wa"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "green",
+                "value": 2
+              }
+            ]
+          },
+          "unit": "none"
+        }
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 0,
+        "y": 17
+      },
+      "id": 5,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "mean"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ef5hhuhvlf08wa"
+          },
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"VolSpread\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r.execution_size == \"${execution_size}\" and r.param_id == \"${param_id}\")\n  |> filter(fn: (r) => r._field == \"vol_spread_ratio\")\n  |> mean()\n  |> yield(name: \"average_ratio\")",
+          "refId": "A"
+        }
+      ],
+      "title": "Average Ratio",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "ef5hhuhvlf08wa"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "green",
+                "value": 2
+              }
+            ]
+          },
+          "unit": "percentunit"
+        }
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 8,
+        "y": 17
+      },
+      "id": 6,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ef5hhuhvlf08wa"
+          },
+          "query": "ratio = from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"VolSpread\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r.execution_size == \"${execution_size}\" and r.param_id == \"${param_id}\")\n  |> filter(fn: (r) => r._field == \"vol_spread_ratio\")\n\ntradeable = ratio\n  |> map(fn: (r) => ({ r with _value: if r._value >= 1.0 then 1.0 else 0.0 }))\n  |> mean()\n\ntradeable",
+          "refId": "A"
+        }
+      ],
+      "title": "Ratio >= 1 Share",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "ef5hhuhvlf08wa"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 16,
+        "y": 17
+      },
+      "id": 7,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ef5hhuhvlf08wa"
+          },
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"VolSpread\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r.execution_size == \"${execution_size}\" and r.param_id == \"${param_id}\")\n  |> filter(fn: (r) => r._field == \"vol_spread_ratio\")\n  |> count()",
+          "refId": "A"
+        }
+      ],
+      "title": "Samples",
+      "type": "stat"
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "bucket",
+        "type": "constant",
+        "label": "Bucket",
+        "hide": 0,
+        "current": {
+          "selected": true,
+          "text": "Makalu",
+          "value": "Makalu"
+        },
+        "query": "Makalu"
+      },
+      {
+        "name": "exchange",
+        "type": "constant",
+        "label": "Exchange",
+        "hide": 0,
+        "current": {
+          "selected": true,
+          "text": "GMO",
+          "value": "GMO"
+        },
+        "query": "GMO"
+      },
+      {
+        "name": "symbol",
+        "type": "constant",
+        "label": "Symbol",
+        "hide": 0,
+        "current": {
+          "selected": true,
+          "text": "ETH_JPY",
+          "value": "ETH_JPY"
+        },
+        "query": "ETH_JPY"
+      },
+      {
+        "name": "execution_size",
+        "type": "constant",
+        "label": "Execution Size",
+        "hide": 0,
+        "current": {
+          "selected": true,
+          "text": "0.1",
+          "value": "0.1"
+        },
+        "query": "0.1"
+      },
+      {
+        "name": "param_id",
+        "type": "constant",
+        "label": "Param ID",
+        "hide": 0,
+        "current": {
+          "selected": true,
+          "text": "vs_60_900_300_1s",
+          "value": "vs_60_900_300_1s"
+        },
+        "query": "vs_60_900_300_1s"
+      }
+    ]
+  },
+  "time": {
+    "from": "2026-01-01T00:00:00.000Z",
+    "to": "2026-01-31T23:59:59.999Z"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "version": 1
+}

@@ -2,7 +2,7 @@
 bin) mean+std curve over a trailing training window, read from already-
 populated VolSpread/LeadLag gold data -- never recomputed from bronze.
 
-ActivityCurve combines BOTH of VolSpread's columns (volatility and
+ActivityCurve combines BOTH of VolSpread's columns (volatility_ema and
 spread_pct_ema) -- the original active_score/curve_builder.py only ever
 used volatility, despite the dataset and the whole concept being named for
 both. LeadLagCurve is the lead-lag-strength equivalent, built from LeadLag's
@@ -53,7 +53,7 @@ def build_activity_curve_rows(
             LOG.warning(f"No VolSpread data for param_id={param_id}, skipping.")
             continue
         index = pd.to_datetime(df["ts"], unit="s", utc=True)
-        for col in ("volatility", "spread_pct_ema"):
+        for col in ("volatility_ema", "spread_pct_ema"):
             if col not in df.columns:
                 continue
             z = zscore_normalize(pd.Series(df[col].values, index=index, name=f"{param_id}:{col}"))
@@ -64,7 +64,7 @@ def build_activity_curve_rows(
 
     if not series_list:
         raise ValueError("No valid VolSpread data found for any of the given param_ids.")
-    LOG.info(f"Combining {len(series_list)} normalized (volatility/spread) series into weekly ActivityCurve.")
+    LOG.info(f"Combining {len(series_list)} normalized (volatility_ema/spread) series into weekly ActivityCurve.")
 
     scores, std_scores = aggregate_weekly(series_list, bin_size_sec)
     return _curve_rows(scores, std_scores, "score_mean", "score_std")

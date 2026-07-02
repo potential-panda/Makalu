@@ -2,7 +2,7 @@
 
 ## 1 VolSpread Plot
 
-Plots `volatility` (red) and `spread_pct_ema` (blue) over a date range.
+Plots `volatility_ema` (red) and `spread_pct_ema` (blue) over a date range.
 High volatility relative to spread_pct_ema = favourable trading conditions.
 
 ### 1.1 Step 1 — list available param_ids

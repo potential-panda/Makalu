@@ -11,19 +11,22 @@ LOG = logging.getLogger(__name__)
 
 @dataclass
 class VolSpreadConfig:
-    return_shift_sec: int
+    return_horizon_sec: int
     lookback_sec: int
-    ema_span_sec: int
-    resample_interval: str = "1s"
+    smooth_sec: int
+    emit_interval: str = "1s"
+    sample_interval: str = "1s"
 
     @property
     def param_id(self) -> str:
         params = [
-            self.return_shift_sec,
+            self.return_horizon_sec,
             self.lookback_sec,
-            self.ema_span_sec,
-            self.resample_interval,
+            self.smooth_sec,
+            self.emit_interval,
         ]
+        if self.sample_interval != "1s":
+            params.append(self.sample_interval)
         return f"vs_{'_'.join(map(str, params))}"
 
 

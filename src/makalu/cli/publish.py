@@ -152,7 +152,7 @@ def register_cli(parser: argparse.ArgumentParser):
             "Read already-populated parquet files and stream them to InfluxDB.\n"
             "Uses the same store objects as 'populate' to resolve parquet paths.\n"
             "If a date has no parquet file, it is silently skipped.\n\n"
-            "Implemented datasets: Trade (bronze), MarketPrice (silver)."
+            "Implemented datasets: Trade (bronze), MarketPrice (silver), VolSpread (gold)."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )

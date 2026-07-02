@@ -80,9 +80,9 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
 
     if "ExectuionPriceDerived" in run_stages:
         # Param policy:
-        # - Keep return_shift_sec responsive for frequent trading.
-        # - Require lookback_sec >= return_shift_sec so volatility is estimated on a sensible horizon.
-        # - Keep ema_span_sec shorter than lookback_sec so spread smoothing does not become too sluggish.
+        # - Keep return_horizon_sec responsive for frequent trading.
+        # - Require lookback_sec >= return_horizon_sec so volatility is estimated on a sensible horizon.
+        # - Keep smooth_sec shorter than lookback_sec so volatility smoothing does not become too sluggish.
 
         # pipeline.stage(
         #     ExecutionPriceDerivedStage(market_lead, EXECUTION_SIZE.get(market_lead.symbol))

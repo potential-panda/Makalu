@@ -215,9 +215,12 @@ param combination and returns mixed results. Discover available values first:
 | `ask` | Effective ask execution price (carried from MarketPrice source) |
 | `mid` | `(bid + ask) / 2` |
 | `spread` | `ask - bid` |
+| `spread_pct` | `spread / mid` |
 | `spread_bps` | `spread / mid * 10000` |
-| `volatility` | `EMA(returns.rolling(window).std(), span=ema_span_sec)` where `returns = mid.pct_change(shift_periods)` |
-| `spread_pct_ema` | `EMA(spread / mid, span=ema_span_sec)` |
+| `volatility_raw` | `returns.rolling(lookback_sec).std()` where `returns = mid.pct_change(return_horizon_sec)` |
+| `volatility_ema` | `EMA(volatility_raw, span=smooth_sec)` |
+| `spread_pct_ema` | `EMA(spread_pct, span=lookback_sec)` |
+| `vol_spread_ratio` | `volatility_ema / spread_pct_ema` |
 
 ---
 
@@ -229,7 +232,7 @@ Partitioned by: `exchange`, `symbol`, `param_id`
 
 Built by `populate ActivityCurve` (see `src/pipeline/curve_steps.py::build_activity_curve_rows`,
 core binning math in `src/active_score/weekly_curve.py::aggregate_weekly`). For each VolSpread
-param_id config, both the `volatility` and `spread_pct_ema` columns are resampled to 1-min,
+param_id config, both the `volatility_ema` and `spread_pct_ema` columns are resampled to 1-min,
 z-score normalized, then all of those normalized series are combined and binned by
 `(day_of_week, time_of_day // bin_size_sec)`. Mean is min-max normalized to [0, 1]; std is scaled
 by the same factor. `--start`/`--end` is the *training window* (how much trailing VolSpread

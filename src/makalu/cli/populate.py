@@ -424,7 +424,7 @@ _DATASET_META = {
     "ActivityCurve": {
         "help": "Populate a weekly (day-of-week x time-of-day) volatility+spread activity curve from VolSpread (gold layer)",
         "description": (
-            "Combines VolSpread's volatility AND spread_pct_ema columns (z-score normalized\n"
+            "Combines VolSpread's volatility_ema AND spread_pct_ema columns (z-score normalized\n"
             "per config, then averaged) into one weekly mean+std curve, binned by\n"
             "(day_of_week, time_of_day // --bin-size). --start/--end is the TRAINING window\n"
             "(how many trailing days of VolSpread data the curve is built from); the curve\n"

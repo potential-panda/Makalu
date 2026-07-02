@@ -75,7 +75,7 @@ LIMIT 100
 
 ### 2.4 Gold — VolSpread (always include param_id and execution_size)
 ```sql
-SELECT ts, mid, volatility, spread_pct_ema
+SELECT ts, mid, volatility_ema, spread_pct_ema
 FROM volspread
 WHERE exchange='GMO' AND symbol='BTC_JPY'
   AND execution_size='0.002'

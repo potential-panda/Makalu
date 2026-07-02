@@ -150,7 +150,7 @@ datasets:
     layer: gold
     description: >
       Weekly (day_of_week x time-of-day bin) volatility+spread activity curve,
-      combining VolSpread's volatility and spread_pct_ema columns (z-score
+      combining VolSpread's volatility_ema and spread_pct_ema columns (z-score
       normalized per config, then averaged) into one mean+std curve per bin,
       min-max normalized to [0, 1]. Each populate run is a new date= snapshot
       equal to --end (the as-of date the training window describes), NOT the

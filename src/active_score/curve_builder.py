@@ -33,7 +33,7 @@ def _load_and_normalize(
     dt_range: DtRange,
 ) -> pd.Series | None:
     """
-    Load volatility for one param_id, resample to 1-min, z-score normalize.
+    Load volatility_ema for one param_id, resample to 1-min, z-score normalize.
     Returns a Series indexed by UTC DatetimeIndex, or None if no data found.
     """
     store = parquet_store.create_vol_spread(market, execution_size_str, param_id)
@@ -45,7 +45,7 @@ def _load_and_normalize(
 
     # Build a DatetimeIndex from Unix-second timestamps (UTC)
     index = pd.to_datetime(df["ts"], unit="s", utc=True)
-    series = pd.Series(df["volatility"].values, index=index, name=param_id)
+    series = pd.Series(df["volatility_ema"].values, index=index, name=param_id)
 
     # Resample to 1-min for alignment across all configs
     series = series.resample(ALIGN_INTERVAL).mean()

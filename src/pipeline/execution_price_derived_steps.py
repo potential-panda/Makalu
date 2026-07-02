@@ -27,21 +27,44 @@ class VolSpreadStep(Step):
         self.config = config
 
     def _calculate(self, df: pd.DataFrame) -> pd.DataFrame:
-        dt_sec = pd.Timedelta(self.config.resample_interval).total_seconds()
-        shift_periods = int(round(self.config.return_shift_sec / dt_sec))
-        lookback_periods = int(round(self.config.lookback_sec / dt_sec))
+        sample_sec = pd.Timedelta(self.config.sample_interval).total_seconds()
+        emit_sec = pd.Timedelta(self.config.emit_interval).total_seconds()
+        if sample_sec <= 0 or emit_sec <= 0:
+            raise ValueError("sample_interval and emit_interval must be positive")
 
-        mid_resampled = df["mid"].resample(self.config.resample_interval).last().ffill()
-        spread_resampled = df["spread"].resample(self.config.resample_interval).last().ffill()
+        horizon_periods = max(1, int(round(self.config.return_horizon_sec / sample_sec)))
+        lookback_periods = max(1, int(round(self.config.lookback_sec / sample_sec)))
+        smooth_periods = max(1, int(round(self.config.smooth_sec / sample_sec)))
 
-        returns = mid_resampled.pct_change(periods=shift_periods)
-        volatility = returns.rolling(window=lookback_periods, min_periods=1).std()
-        spread_pct = spread_resampled / mid_resampled
-        spread_pct_ema = spread_pct.ewm(span=self.config.ema_span_sec, adjust=False).mean()
+        bid = df["bid"].resample(self.config.sample_interval).last().ffill()
+        ask = df["ask"].resample(self.config.sample_interval).last().ffill()
+        mid = (bid + ask) / 2
+        spread = ask - bid
+        spread_pct = spread / mid
+        spread_bps = spread_pct * 10000
 
-        df["volatility"] = volatility.reindex(df.index, method="ffill")
-        df["spread_pct_ema"] = spread_pct_ema.reindex(df.index, method="ffill")
-        return df
+        returns = mid.pct_change(periods=horizon_periods)
+        volatility_raw = returns.rolling(window=lookback_periods, min_periods=1).std()
+        volatility_ema = volatility_raw.ewm(span=smooth_periods, adjust=False).mean()
+        spread_pct_ema = spread_pct.ewm(span=lookback_periods, adjust=False).mean()
+        vol_spread_ratio = volatility_ema / spread_pct_ema.where(spread_pct_ema > 0)
+
+        out = pd.DataFrame(
+            {
+                "bid": bid,
+                "ask": ask,
+                "mid": mid,
+                "spread": spread,
+                "spread_pct": spread_pct,
+                "spread_bps": spread_bps,
+                "volatility_raw": volatility_raw,
+                "volatility_ema": volatility_ema,
+                "spread_pct_ema": spread_pct_ema,
+                "vol_spread_ratio": vol_spread_ratio,
+            }
+        )
+
+        return out.resample(self.config.emit_interval).last().ffill()
 
     def populate(self, pipeline_context: PipelineContext, stage_context: Context):
         df = self._calculate(stage_context.price_df)

@@ -92,13 +92,13 @@ spread_pct_ema[t] = EMA(spread_pct_1s, span=lookback_sec)
 Volatility should be smoothed as well, so the ratio does not combine a noisy numerator with a smoothed denominator:
 
 ```text
-volatility[t] = EMA(volatility_raw, span=smooth_sec)
+volatility_ema[t] = EMA(volatility_raw, span=smooth_sec)
 ```
 
 Then:
 
 ```text
-vol_spread_ratio[t] = volatility[t] / spread_pct_ema[t]
+vol_spread_ratio[t] = volatility_ema[t] / spread_pct_ema[t]
 ```
 
 ### 3. Emission Interval
@@ -139,9 +139,9 @@ Avoid overloading one parameter to mean both trading horizon and averaging windo
 | `spread_pct` | `spread / mid` |
 | `spread_bps` | `spread_pct * 10000` |
 | `volatility_raw` | Rolling std of horizon returns |
-| `volatility` | Smoothed volatility |
+| `volatility_ema` | EMA-smoothed volatility |
 | `spread_pct_ema` | Smoothed spread percentage |
-| `vol_spread_ratio` | `volatility / spread_pct_ema` |
+| `vol_spread_ratio` | `volatility_ema / spread_pct_ema` |
 
 ## Pattern Learning
 
@@ -158,7 +158,7 @@ Recommended aggregate fields:
 
 | Column | Meaning |
 |--------|---------|
-| `median_volatility` | Typical volatility for the bin |
+| `median_volatility_ema` | Typical EMA-smoothed volatility for the bin |
 | `median_spread_pct` | Typical spread for the bin |
 | `median_vol_spread_ratio` | Typical tradability ratio for the bin |
 | `p25_vol_spread_ratio` | Lower quartile ratio |
