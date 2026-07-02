@@ -69,7 +69,6 @@ import argparse
 import logging
 import sys
 
-from makalu.data_outage import install_qate_bronze_outage_patch
 from qate.env import sys_env
 from qate.env.env import Env
 from qate.env.env_name import EnvName
@@ -92,6 +91,7 @@ from makalu.cli import (
     scan,
     trading_chart,
 )
+from makalu.data_outage import install_qate_bronze_outage_patch
 
 ENV_NAME = EnvName.LUIGI_MARIO
 
@@ -102,7 +102,9 @@ def _setup_env() -> None:
     env.visit()
     # Also log to stdout so the agent subprocess can read LOG output
     stream_handler = logging.StreamHandler(sys.stdout)
-    stream_handler.setFormatter(logging.Formatter("{asctime} {levelname:8s} {name} {message}", style="{"))
+    stream_handler.setFormatter(
+        logging.Formatter("{asctime} {levelname:8s} {name} {message}", style="{")
+    )
     logging.getLogger().addHandler(stream_handler)
 
 
