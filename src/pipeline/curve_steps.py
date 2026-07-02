@@ -3,12 +3,13 @@ bin) mean+std curve over a trailing training window, read from already-
 populated VolSpread/LeadLag gold data -- never recomputed from bronze.
 
 ActivityCurve combines BOTH of VolSpread's columns (volatility_ema and
-spread_pct_ema) -- the original active_score/curve_builder.py only ever
-used volatility, despite the dataset and the whole concept being named for
-both. LeadLagCurve is the lead-lag-strength equivalent, built from LeadLag's
-ll_max_corr* columns (whichever window/span suffixes are actually present
-for the populated config, discovered from the data rather than hardcoded,
-since the suffix set depends on which LeadLagConfig was populated).
+spread_pct_ema), via active_score/weekly_curve.py's load_volspread_series --
+shared with active_score/inspect_curve.py, the diagnostic tool that recomputes
+the same curve for eyeballing without writing gold parquet. LeadLagCurve is
+the lead-lag-strength equivalent, built from LeadLag's ll_max_corr* columns
+(whichever window/span suffixes are actually present for the populated
+config, discovered from the data rather than hardcoded, since the suffix set
+depends on which LeadLagConfig was populated).
 """
 
 import logging
@@ -18,7 +19,7 @@ from qate.core.model import Market
 from qate.store.parquet_store import ParquetStore
 from qate.util.dt_range import DtRange
 
-from active_score.weekly_curve import aggregate_weekly, zscore_normalize
+from active_score.weekly_curve import aggregate_weekly, load_volspread_series, zscore_normalize
 
 LOG = logging.getLogger(__name__)
 
@@ -45,22 +46,7 @@ def build_activity_curve_rows(
     dt_range: DtRange,
     bin_size_sec: int = 300,
 ) -> list[dict]:
-    series_list = []
-    for param_id in vol_param_ids:
-        store = parquet_store.create_vol_spread(market, execution_size_str, param_id)
-        df = store.read(dt_range)
-        if df.empty:
-            LOG.warning(f"No VolSpread data for param_id={param_id}, skipping.")
-            continue
-        index = pd.to_datetime(df["ts"], unit="s", utc=True)
-        for col in ("volatility_ema", "spread_pct_ema"):
-            if col not in df.columns:
-                continue
-            z = zscore_normalize(pd.Series(df[col].values, index=index, name=f"{param_id}:{col}"))
-            if z is not None:
-                series_list.append(z)
-            else:
-                LOG.warning(f"param_id={param_id} column={col} has no variance after resampling, skipping.")
+    series_list = load_volspread_series(parquet_store, market, execution_size_str, vol_param_ids, dt_range)
 
     if not series_list:
         raise ValueError("No valid VolSpread data found for any of the given param_ids.")

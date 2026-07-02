@@ -1,8 +1,8 @@
 """
 Runtime ActiveScore class.
 
-Loads a pre-built weekly curve (produced by curve_builder.py) and provides
-a fast get_score(ts) lookup and is_active(ts) gate for use in the trading engine.
+Loads a pre-built weekly curve JSON file and provides a fast get_score(ts)
+lookup and is_active(ts) gate for use in the trading engine.
 """
 
 import json

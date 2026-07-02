@@ -1,16 +1,19 @@
-"""Shared (day_of_week x time-of-day bin) aggregation core, extracted from
-active_score/curve_builder.py's build_curve so it can be reused for any
-weekly-pattern dataset, not just the original VolSpread-only ActiveScore.
+"""Shared (day_of_week x time-of-day bin) aggregation core for any
+weekly-pattern dataset built from VolSpread (or similar per-param_id series).
 
-Used by makalu/cli/populate.py's ActivityCurve (volatility + spread_pct_ema
-combined, fixing the original curve_builder's volatility-only gap) and
-LeadLagCurve (correlation strength) commands.
+Used by makalu/cli/populate.py's ActivityCurve (gold pipeline, volatility +
+spread_pct_ema combined) and LeadLagCurve (correlation strength) commands, and
+by active_score/inspect_curve.py (diagnostic tool that recomputes the same
+curve straight from VolSpread for eyeballing, without writing gold parquet).
 """
 
 import logging
 
 import numpy as np
 import pandas as pd
+from qate.core.model import Market
+from qate.store.parquet_store import ParquetStore
+from qate.util.dt_range import DtRange
 
 LOG = logging.getLogger(__name__)
 
@@ -24,6 +27,38 @@ def zscore_normalize(series: pd.Series) -> pd.Series | None:
     if series.empty or series.std() == 0:
         return None
     return (series - series.mean()) / series.std()
+
+
+def load_volspread_series(
+    parquet_store: ParquetStore,
+    market: Market,
+    execution_size_str: str,
+    param_ids: list[str],
+    dt_range: DtRange,
+) -> list[pd.Series]:
+    """Load volatility_ema and spread_pct_ema for each param_id, z-score
+    normalize each column independently (so configs and columns of different
+    scale contribute equally), and return the list of normalized series ready
+    for aggregate_weekly. Columns/param_ids with no data or no variance are
+    skipped with a warning.
+    """
+    series_list = []
+    for param_id in param_ids:
+        store = parquet_store.create_vol_spread(market, execution_size_str, param_id)
+        df = store.read(dt_range)
+        if df.empty:
+            LOG.warning(f"No VolSpread data for param_id={param_id}, skipping.")
+            continue
+        index = pd.to_datetime(df["ts"], unit="s", utc=True)
+        for col in ("volatility_ema", "spread_pct_ema"):
+            if col not in df.columns:
+                continue
+            z = zscore_normalize(pd.Series(df[col].values, index=index, name=f"{param_id}:{col}"))
+            if z is not None:
+                series_list.append(z)
+            else:
+                LOG.warning(f"param_id={param_id} column={col} has no variance after resampling, skipping.")
+    return series_list
 
 
 def aggregate_weekly(series_list: list[pd.Series], bin_size_sec: int) -> tuple[np.ndarray, np.ndarray]:

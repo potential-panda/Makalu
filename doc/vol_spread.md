@@ -176,6 +176,56 @@ pattern_asof_date = D
 training_window = [D - N days, D)
 ```
 
+## Active/Inactive Window Simplification
+
+Individual `bucket_index` cells in the learned pattern are noisy: splitting a year of
+training data into two independent halves (e.g. first half of the year vs second half)
+shows bin-level correlation around 0.83-0.95 between the halves, with mean differences
+comparable in size to the signal itself. The overall day-of-week / time-of-day shape is
+real, but any single 5-minute cell is not precise enough to schedule trading against
+directly.
+
+A more robust simplification is to collapse each day-type (weekday vs weekend) down to
+two contiguous time-of-day groups -- active and inactive -- rather than trusting the raw
+bin values:
+
+1. Average the bin-level curve across the relevant day-type rows (e.g. all weekday rows)
+   to get one representative day curve.
+2. Threshold at that representative day's own mean score.
+3. Take the longest contiguous run of hours above the threshold as "active"; everything
+   else on that day-type is "inactive".
+
+This throws away resolution but keeps only the structure that survives being checked
+against half the training data independently: the *ratio* between the active and
+inactive group means stays stable (within ~1%) across a chronological half/half split,
+even though absolute activity levels drift over the training window.
+
+Exchange-specific closures should be handled explicitly rather than left to the
+threshold. A market reopening after a scheduled maintenance window commonly produces a
+short volatility/spread spike that is an artifact of the reopen, not organic
+tradability, and can distort a naive threshold if left in. The simplest fix is to mark
+the whole day containing the closure (e.g. all of Saturday, if the exchange runs weekly
+maintenance on Saturday) as inactive outright, rather than trying to carve out just the
+affected hours.
+
+Report each resulting time-period group in both UTC (the curve's native timezone) and
+the exchange's local time -- local time is usually what actually explains the pattern
+(e.g. a market's own night/day cycle, or overlap with another market's trading hours).
+
+Example (GMO ETH_JPY, execution_size=0.1, trained on 2025-07-01 to 2026-06-20):
+
+| Group | UTC | JST |
+|-------|-----|-----|
+| Weekday active | 13:00 - 21:00 | 22:00 - 06:00 |
+| Weekday inactive | 21:00 - 13:00 | 06:00 - 22:00 |
+| Weekend (Sat + Sun) | inactive | inactive |
+
+The weekday active window lines up with the earlier finding that this market moves most
+while the US session is running, which lands overnight in Japan. The whole weekend is
+marked inactive rather than only excluding GMO's Saturday maintenance window (09:00-11:00
+JST / 00:00-02:00 UTC), because weekend activity overall correlates poorly (~0.44-0.52)
+with the average day, not just around the reopen.
+
 ## Strategy Usage
 
 Strategies can use the observed or learned ratio to set parameters dynamically:
