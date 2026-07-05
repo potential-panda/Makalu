@@ -22,7 +22,12 @@ def _file_summary(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {"exists": False}
     stat = path.stat()
-    return {"exists": True, "path": str(path), "size": stat.st_size, "mtime": int(stat.st_mtime)}
+    return {
+        "exists": True,
+        "path": str(path),
+        "size": stat.st_size,
+        "mtime": int(stat.st_mtime),
+    }
 
 
 def _port_open(port: int) -> bool:
@@ -44,7 +49,9 @@ def docker_observability() -> dict[str, Any]:
         "data_dirs": {
             "grafana": _file_summary(_COMPOSE_DIR / "data" / "grafana"),
             "influxdb2": _file_summary(_COMPOSE_DIR / "data" / "influxdb2"),
-            "influxdb2_config": _file_summary(_COMPOSE_DIR / "data" / "influxdb2-config"),
+            "influxdb2_config": _file_summary(
+                _COMPOSE_DIR / "data" / "influxdb2-config"
+            ),
         },
     }
 

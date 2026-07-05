@@ -43,20 +43,28 @@ def lead_lag_search_numba(target_resampled, leader_resampled, lags, alpha):
     Args:
         target_resampled: Log-returns of target (lag) market
         leader_resampled: Log-returns of leader market
-        lags: Array of lag indices (in resampled steps)
+        lags: Array of lag indices (in resampled steps), positive, negative, or zero
         alpha: EW decay factor
 
     Returns:
         (best_corr, best_lag): Peak |ρ(k)| and corresponding lag index
     """
+    n = len(target_resampled)
     n_lags = len(lags)
     corrs = np.zeros(n_lags)
 
     for i in prange(n_lags):
         k = lags[i]
-        # Align: target_t vs leader_{t-k}
-        t_segment = target_resampled[k:]
-        l_segment = leader_resampled[:len(target_resampled) - k]
+        # Align: target_t vs leader_{t-k}. k>=0: leader_resampled[:n-k]/[:] must NOT
+        # use Python/numpy negative-index slicing for k<0 (that means "from the
+        # end", not "shift by k") -- so the two directions are split explicitly.
+        if k >= 0:
+            t_segment = target_resampled[k:]
+            l_segment = leader_resampled[: n - k]
+        else:
+            m = -k
+            t_segment = target_resampled[: n - m]
+            l_segment = leader_resampled[m:]
 
         if len(t_segment) > 0 and len(l_segment) > 0:
             corrs[i] = calc_ew_corr_numba(t_segment, l_segment, alpha)

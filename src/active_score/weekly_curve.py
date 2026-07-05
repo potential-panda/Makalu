@@ -61,6 +61,42 @@ def load_volspread_series(
     return series_list
 
 
+def load_leadlag_series(
+    parquet_store: ParquetStore,
+    market_lead: Market,
+    market_lag: Market,
+    param_ids: list[str],
+    dt_range: DtRange,
+) -> list[pd.Series]:
+    """Load every ll_max_corr* column for each param_id, take abs() (a strong
+    relationship is informative regardless of sign -- who leads whom isn't
+    what "is this a good time to trade the relationship" depends on),
+    z-score normalize each column independently, and return the list of
+    normalized series ready for aggregate_weekly. The set of ll_max_corr*
+    suffixes is discovered from the data rather than hardcoded, since it
+    depends on which LeadLagConfig.windows_sec/decay_spans_sec were used.
+    """
+    series_list = []
+    for param_id in param_ids:
+        store = parquet_store.create_lead_lag(market_lead, market_lag, param_id)
+        df = store.read(dt_range)
+        if df.empty:
+            LOG.warning(f"No LeadLag data for param_id={param_id}, skipping.")
+            continue
+        index = pd.to_datetime(df["ts"], unit="s", utc=True)
+        corr_cols = [c for c in df.columns if c.startswith("ll_max_corr")]
+        if not corr_cols:
+            LOG.warning(f"param_id={param_id} has no ll_max_corr* columns, skipping.")
+            continue
+        for col in corr_cols:
+            z = zscore_normalize(pd.Series(df[col].abs().values, index=index, name=f"{param_id}:{col}"))
+            if z is not None:
+                series_list.append(z)
+            else:
+                LOG.warning(f"param_id={param_id} column={col} has no variance after resampling, skipping.")
+    return series_list
+
+
 def aggregate_weekly(series_list: list[pd.Series], bin_size_sec: int) -> tuple[np.ndarray, np.ndarray]:
     """Combine already-normalized series into one (mean, std) pair of
     [7, n_bins] arrays, binned by (day_of_week, time_of_day // bin_size_sec).

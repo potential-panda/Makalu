@@ -10,7 +10,11 @@ from qate.util.dt_range import DtRange
 
 from feature_engineering.volatility import VolSpreadConfig
 from labeling.triple_barrier import TripleBarrierConfig
-from lead_lag.lead_lag import LEAD_LAG_CONFIG_MID, LEAD_LAG_CONFIG_NEARHFT, LEAD_LAG_CONFIG_FAR
+from lead_lag.lead_lag import (
+    LEAD_LAG_CONFIG_FAR,
+    LEAD_LAG_CONFIG_MID,
+    LEAD_LAG_CONFIG_NEARHFT,
+)
 from pipeline.execution_price_derived_steps import VolSpreadStep
 from pipeline.features import (
     BookChangeFeatureStep,
@@ -60,22 +64,34 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
     pipeline = Pipeline(market_data_store, parquet_store)
 
     if "TradeDerived" in run_stages:
-        pipeline.stage(TradeDerivedStage(market_lead).step(PopulateAggressionStep(windows_sec=[1, 3, 5, 10, 30, 60])))
+        pipeline.stage(
+            TradeDerivedStage(market_lead).step(
+                PopulateAggressionStep(windows_sec=[1, 3, 5, 10, 30, 60])
+            )
+        )
 
     if "TradeChart" in run_stages:
         pipeline.stage(
             TradeDerivedStage(market_lead)
             .step(PopulateCandleBarStep(interval_seconds=60))  # 1-minute candle bars
-            .step(PopulateHeikinAshiBarStep(interval_seconds=60))  # 1-minute Heikin Ashi bars
-            .step(PopulateRangeBarStep(box_size_rate=0.001))  # 0.1% range bars (example)
+            .step(
+                PopulateHeikinAshiBarStep(interval_seconds=60)
+            )  # 1-minute Heikin Ashi bars
+            .step(
+                PopulateRangeBarStep(box_size_rate=0.001)
+            )  # 0.1% range bars (example)
         )
 
     if "ExecutionPrice" in run_stages:
         pipeline.stage(
-            OrderBookDerivedStage(market_lead).step(PopulateMarketPriceStep(EXECUTION_SIZE.get(market_lead.symbol)))
+            OrderBookDerivedStage(market_lead).step(
+                PopulateMarketPriceStep(EXECUTION_SIZE.get(market_lead.symbol))
+            )
         )
         pipeline.stage(
-            OrderBookDerivedStage(market_lag).step(PopulateMarketPriceStep(EXECUTION_SIZE.get(market_lag.symbol)))
+            OrderBookDerivedStage(market_lag).step(
+                PopulateMarketPriceStep(EXECUTION_SIZE.get(market_lag.symbol))
+            )
         )
 
     if "ExectuionPriceDerived" in run_stages:
@@ -92,7 +108,9 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
         #     .step(VolSpreadStep(VolSpreadConfig(300, 900, 300)))
         # )
         pipeline.stage(
-            ExecutionPriceDerivedStage(market_lag, EXECUTION_SIZE.get(market_lag.symbol))
+            ExecutionPriceDerivedStage(
+                market_lag, EXECUTION_SIZE.get(market_lag.symbol)
+            )
             .step(VolSpreadStep(VolSpreadConfig(60, 300, 120)))
             .step(VolSpreadStep(VolSpreadConfig(60, 900, 300)))
             .step(VolSpreadStep(VolSpreadConfig(180, 900, 300)))
@@ -122,10 +140,26 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
 
     if "Feature_" + FeatureTarget.NEAR_HFT in run_stages:
         pipeline.stage(
-            FeatureStage(market_lead, EXECUTION_SIZE.get(market_lead.symbol), target=FeatureTarget.NEAR_HFT)
-            .step(TradeAggressionFeatureStep(windows=["5s", "10s", "30s"], rolling_windows=["30s", "60s", "300s"]))
-            .step(OrderBookStateFeatureStep(depth_levels=[1, 3, 5, 10], windows=["5s", "10s", "30s"]))
-            .step(BookChangeFeatureStep(depth_levels=[1, 3, 5, 10], rolling_windows=["30s", "60s", "300s"]))
+            FeatureStage(
+                market_lead,
+                EXECUTION_SIZE.get(market_lead.symbol),
+                target=FeatureTarget.NEAR_HFT,
+            )
+            .step(
+                TradeAggressionFeatureStep(
+                    windows=["5s", "10s", "30s"], rolling_windows=["30s", "60s", "300s"]
+                )
+            )
+            .step(
+                OrderBookStateFeatureStep(
+                    depth_levels=[1, 3, 5, 10], windows=["5s", "10s", "30s"]
+                )
+            )
+            .step(
+                BookChangeFeatureStep(
+                    depth_levels=[1, 3, 5, 10], rolling_windows=["30s", "60s", "300s"]
+                )
+            )
             .step(ExecutionPriceFeatureStep(rolling_windows=["30s", "60s", "300s"]))
             .step(
                 CrossInteractionsFeatureStep(
@@ -141,10 +175,27 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
 
     if "Feature_" + FeatureTarget.MID in run_stages:
         pipeline.stage(
-            FeatureStage(market_lead, EXECUTION_SIZE.get(market_lead.symbol), target=FeatureTarget.MID)
-            .step(TradeAggressionFeatureStep(windows=["30s", "60s", "180s"], rolling_windows=["120s", "300s", "600s"]))
-            .step(OrderBookStateFeatureStep(depth_levels=[5, 10, 20], windows=["30s", "60s", "180s"]))
-            .step(BookChangeFeatureStep(depth_levels=[5, 10, 20], rolling_windows=["120s", "300s", "600s"]))
+            FeatureStage(
+                market_lead,
+                EXECUTION_SIZE.get(market_lead.symbol),
+                target=FeatureTarget.MID,
+            )
+            .step(
+                TradeAggressionFeatureStep(
+                    windows=["30s", "60s", "180s"],
+                    rolling_windows=["120s", "300s", "600s"],
+                )
+            )
+            .step(
+                OrderBookStateFeatureStep(
+                    depth_levels=[5, 10, 20], windows=["30s", "60s", "180s"]
+                )
+            )
+            .step(
+                BookChangeFeatureStep(
+                    depth_levels=[5, 10, 20], rolling_windows=["120s", "300s", "600s"]
+                )
+            )
             .step(ExecutionPriceFeatureStep(rolling_windows=["120s", "300s", "600s"]))
             .step(
                 CrossInteractionsFeatureStep(
@@ -163,10 +214,27 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
         # Orion is a meta-regime filter operating on range-bar close timestamps.
         # Windows are chosen to cover the 5m–2h regime-detection horizon from the spec.
         pipeline.stage(
-            FeatureStage(market_lead, EXECUTION_SIZE.get(market_lead.symbol), target=FeatureTarget.ORION)
-            .step(TradeAggressionFeatureStep(windows=["300s", "1800s"], rolling_windows=["300s", "1800s", "7200s"]))
-            .step(OrderBookStateFeatureStep(depth_levels=[5, 10, 20], windows=["300s", "1800s"]))
-            .step(BookChangeFeatureStep(depth_levels=[5, 10, 20], rolling_windows=["300s", "1800s", "7200s"]))
+            FeatureStage(
+                market_lead,
+                EXECUTION_SIZE.get(market_lead.symbol),
+                target=FeatureTarget.ORION,
+            )
+            .step(
+                TradeAggressionFeatureStep(
+                    windows=["300s", "1800s"],
+                    rolling_windows=["300s", "1800s", "7200s"],
+                )
+            )
+            .step(
+                OrderBookStateFeatureStep(
+                    depth_levels=[5, 10, 20], windows=["300s", "1800s"]
+                )
+            )
+            .step(
+                BookChangeFeatureStep(
+                    depth_levels=[5, 10, 20], rolling_windows=["300s", "1800s", "7200s"]
+                )
+            )
             .step(ExecutionPriceFeatureStep(rolling_windows=["300s", "1800s", "7200s"]))
             .step(VolatilityFeatureStep(windows=["300s", "1800s", "7200s"]))
             .step(TrendFeatureStep(windows=["300s", "1800s", "7200s"]))
@@ -211,9 +279,17 @@ ALL_STEPS = [
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Data pipeline CLI for processing market data.")
-    parser.add_argument("--market", required=True, help="Market in format EXCHANGE:SYMBOL (e.g., BINANCE:BTC_USDT)")
-    parser.add_argument("--from-dt", required=True, help="Start date in YYYYMMDD format")
+    parser = argparse.ArgumentParser(
+        description="Data pipeline CLI for processing market data."
+    )
+    parser.add_argument(
+        "--market",
+        required=True,
+        help="Market in format EXCHANGE:SYMBOL (e.g., BINANCE:BTC_USDT)",
+    )
+    parser.add_argument(
+        "--from-dt", required=True, help="Start date in YYYYMMDD format"
+    )
     parser.add_argument("--to-dt", help="End date in YYYYMMDD format")
     parser.add_argument(
         "--stages",

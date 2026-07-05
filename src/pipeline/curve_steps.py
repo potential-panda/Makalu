@@ -14,12 +14,15 @@ depends on which LeadLagConfig was populated).
 
 import logging
 
-import pandas as pd
 from qate.core.model import Market
 from qate.store.parquet_store import ParquetStore
 from qate.util.dt_range import DtRange
 
-from active_score.weekly_curve import aggregate_weekly, load_volspread_series, zscore_normalize
+from active_score.weekly_curve import (
+    aggregate_weekly,
+    load_leadlag_series,
+    load_volspread_series,
+)
 
 LOG = logging.getLogger(__name__)
 
@@ -29,12 +32,14 @@ def _curve_rows(scores, std_scores, mean_col: str, std_col: str) -> list[dict]:
     rows = []
     for d in range(7):
         for b in range(n_bins):
-            rows.append({
-                "day_of_week": d,
-                "bucket_index": b,
-                mean_col: float(scores[d, b]),
-                std_col: float(std_scores[d, b]),
-            })
+            rows.append(
+                {
+                    "day_of_week": d,
+                    "bucket_index": b,
+                    mean_col: float(scores[d, b]),
+                    std_col: float(std_scores[d, b]),
+                }
+            )
     return rows
 
 
@@ -46,11 +51,17 @@ def build_activity_curve_rows(
     dt_range: DtRange,
     bin_size_sec: int = 300,
 ) -> list[dict]:
-    series_list = load_volspread_series(parquet_store, market, execution_size_str, vol_param_ids, dt_range)
+    series_list = load_volspread_series(
+        parquet_store, market, execution_size_str, vol_param_ids, dt_range
+    )
 
     if not series_list:
-        raise ValueError("No valid VolSpread data found for any of the given param_ids.")
-    LOG.info(f"Combining {len(series_list)} normalized (volatility_ema/spread) series into weekly ActivityCurve.")
+        raise ValueError(
+            "No valid VolSpread data found for any of the given param_ids."
+        )
+    LOG.info(
+        f"Combining {len(series_list)} normalized (volatility_ema/spread) series into weekly ActivityCurve."
+    )
 
     scores, std_scores = aggregate_weekly(series_list, bin_size_sec)
     return _curve_rows(scores, std_scores, "score_mean", "score_std")
@@ -64,31 +75,15 @@ def build_leadlag_curve_rows(
     dt_range: DtRange,
     bin_size_sec: int = 300,
 ) -> list[dict]:
-    series_list = []
-    for param_id in leadlag_param_ids:
-        store = parquet_store.create_lead_lag(market_lead, market_lag, param_id)
-        df = store.read(dt_range)
-        if df.empty:
-            LOG.warning(f"No LeadLag data for param_id={param_id}, skipping.")
-            continue
-        index = pd.to_datetime(df["ts"], unit="s", utc=True)
-        corr_cols = [c for c in df.columns if c.startswith("ll_max_corr")]
-        if not corr_cols:
-            LOG.warning(f"param_id={param_id} has no ll_max_corr* columns, skipping.")
-            continue
-        for col in corr_cols:
-            # abs(): a strong relationship is informative regardless of sign;
-            # the sign itself (who leads whom) isn't what "is this a good
-            # time to trade the relationship" should depend on.
-            z = zscore_normalize(pd.Series(df[col].abs().values, index=index, name=f"{param_id}:{col}"))
-            if z is not None:
-                series_list.append(z)
-            else:
-                LOG.warning(f"param_id={param_id} column={col} has no variance after resampling, skipping.")
+    series_list = load_leadlag_series(
+        parquet_store, market_lead, market_lag, leadlag_param_ids, dt_range
+    )
 
     if not series_list:
         raise ValueError("No valid LeadLag data found for any of the given param_ids.")
-    LOG.info(f"Combining {len(series_list)} normalized correlation series into weekly LeadLagCurve.")
+    LOG.info(
+        f"Combining {len(series_list)} normalized correlation series into weekly LeadLagCurve."
+    )
 
     scores, std_scores = aggregate_weekly(series_list, bin_size_sec)
     return _curve_rows(scores, std_scores, "corr_mean", "corr_std")

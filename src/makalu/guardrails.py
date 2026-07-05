@@ -28,7 +28,9 @@ def validate(sql: str) -> str:
 
     match = _WRITE_KEYWORDS.search(stripped)
     if match:
-        raise GuardrailError(f"Query contains forbidden keyword: {match.group().upper()}")
+        raise GuardrailError(
+            f"Query contains forbidden keyword: {match.group().upper()}"
+        )
 
     if _IMPLICIT_CROSS_JOIN.search(stripped):
         raise GuardrailError(
@@ -38,6 +40,7 @@ def validate(sql: str) -> str:
     if not _HAS_LIMIT.search(stripped):
         stripped = f"{stripped}\nLIMIT {MAX_ROWS}"
     else:
+
         def _cap(m: re.Match[str]) -> str:
             n = int(m.group(1))
             return f"LIMIT {min(n, MAX_ROWS)}"

@@ -71,7 +71,7 @@ class LeadLagConfig:
 # target to hold positions for 20s-30s
 LEAD_LAG_CONFIG_NEARHFT = LeadLagConfig(
     resample_interval="100ms",
-    search_lags_ms=range(0, 5100, 100),
+    search_lags_ms=range(-500, 2100, 100),
     decay_spans_sec=[5, 15, 30],
     windows_sec=[10, 20, 30, 60],
     window_size_sec=600,
@@ -81,16 +81,16 @@ LEAD_LAG_CONFIG_NEARHFT = LeadLagConfig(
 
 # target to hold positions for 120s-180s
 LEAD_LAG_CONFIG_MID = LeadLagConfig(
-    search_lags_ms=range(0, 5100, 100),
+    search_lags_ms=range(-500, 2100, 100),
     decay_spans_sec=[30, 60, 120],
     windows_sec=[60, 120, 180, 300],
     window_size_sec=3600,
-    window_step_sec=30,
+    window_step_sec=60,
     stability_lookbacks=[10],
 )
 
 LEAD_LAG_CONFIG_FAR = LeadLagConfig(
-    search_lags_ms=range(0, 5100, 100),
+    search_lags_ms=range(-500, 2100, 100),
     decay_spans_sec=[120, 300, 600],
     windows_sec=[300, 600, 900, 1200],
     window_size_sec=3600 * 4,

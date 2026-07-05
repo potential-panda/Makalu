@@ -49,7 +49,9 @@ class StepProgressLogger:
         if now - self.last_log_time > 180:
             self.last_log_time = now
             progress = (self.cnt / self.total) * 100
-            LOG.info(f"{self.name}: {self.cnt}/{self.total} processed ({progress:.2f}%)")
+            LOG.info(
+                f"{self.name}: {self.cnt}/{self.total} processed ({progress:.2f}%)"
+            )
 
 
 class Step(ABC):
@@ -66,7 +68,9 @@ class Stage(ABC):
         self._steps.append(step)
         return self
 
-    def before(self, dt_range: DtRange, pipeline_context: PipelineContext) -> StageContext:
+    def before(
+        self, dt_range: DtRange, pipeline_context: PipelineContext
+    ) -> StageContext:
         pass
 
     def after(self):
@@ -82,11 +86,15 @@ class Stage(ABC):
             LOG.info(f"Running step {s.__class__.__name__}...")
             s.populate(pipeline_context, stage_context)
             step_end_time = time.time()
-            LOG.info(f"Step {s.__class__.__name__} finished in {step_end_time - step_start_time:.2f} seconds.")
+            LOG.info(
+                f"Step {s.__class__.__name__} finished in {step_end_time - step_start_time:.2f} seconds."
+            )
 
         self.after()
         stage_end_time = time.time()
-        LOG.info(f"Stage {self.__class__.__name__} finished in {stage_end_time - stage_start_time:.2f} seconds.")
+        LOG.info(
+            f"Stage {self.__class__.__name__} finished in {stage_end_time - stage_start_time:.2f} seconds."
+        )
 
 
 class Pipeline:
@@ -111,11 +119,17 @@ class Pipeline:
                 for s in self._stages:
                     s.run(chunk, self._context)
             except NoDataForChunk as e:
-                LOG.warning(f"Chunk {i + 1}/{total_chunks} ({chunk.start_str} to {chunk.end_str}) skipped: {e}")
+                LOG.warning(
+                    f"Chunk {i + 1}/{total_chunks} ({chunk.start_str} to {chunk.end_str}) skipped: {e}"
+                )
                 skipped_chunks.append((chunk.start_str, chunk.end_str))
                 continue
             chunk_end_time = time.time()
-            LOG.info(f"Chunk {i + 1}/{total_chunks} processed in {chunk_end_time - chunk_start_time:.2f} seconds.")
+            LOG.info(
+                f"Chunk {i + 1}/{total_chunks} processed in {chunk_end_time - chunk_start_time:.2f} seconds."
+            )
 
         if skipped_chunks:
-            LOG.warning(f"Skipped {len(skipped_chunks)}/{total_chunks} chunk(s) with no data: {skipped_chunks}")
+            LOG.warning(
+                f"Skipped {len(skipped_chunks)}/{total_chunks} chunk(s) with no data: {skipped_chunks}"
+            )

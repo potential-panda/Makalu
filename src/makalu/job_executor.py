@@ -93,7 +93,9 @@ class JobExecutor:
 
     def list_jobs(self) -> list[dict]:
         with self._jobs_lock:
-            return sorted(self._jobs.values(), key=lambda j: j.get("created_at", 0), reverse=True)
+            return sorted(
+                self._jobs.values(), key=lambda j: j.get("created_at", 0), reverse=True
+            )
 
     def get_job(self, job_id: str) -> dict | None:
         with self._jobs_lock:
@@ -134,7 +136,9 @@ class JobExecutor:
         with self._jobs_lock:
             self._jobs[job_id] = job
 
-    def _monitor_job(self, job_id: str, pid: int, proc: subprocess.Popen | None = None) -> None:
+    def _monitor_job(
+        self, job_id: str, pid: int, proc: subprocess.Popen | None = None
+    ) -> None:
         proc_file = _processing_path(job_id)
         rc_file = _rc_path(job_id)
 
@@ -185,7 +189,8 @@ class JobExecutor:
             stale = [
                 jid
                 for jid, j in list(self._jobs.items())
-                if j.get("status") in ("done", "failed") and j.get("finished_at", j.get("created_at", 0)) < cutoff
+                if j.get("status") in ("done", "failed")
+                and j.get("finished_at", j.get("created_at", 0)) < cutoff
             ]
             for jid in stale:
                 del self._jobs[jid]
