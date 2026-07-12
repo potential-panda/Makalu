@@ -13,7 +13,7 @@ from pipeline.market_data_steps import PopulateOrderBookStep, PopulateTradeStep
 from pipeline.stages import MarketDataStage
 
 LOG = getLogger(__name__)
-ENV_NAME = EnvName.LUIGI_MARIO
+ENV_NAME = EnvName("LUIGI_MARIO")
 
 
 def main(market: Market, dt_range: DtRange, populate=False):

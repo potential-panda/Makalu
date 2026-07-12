@@ -45,7 +45,7 @@ from lead_lag.lead_lag import LEAD_LAG_CONFIG_MID, LEAD_LAG_CONFIG_NEARHFT
 from pipeline.market_pair import LEAD_LAG_PAIRS
 
 LOG = logging.getLogger(__name__)
-ENV_NAME = EnvName.MARIO_MARIO
+ENV_NAME = EnvName("MARIO_MARIO")
 
 LEADLAG_CONFIGS = {"nearhft": LEAD_LAG_CONFIG_NEARHFT, "mid": LEAD_LAG_CONFIG_MID}
 

@@ -52,7 +52,7 @@ from active_score.weekly_curve import aggregate_weekly, load_volspread_series
 from feature_engineering.volatility import VolSpreadConfig
 
 LOG = logging.getLogger(__name__)
-ENV_NAME = EnvName.MARIO_MARIO
+ENV_NAME = EnvName("MARIO_MARIO")
 
 # Kept in sync with populate.py's _volspread_configs() / silver.py's own
 # VolSpreadStep list -- the 4 configs actually populated for VolSpread.

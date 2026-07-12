@@ -53,7 +53,7 @@ from pipeline.trade_derived_steps import (
 from pipeline.triple_barrier_steps import GenerateLabelsStep
 
 LOG = getLogger(__name__)
-ENV_NAME = EnvName.MARIO_MARIO
+ENV_NAME = EnvName("MARIO_MARIO")
 
 
 def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:

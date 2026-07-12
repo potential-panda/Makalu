@@ -93,7 +93,7 @@ from makalu.cli import (
 )
 from makalu.data_outage import install_qate_bronze_outage_patch
 
-ENV_NAME = EnvName.LUIGI_MARIO
+ENV_NAME = EnvName("LUIGI_MARIO")
 
 
 def _setup_env() -> None:
