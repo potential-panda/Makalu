@@ -25,9 +25,24 @@ class Context(StageContext):
 
 
 class PopulateMarketPriceStep(Step):
-    def __init__(self, execution_size_str: str):
+    # Degenerate-snapshot guard, NOT the old max_spread_bps=10.0 pre-filter
+    # (removed in 24ecb0d because it dropped ~7% of legitimate snapshots at
+    # SAR-flip moments). The collector used to emit partial books after every
+    # snapshot resync (1-3 levels with stale far-away prices — fixed in
+    # potential-panda-core cdc172a, but historical bronze retains them), and
+    # pricing those produced +/-200-1100 bps reverting mid spikes. The check
+    # is on the WALKED spread (market_price.spread_bps): partial books often
+    # keep a tight top-of-book with almost nothing behind it, so the walk
+    # lands hundreds of bps deep. 100 bps is ~4-10x any real walked stress
+    # spread on the recorded venues (BINANCE p99.9 ~25 bps at size 0.1) yet
+    # far below the artifact spreads; on the days checked (2026-03-03,
+    # 05-13, 06-10) it removes every reverting spike.
+    DEGENERATE_SPREAD_BPS = 100.0
+
+    def __init__(self, execution_size_str: str, degenerate_spread_bps: float = DEGENERATE_SPREAD_BPS):
         super().__init__()
         self.execution_size_str = execution_size_str
+        self.degenerate_spread_bps = degenerate_spread_bps
 
     def populate(self, pipeline_context: PipelineContext, stage_context: Context):
         parquet_store = pipeline_context.parquet_store.create_execution_price(
@@ -44,6 +59,7 @@ class PopulateMarketPriceStep(Step):
     def _populate(self, pipeline_context: PipelineContext, stage_context: Context):
         """Generator that yields (ts, fields) tuples."""
         skip_count = 0
+        degenerate_count = 0
         progress = StepProgressLogger(self.__class__.__name__, len(stage_context.order_books))
         for order_book in stage_context.order_books:
             if not stage_context.populate_dt_range.is_within(order_book.get_ts()):
@@ -52,6 +68,10 @@ class PopulateMarketPriceStep(Step):
             market_price = order_book.market_price(float(self.execution_size_str))
             if not market_price:
                 skip_count += 1
+                continue
+
+            if market_price.spread_bps > self.degenerate_spread_bps:
+                degenerate_count += 1
                 continue
 
             fields = {
@@ -64,7 +84,11 @@ class PopulateMarketPriceStep(Step):
 
             yield (order_book.get_ts(), fields)
             progress.update()
-        LOG.info(f"PopulateMarketPriceStep: Processed {progress.cnt} objects, skipped {skip_count} objects")
+        LOG.info(
+            f"PopulateMarketPriceStep: Processed {progress.cnt} objects,"
+            f" skipped {skip_count} objects,"
+            f" dropped {degenerate_count} degenerate snapshots"
+        )
 
 
 class PopulateBookStateStep(Step):
