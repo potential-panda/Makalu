@@ -574,6 +574,361 @@ body {
 .day-tooltip .tt-val   { color: var(--text); }
 
 /* ─── Jobs section ────────────────────────────────── */
+#dataset-section {
+  background: var(--surface);
+  border: 1px solid var(--border-dim);
+  border-left: 3px solid var(--link);
+  border-radius: 4px;
+  padding: 14px 16px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dataset-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+#dataset-select {
+  width: min(320px, 100%);
+  background: var(--surface2);
+  border: 1px solid var(--border-dim);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 6px 9px;
+  border-radius: 3px;
+  outline: none;
+  appearance: none;
+}
+
+.dataset-status {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+#dataset-calendar-section {
+  background: var(--surface);
+  border: 1px solid var(--border-dim);
+  border-left: 3px solid var(--orange);
+  border-radius: 4px;
+  padding: 14px 16px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mode-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border-dim);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.mode-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.mode-btn.is-active {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.dataset-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dataset-legend-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border: 1px solid var(--border-dim);
+  border-radius: 999px;
+  background: rgba(255,255,255,0.03);
+  font-size: 10px;
+  color: var(--text);
+}
+
+.dataset-legend-swatch,
+.dataset-tt-swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+#dataset-calendar-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+#dataset-cal-month-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--text);
+  flex: 1;
+  text-align: center;
+}
+
+#dataset-calendar-spinner {
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#dataset-calendar-spinner::after {
+  content: '';
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border-dim);
+  border-top-color: var(--orange);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+#dataset-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.dataset-day-cell {
+  overflow: hidden;
+}
+
+.dataset-bars {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  bottom: 3px;
+  display: flex;
+  gap: 2px;
+  height: 5px;
+}
+
+.dataset-bar {
+  flex: 1;
+  border-radius: 1px;
+  background: rgba(255,255,255,0.07);
+}
+
+.dataset-bar.on {
+  background: var(--dataset-bar-color);
+}
+
+.dataset-tooltip .tt-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dataset-tooltip .tt-row {
+  min-width: 190px;
+}
+
+.dataset-pin {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+#dataset-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border-dim);
+  border-radius: 3px;
+}
+
+.dataset-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10px;
+  min-width: 820px;
+}
+
+.dataset-table th,
+.dataset-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-dim);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.dataset-table th {
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  background: rgba(255,255,255,0.02);
+}
+
+.dataset-row {
+  cursor: pointer;
+}
+
+.dataset-row td:first-child {
+  text-align: center;
+}
+
+.dataset-row:hover {
+  background: rgba(255,255,255,0.03);
+}
+
+.dataset-row.is-active {
+  background: rgba(0, 220, 150, 0.06);
+}
+
+#dataset-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-top: 1px solid var(--border-dim);
+  padding-top: 12px;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.detail-block {
+  min-width: 0;
+}
+
+.detail-label {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.detail-value {
+  font-size: 11px;
+  color: var(--text);
+  word-break: break-word;
+  line-height: 1.45;
+}
+
+.dataset-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.control-select-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 180px;
+}
+
+.control-label {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.control-select-wrap select {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border-dim);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 6px 9px;
+  border-radius: 3px;
+  outline: none;
+  appearance: none;
+}
+
+.partition-row,
+.pill-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border-dim);
+  color: var(--text);
+  font-size: 10px;
+}
+
+.pill-warn {
+  background: rgba(240, 144, 48, 0.08);
+  border-color: rgba(240, 144, 48, 0.18);
+  color: #f0c48a;
+}
+
+.dataset-values,
+.dataset-ranges {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.coverage-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.coverage-item {
+  padding: 8px 10px;
+  border: 1px solid var(--border-dim);
+  border-radius: 3px;
+  background: rgba(255,255,255,0.02);
+}
+
+.coverage-item span {
+  display: block;
+  font-size: 9px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 4px;
+}
+
+.coverage-item strong {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.muted {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
 #jobs-section {
   background: var(--surface);
   border: 1px solid var(--border-dim);
@@ -683,10 +1038,15 @@ body {
 /* ─── Responsive ──────────────────────────────────── */
 @media (max-width: 900px) {
   #calendar-grid { grid-template-columns: 1fr; }
+  #dataset-calendar-grid { grid-template-columns: 1fr; }
   #main { flex-direction: column; height: auto; }
   #sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border-dim); }
   #market-bar #market-select { max-width: 100%; }
   #main { height: auto; }
+  .detail-grid,
+  .coverage-grid { grid-template-columns: 1fr 1fr; }
+  .dataset-toolbar { flex-direction: column; align-items: stretch; }
+  .control-select-wrap { min-width: 100%; }
 }
 
 #viewport-indicator {

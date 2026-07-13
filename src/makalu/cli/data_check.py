@@ -1,140 +1,57 @@
 import argparse
-from datetime import date, timedelta
 from logging import getLogger
-from pathlib import Path
 
-from makalu.data_outage import filter_bronze_outage_missing_dates
-
-from .common import DATASETS, get_dataset_root
+from makalu.data_access import dataset_availability
 
 LOG = getLogger(__name__)
 
 
-def _list_partition_values(path: Path, key: str) -> list[str]:
-    """Return sorted values for a partition key at the given path level."""
-    prefix = f"{key}="
-    start = len(prefix)
-    return sorted(d.name[start:] for d in path.iterdir() if d.is_dir() and d.name.startswith(prefix))
-
-
-def _collect_dates(path: Path) -> list[str]:
-    """Return sorted date strings under a fully-resolved partition path."""
-    prefix = "date="
-    dates = []
-    for d in path.iterdir():
-        if d.is_dir() and d.name.startswith(prefix):
-            parquet = d / "data.parquet"
-            if parquet.exists():
-                start = len(prefix)
-                dates.append(d.name[start:])
-    return sorted(dates)
-
-
-def _missing_dates(dates: list[str], start: str | None, end: str | None) -> list[str]:
-    if not dates:
-        return []
-    d_start = date.fromisoformat(start) if start else date.fromisoformat(dates[0])
-    d_end = date.fromisoformat(end) if end else date.fromisoformat(dates[-1])
-    existing = set(dates)
-    missing = []
-    cur = d_start
-    while cur <= d_end:
-        s = cur.isoformat()
-        if s not in existing:
-            missing.append(s)
-        cur += timedelta(days=1)
-    return missing
-
-
-def _to_ranges(dates: list[str]) -> list[str]:
-    """Compress a sorted list of date strings into human-readable ranges."""
-    if not dates:
-        return []
-    ranges = []
-    start = prev = date.fromisoformat(dates[0])
-    for d in dates[1:]:
-        cur = date.fromisoformat(d)
-        if (cur - prev).days == 1:
-            prev = cur
-        else:
-            ranges.append(_range_str(start, prev))
-            start = prev = cur
-    ranges.append(_range_str(start, prev))
-    return ranges
-
-
-def _range_str(start: date, end: date) -> str:
-    if start == end:
-        return str(start)
-    return f"{start} → {end}"
-
-
 def execute(args):
     dataset = args.dataset
-    if dataset not in DATASETS:
-        LOG.error(f"Unknown dataset '{dataset}'. Available: {', '.join(sorted(DATASETS))}")
+    partitions = {
+        "exchange": args.exchange,
+        "symbol": args.symbol,
+        "execution_size": args.execution_size,
+        "param_id": args.param_id,
+        "market_a": args.market_a,
+        "market_b": args.market_b,
+    }
+    info = dataset_availability(dataset, partitions=partitions, start=args.start, end=args.end)
+
+    if info.get("state") == "unknown_dataset":
+        LOG.error(info["error"])
         return
-
-    layer, keys = DATASETS[dataset]
-    base = get_dataset_root(layer, dataset)
-
-    if not base.exists():
-        LOG.warning(f"No data found for {dataset} at {base}")
+    if info.get("state") == "missing_dataset":
+        LOG.warning(f"No data found for {dataset} at {info['base_path']}")
         return
-
-    # Build mapping of key -> provided value
-    provided: dict[str, str | None] = {}
-    for key in keys:
-        provided[key] = getattr(args, key, None)
-
-    # Walk partition keys one by one; stop and list when a value is missing
-    path = base
-    for key in keys:
-        val = provided[key]
-        if val is None:
-            values = _list_partition_values(path, key)
-            if not values:
-                LOG.warning(f"No data under {path}")
-                return
-            print(f"Available {key}:")
-            for v in values:
-                print(f"  {v}")
-            return
-        next_path = path / f"{key}={val}"
-        if not next_path.exists():
-            LOG.warning(f"No data for {key}={val} under {path}")
-            return
-        path = next_path
-
-    # All partition keys resolved — show date summary
-    dates = _collect_dates(path)
-    if not dates:
-        LOG.warning(f"No parquet files found under {path}")
+    if info.get("state") == "needs_partition":
+        print(f"Available {info['next_key']}:")
+        for v in info.get("available_values", []):
+            print(f"  {v}")
         return
-
-    missing = filter_bronze_outage_missing_dates(dataset, _missing_dates(dates, args.start, args.end))
-
-    partition_desc = " / ".join(f"{k}={provided[k]}" for k in keys)
-    print(f"Dataset : {dataset}")
-    print(f"Location: {path}")
-    print(f"Partition: {partition_desc}")
-    print(f"Min date: {dates[0]}")
-    print(f"Max date: {dates[-1]}")
-    print(f"Total   : {len(dates)} days on disk")
-    if args.start or args.end:
-        window_start = args.start or dates[0]
-        window_end = args.end or dates[-1]
-        print(f"Window  : {window_start} → {window_end}")
-        print(f"Missing : {len(missing)} days")
-        if missing:
-            # Show missing as compact ranges
-            ranges = _to_ranges(missing)
-            for r in ranges:
+    if info.get("state") == "missing_partition":
+        LOG.warning(
+            f"No data for {info['missing_key']}={info['missing_value']} under {info['path']}"
+        )
+        return
+    if info.get("state") == "summary":
+        partition_desc = " / ".join(
+            f"{k}={v}" for k, v in info["resolved_partitions"].items() if v is not None
+        )
+        print(f"Dataset : {info['dataset']}")
+        print(f"Location: {info['path']}")
+        print(f"Partition: {partition_desc}")
+        print(f"Min date: {info['min_date']}")
+        print(f"Max date: {info['max_date']}")
+        print(f"Total   : {info['total_days']} days on disk")
+        if args.start or args.end:
+            print(f"Window  : {info['window_start']} → {info['window_end']}")
+            print(f"Missing : {info['missing_days']} days")
+            for r in info["missing_ranges"]:
                 print(f"  {r}")
-    else:
-        print(f"Missing : {len(missing)} days (between min and max)")
-        if missing:
-            for r in _to_ranges(missing):
+        else:
+            print(f"Missing : {info['missing_days']} days (between min and max)")
+            for r in info["missing_ranges"]:
                 print(f"  {r}")
 
 

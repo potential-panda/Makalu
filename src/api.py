@@ -12,7 +12,7 @@ from pathlib import Path
 
 from flask import Flask, jsonify, request, send_from_directory
 
-from makalu.data_access import availability, global_stats, list_markets
+from makalu.data_access import availability, dataset_availability, dataset_overview, global_stats, list_markets
 from makalu.data_outage import install_qate_bronze_outage_patch
 from makalu.job_executor import JobExecutor
 
@@ -34,6 +34,11 @@ _stats_cache: dict = {}
 _stats_cache_ts: float = 0
 _stats_refreshing = False
 
+# Dataset inventory cache
+_datasets_cache: list[dict] = []
+_datasets_cache_ts: float = 0
+_datasets_refreshing = False
+
 # Availability cache: key = "EXCHANGE_SYMBOL"
 _avail_cache: dict[str, dict] = {}
 _avail_cache_ts: dict[str, float] = {}
@@ -52,6 +57,18 @@ def _refresh_stats() -> None:
         _stats_refreshing = False
 
 
+def _refresh_datasets() -> None:
+    global _datasets_cache, _datasets_cache_ts, _datasets_refreshing
+    _datasets_refreshing = True
+    try:
+        _datasets_cache = dataset_overview()
+        _datasets_cache_ts = time.time()
+    except Exception:
+        pass
+    finally:
+        _datasets_refreshing = False
+
+
 def _refresh_avail(exchange: str, symbol: str) -> None:
     key = f"{exchange}_{symbol}"
     _avail_refreshing.add(key)
@@ -66,6 +83,7 @@ def _refresh_avail(exchange: str, symbol: str) -> None:
 
 # Pre-warm stats cache in background on startup
 threading.Thread(target=_refresh_stats, daemon=True).start()
+threading.Thread(target=_refresh_datasets, daemon=True).start()
 
 
 # ── Data endpoints ────────────────────────────────────────────────────────────
@@ -88,6 +106,30 @@ def api_availability():
     if key in _avail_cache:
         return jsonify(_avail_cache[key])
     return jsonify({"loading": True})
+
+
+@app.route("/api/datasets")
+def api_datasets():
+    if time.time() - _datasets_cache_ts > CACHE_TTL and not _datasets_refreshing:
+        threading.Thread(target=_refresh_datasets, daemon=True).start()
+    if _datasets_cache:
+        return jsonify(_datasets_cache)
+    return jsonify({"loading": True})
+
+
+@app.route("/api/dataset-availability")
+def api_dataset_availability():
+    dataset = request.args.get("dataset", "")
+    start = request.args.get("start", "") or None
+    end = request.args.get("end", "") or None
+    partitions = {
+        k: request.args.get(k) or None
+        for k in ("exchange", "symbol", "execution_size", "param_id", "market_a", "market_b")
+        if request.args.get(k) is not None
+    }
+    if not dataset:
+        return jsonify({"error": "dataset required"}), 400
+    return jsonify(dataset_availability(dataset, partitions=partitions, start=start, end=end))
 
 
 @app.route("/api/stats")
