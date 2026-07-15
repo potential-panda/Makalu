@@ -37,7 +37,7 @@ class PopulateAggressionStep(Step):
 
     def populate(self, pipeline_context: PipelineContext, stage_context: Context):
         parquet_store = pipeline_context.parquet_store.create_single_market(
-            "TradeAggression", stage_context.market, layer="silver"
+            "TradeAggression", stage_context.market
         )
         count = 0
         for ts, write_fields in self._populate(pipeline_context, stage_context):
