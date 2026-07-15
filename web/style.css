@@ -49,6 +49,7 @@ body {
   height: 54px;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   padding: 0 28px;
   position: sticky;
   top: 0;
@@ -83,6 +84,38 @@ body {
   letter-spacing: 0.08em;
   text-transform: none;
   color: var(--text-muted);
+}
+
+.page-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.page-link {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border-dim);
+  border-radius: 3px;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.page-link:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.page-link.is-active {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-dim);
 }
 
 /* ─── Market bar ─────────────────────────────────── */
@@ -881,6 +914,31 @@ body {
   border: 1px solid var(--border-dim);
   color: var(--text);
   font-size: 10px;
+}
+
+.pill-clearable {
+  gap: 6px;
+}
+
+.pill-clear {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-dim);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.pill-clear:hover {
+  color: var(--text);
+  border-color: var(--accent);
 }
 
 .pill-warn {

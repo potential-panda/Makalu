@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Makalu - Dataset Availability</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css?v=20260715-1" />
+</head>
+<body data-page="datasets">
+  <div id="app">
+    <header id="topbar">
+      <div id="logo">
+        <span id="logo-dot"></span>
+        MAKALU
+        <span id="logo-sub">Dataset Availability</span>
+      </div>
+      <nav class="page-nav" aria-label="Pages">
+        <a class="page-link" href="./">Market</a>
+        <a class="page-link is-active" href="./datasets.html">Datasets</a>
+      </nav>
+    </header>
+
+    <div id="stats-bar">
+      <div class="stat-item">
+        <span class="stat-label">RAW</span>
+        <span class="stat-value" id="stat-raw">—</span>
+        <span class="stat-count" id="stat-raw-count"></span>
+      </div>
+      <div class="stat-sep"></div>
+      <div class="stat-item">
+        <span class="stat-dot bronze-dot"></span>
+        <span class="stat-label">BRONZE</span>
+        <span class="stat-value" id="stat-bronze">—</span>
+      </div>
+      <div class="stat-sep"></div>
+      <div class="stat-item">
+        <span class="stat-dot silver-dot"></span>
+        <span class="stat-label">SILVER</span>
+        <span class="stat-value" id="stat-silver">—</span>
+      </div>
+      <div class="stat-sep"></div>
+      <div class="stat-item">
+        <span class="stat-dot gold-dot"></span>
+        <span class="stat-label">GOLD</span>
+        <span class="stat-value" id="stat-gold">—</span>
+      </div>
+    </div>
+
+    <div id="main">
+      <div id="content">
+        <section id="dataset-section">
+          <div class="section-header">
+            <span class="panel-label">DATASETS</span>
+            <button class="link-btn" id="dataset-refresh">refresh</button>
+          </div>
+          <div class="dataset-toolbar">
+            <select id="dataset-select">
+              <option value="">Loading…</option>
+            </select>
+            <div id="dataset-status" class="dataset-status">Loading dataset inventory…</div>
+          </div>
+          <div id="dataset-table-wrap">
+            <div id="dataset-table"></div>
+          </div>
+          <div id="dataset-detail">
+            <div class="detail-grid">
+              <div class="detail-block">
+                <div class="detail-label">Selection</div>
+                <div id="dataset-summary" class="detail-value">Select a dataset.</div>
+              </div>
+              <div class="detail-block">
+                <div class="detail-label">Partitions</div>
+                <div id="dataset-partitions" class="detail-value">—</div>
+              </div>
+              <div class="detail-block">
+                <div class="detail-label">Path</div>
+                <div id="dataset-path" class="detail-value">—</div>
+              </div>
+            </div>
+            <div id="dataset-controls" class="dataset-controls"></div>
+            <div id="dataset-values" class="dataset-values"></div>
+            <div id="dataset-ranges" class="dataset-ranges"></div>
+          </div>
+        </section>
+
+        <section id="dataset-calendar-section">
+          <div class="section-header">
+            <span class="panel-label">DATASET CALENDAR</span>
+            <div class="mode-toggle" role="tablist" aria-label="Dataset calendar mode">
+              <button class="mode-btn is-active" id="dataset-mode-single" type="button">single</button>
+              <button class="mode-btn" id="dataset-mode-compare" type="button">compare</button>
+            </div>
+          </div>
+          <div class="dataset-toolbar">
+            <div id="dataset-calendar-legend" class="dataset-legend"></div>
+            <div id="dataset-calendar-status" class="dataset-status">Loading dataset calendar…</div>
+          </div>
+          <div id="dataset-calendar-header">
+            <button class="nav-btn" id="dataset-cal-prev">&#x2190;</button>
+            <span id="dataset-cal-month-label"></span>
+            <button class="nav-btn" id="dataset-cal-next">&#x2192;</button>
+          </div>
+          <div id="dataset-calendar-spinner" style="display:none"></div>
+          <div id="dataset-calendar-grid"></div>
+        </section>
+      </div>
+    </div>
+  </div>
+  <div id="viewport-indicator"></div>
+  <script src="app.js?v=20260715-1"></script>
+</body>
+</html>

@@ -45,6 +45,14 @@ _avail_cache_ts: dict[str, float] = {}
 _avail_refreshing: set[str] = set()
 
 
+@app.after_request
+def _no_cache_web_assets(resp):
+    if not request.path.startswith("/api/"):
+        resp.headers["Cache-Control"] = "no-store, max-age=0"
+        resp.headers["Pragma"] = "no-cache"
+    return resp
+
+
 def _refresh_stats() -> None:
     global _stats_cache, _stats_cache_ts, _stats_refreshing
     _stats_refreshing = True

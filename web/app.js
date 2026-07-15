@@ -14,6 +14,15 @@ async function apiFetch(path, opts = {}) {
   return res.json();
 }
 
+function byId(id) {
+  return document.getElementById(id);
+}
+
+function bind(id, event, handler) {
+  const el = byId(id);
+  if (el) el.addEventListener(event, handler);
+}
+
 // ─── Formatting ───────────────────────────────────────────────────────────────
 
 function fmtBytes(b) {
@@ -49,6 +58,8 @@ let state = {
   datasetCalendarViewYear: null,
   datasetCalendarViewMonth: null,
   datasetCalendarInfos: {},
+  datasetAvailabilityReq: 0,
+  datasetCalendarReq: 0,
   rangeStart: null,
   rangeEnd: null,
   selecting: false,
@@ -56,6 +67,9 @@ let state = {
   viewMonth: null,     // 0-11
   jobs: [],
 };
+
+const PAGE = document.body?.dataset?.page || 'market';
+const DATASET_URL_KEYS = ['exchange', 'symbol', 'execution_size', 'param_id', 'market_a', 'market_b'];
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 
@@ -66,27 +80,77 @@ function getHashMarket() {
 
 async function boot() {
   loadGlobalStats();
-  await loadDatasets();
+  if (PAGE === 'datasets') {
+    await bootDatasets();
+  } else {
+    await bootMarket();
+  }
+}
+
+async function bootMarket() {
   loadBacktestEnvs();
   await loadMarkets();
   if (state.markets.length > 0) {
-    const hashMarket = getHashMarket()
-    const initial = state.markets.find(m => m.market === hashMarket) || state.markets[0]
-    document.getElementById('market-select').value = initial.market
-    await selectMarket(initial)
+    const hashMarket = getHashMarket();
+    const initial = state.markets.find(m => m.market === hashMarket) || state.markets[0];
+    byId('market-select').value = initial.market;
+    await selectMarket(initial);
   }
   loadJobs();
   setInterval(loadJobs, 8000);
 
   window.addEventListener('hashchange', async () => {
-    const marketKey = getHashMarket()
-    if (!marketKey) return
-    const mkt = state.markets.find(m => m.market === marketKey)
+    const marketKey = getHashMarket();
+    if (!marketKey) return;
+    const mkt = state.markets.find(m => m.market === marketKey);
     if (mkt && mkt.market !== state.selectedMarket?.market) {
-      document.getElementById('market-select').value = mkt.market
-      await selectMarket(mkt, false)
+      byId('market-select').value = mkt.market;
+      await selectMarket(mkt, false);
     }
-  })
+  });
+
+}
+
+async function bootDatasets() {
+  hydrateDatasetStateFromUrl();
+  await loadDatasets();
+}
+
+function hydrateDatasetStateFromUrl() {
+  const params = new URLSearchParams(location.search);
+  const dataset = params.get('dataset');
+  if (dataset) state.selectedDataset = dataset;
+
+  state.datasetCompareMode = params.get('compare') === '1';
+
+  const pinned = params.get('pinned');
+  if (pinned) {
+    state.datasetPinned = pinned.split(',').map(s => s.trim()).filter(Boolean);
+  }
+
+  const partitions = {};
+  for (const key of DATASET_URL_KEYS) {
+    const value = params.get(key);
+    if (value) partitions[key] = value;
+  }
+  if (dataset && Object.keys(partitions).length) {
+    state.datasetPartitionsByDataset[dataset] = { ...partitions };
+    state.datasetPartitions = { ...partitions };
+  }
+}
+
+function syncDatasetUrl() {
+  if (PAGE !== 'datasets') return;
+  const params = new URLSearchParams();
+  if (state.selectedDataset) params.set('dataset', state.selectedDataset);
+  if (state.datasetCompareMode) params.set('compare', '1');
+  if (state.datasetPinned.length) params.set('pinned', state.datasetPinned.join(','));
+  for (const [key, value] of Object.entries(state.datasetPartitions)) {
+    if (value) params.set(key, value);
+  }
+  const next = `${location.pathname}${params.toString() ? `?${params.toString()}` : ''}${location.hash}`;
+  const current = `${location.pathname}${location.search}${location.hash}`;
+  if (next !== current) history.replaceState(null, '', next);
 }
 
 // ─── Global stats ─────────────────────────────────────────────────────────────
@@ -155,11 +219,7 @@ async function loadDatasets() {
 
   if (state.datasets.length > 0) {
     const initial = state.datasets.find(d => d.dataset === state.selectedDataset) || state.datasets[0];
-    if (!state.selectedDataset || !state.datasets.some(d => d.dataset === state.selectedDataset)) {
-      await selectDataset(initial.dataset);
-    } else {
-      sel.value = state.selectedDataset;
-    }
+    await selectDataset(initial.dataset);
   }
   renderDatasetCalendarControls();
   await refreshDatasetCalendar();
@@ -225,6 +285,7 @@ function renderDatasetCatalog() {
       if (!state.datasetPinned.length && state.selectedDataset) {
         state.datasetPinned = [state.selectedDataset];
       }
+      syncDatasetUrl();
       renderDatasetCatalog();
       renderDatasetCalendarControls();
       refreshDatasetCalendar();
@@ -234,6 +295,8 @@ function renderDatasetCatalog() {
 
 async function selectDataset(dataset) {
   if (!dataset) return;
+  state.datasetAvailabilityReq += 1;
+  state.datasetCalendarReq += 1;
   state.selectedDataset = dataset;
   state.datasetPartitions = state.datasetPartitionsByDataset[dataset] || {};
   state.datasetPartitionsByDataset[dataset] = { ...state.datasetPartitions };
@@ -245,11 +308,13 @@ async function selectDataset(dataset) {
   initDatasetCalendarView();
   renderDatasetCalendarControls();
   await refreshDatasetCalendar();
+  syncDatasetUrl();
 }
 
 async function refreshDatasetAvailability() {
   const dataset = state.selectedDataset;
   if (!dataset) return;
+  const req = ++state.datasetAvailabilityReq;
 
   const params = new URLSearchParams({ dataset });
   for (const [key, value] of Object.entries(state.datasetPartitions)) {
@@ -259,6 +324,7 @@ async function refreshDatasetAvailability() {
   if (state.rangeEnd) params.set('end', state.rangeEnd);
 
   const info = await apiFetch(`/api/dataset-availability?${params.toString()}`);
+  if (req !== state.datasetAvailabilityReq) return;
   state.datasetAvailability = info;
   renderDatasetDetail(info);
 }
@@ -305,10 +371,19 @@ function renderDatasetDetail(info) {
     sel.addEventListener('change', async () => {
       const key = sel.dataset.partitionKey;
       state.datasetPartitions[key] = sel.value || null;
-      state.datasetPartitionsByDataset[state.selectedDataset] = { ...state.datasetPartitions };
       const keyIndex = keys.indexOf(key);
       keys.slice(keyIndex + 1).forEach(k => { delete state.datasetPartitions[k]; });
       state.datasetPartitionsByDataset[state.selectedDataset] = { ...state.datasetPartitions };
+      syncDatasetUrl();
+      await refreshDatasetAvailability();
+      await refreshDatasetCalendar();
+    });
+  });
+
+  controlsEl.querySelectorAll('[data-clear-partition-key]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      clearDatasetPartition(btn.dataset.clearPartitionKey);
+      syncDatasetUrl();
       await refreshDatasetAvailability();
       await refreshDatasetCalendar();
     });
@@ -323,7 +398,12 @@ function renderPartitionControls(info) {
 
   const resolvedChips = keys
     .filter(k => resolved[k])
-    .map(k => `<span class="pill">${escHtml(k)}=${escHtml(resolved[k])}</span>`)
+    .map(k => `
+      <span class="pill pill-clearable">
+        <span>${escHtml(k)}=${escHtml(resolved[k])}</span>
+        <button type="button" class="pill-clear" data-clear-partition-key="${escAttr(k)}" aria-label="Clear ${escHtml(k)}">×</button>
+      </span>
+    `)
     .join('');
 
   const selector = key ? `
@@ -444,6 +524,7 @@ async function refreshDatasetCalendar() {
   const status = document.getElementById('dataset-calendar-status');
   const label = document.getElementById('dataset-cal-month-label');
   const datasets = getDatasetCalendarDatasets();
+  const req = ++state.datasetCalendarReq;
   if (!datasets.length) {
     grid.innerHTML = '';
     label.textContent = '';
@@ -466,6 +547,7 @@ async function refreshDatasetCalendar() {
       const info = await apiFetch(`/api/dataset-availability?${params.toString()}`);
       return info && info.dataset ? info : { dataset, error: 'load failed' };
     }));
+    if (req !== state.datasetCalendarReq) return;
     state.datasetCalendarInfos = Object.fromEntries(infos.map(info => [info.dataset, info]));
     renderDatasetCalendar();
     const rendered = infos.find(info => info.state === 'summary') || infos[0];
@@ -473,9 +555,11 @@ async function refreshDatasetCalendar() {
       ? `${rendered.dataset} · ${rendered.total_days} days · ${rendered.missing_days} missing`
       : `${rendered?.dataset || 'Dataset'} · ${rendered?.state || 'unavailable'}`;
   } catch (e) {
+    if (req !== state.datasetCalendarReq) return;
     status.textContent = `Dataset calendar error: ${e.message}`;
     grid.innerHTML = '';
   } finally {
+    if (req !== state.datasetCalendarReq) return;
     spinner.style.display = 'none';
     grid.style.display = 'grid';
   }
@@ -782,7 +866,7 @@ function updateRangeUI() {
 
 // ─── Navigation ───────────────────────────────────────────────────────────────
 
-document.getElementById('cal-prev').addEventListener('click', () => {
+bind('cal-prev', 'click', () => {
   let m = state.viewMonth - 2;
   let y = state.viewYear;
   while (m < 0) { m += 12; y--; }
@@ -791,7 +875,7 @@ document.getElementById('cal-prev').addEventListener('click', () => {
   renderCalendar();
 });
 
-document.getElementById('cal-next').addEventListener('click', () => {
+bind('cal-next', 'click', () => {
   let m = state.viewMonth + 2;
   let y = state.viewYear;
   while (m > 11) { m -= 12; y++; }
@@ -801,31 +885,33 @@ document.getElementById('cal-next').addEventListener('click', () => {
 });
 
 // Range inputs also update state
-document.getElementById('range-start').addEventListener('change', e => {
+bind('range-start', 'change', e => {
   state.rangeStart = e.target.value;
   updateRangeUI();
   renderCalendar();
 });
-document.getElementById('range-end').addEventListener('change', e => {
+bind('range-end', 'change', e => {
   state.rangeEnd = e.target.value;
   updateRangeUI();
   renderCalendar();
   checkBronzeAvailable();
 });
 
-document.getElementById('dataset-mode-single').addEventListener('click', async () => {
+bind('dataset-mode-single', 'click', async () => {
   state.datasetCompareMode = false;
   renderDatasetCalendarControls();
+  syncDatasetUrl();
   await refreshDatasetCalendar();
 });
 
-document.getElementById('dataset-mode-compare').addEventListener('click', async () => {
+bind('dataset-mode-compare', 'click', async () => {
   state.datasetCompareMode = true;
   renderDatasetCalendarControls();
+  syncDatasetUrl();
   await refreshDatasetCalendar();
 });
 
-document.getElementById('dataset-cal-prev').addEventListener('click', async () => {
+bind('dataset-cal-prev', 'click', async () => {
   let m = state.datasetCalendarViewMonth - 2;
   let y = state.datasetCalendarViewYear;
   while (m < 0) { m += 12; y--; }
@@ -834,7 +920,7 @@ document.getElementById('dataset-cal-prev').addEventListener('click', async () =
   await refreshDatasetCalendar();
 });
 
-document.getElementById('dataset-cal-next').addEventListener('click', async () => {
+bind('dataset-cal-next', 'click', async () => {
   let m = state.datasetCalendarViewMonth + 2;
   let y = state.datasetCalendarViewYear;
   while (m > 11) { m -= 12; y++; }
@@ -891,7 +977,7 @@ function disableFor(btn, ms = 3000) {
   setTimeout(() => { btn.disabled = false; checkBronzeAvailable(); }, ms);
 }
 
-document.getElementById('btn-download').addEventListener('click', async (e) => {
+bind('btn-download', 'click', async (e) => {
   if (!state.rangeStart || !state.rangeEnd) { alert('Select a date range first'); return; }
   const btn = e.currentTarget;
   disableFor(btn);
@@ -909,7 +995,7 @@ document.getElementById('btn-download').addEventListener('click', async (e) => {
   }
 });
 
-document.getElementById('btn-populate').addEventListener('click', async (e) => {
+bind('btn-populate', 'click', async (e) => {
   if (!state.rangeStart || !state.rangeEnd) { alert('Select a date range first'); return; }
   const mkt = state.selectedMarket;
   if (!mkt) { alert('Select a market first'); return; }
@@ -934,7 +1020,7 @@ document.getElementById('btn-populate').addEventListener('click', async (e) => {
   }
 });
 
-document.getElementById('btn-backtest').addEventListener('click', async (e) => {
+bind('btn-backtest', 'click', async (e) => {
   const env = document.getElementById('backtest-env').value;
   if (!env) { alert('Select a backtest env first'); return; }
   if (!state.rangeStart || !state.rangeEnd) { alert('Select a date range first'); return; }
@@ -1009,8 +1095,19 @@ function escAttr(s) {
   return escHtml(String(s)).replace(/"/g, '&quot;');
 }
 
-document.getElementById('jobs-refresh').addEventListener('click', loadJobs);
-document.getElementById('dataset-refresh').addEventListener('click', async () => {
+function clearDatasetPartition(key) {
+  if (!state.selectedDataset) return;
+  state.datasetPartitions[key] = null;
+  const keys = state.datasetAvailability?.keys || [];
+  const keyIndex = keys.indexOf(key);
+  keys.slice(keyIndex + 1).forEach(k => {
+    delete state.datasetPartitions[k];
+  });
+  state.datasetPartitionsByDataset[state.selectedDataset] = { ...state.datasetPartitions };
+}
+
+bind('jobs-refresh', 'click', loadJobs);
+bind('dataset-refresh', 'click', async () => {
   await loadDatasets();
   if (state.selectedDataset) {
     await refreshDatasetAvailability();
@@ -1018,8 +1115,8 @@ document.getElementById('dataset-refresh').addEventListener('click', async () =>
 });
 
 // Viewport width indicator
-const _vpEl = document.getElementById('viewport-indicator');
-function updateVp() { _vpEl.textContent = window.innerWidth + 'px'; }
+const _vpEl = byId('viewport-indicator');
+function updateVp() { if (_vpEl) _vpEl.textContent = window.innerWidth + 'px'; }
 updateVp();
 window.addEventListener('resize', updateVp);
 

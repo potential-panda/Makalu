@@ -46,50 +46,71 @@ class PopulateAggressionStep(Step):
         parquet_store.close()
         LOG.info(f"PopulateAggressionStep: Wrote {count} records to Parquet store")
 
+    @staticmethod
+    def _write_fields(aggressions) -> dict:
+        write_fields = {}
+        for aggression in aggressions:
+            fields = {
+                "buy_qty": aggression.buy_qty,
+                "sell_qty": aggression.sell_qty,
+                "buy_count": aggression.buy_count,
+                "sell_count": aggression.sell_count,
+                "imbalance_qty": aggression.imbalance_qty,
+                "imbalance_count": aggression.imbalance_count,
+                "qty_per_sec": aggression.qty_per_sec,
+                "trades_per_sec": aggression.trades_per_sec,
+                "buy_qty_per_sec": aggression.buy_qty_per_sec,
+                "sell_qty_per_sec": aggression.sell_qty_per_sec,
+                "vwap": aggression.vwap,
+                "vwap_buy": aggression.vwap_buy,
+                "vwap_sell": aggression.vwap_sell,
+                "dominant_size_bucket": aggression.dominant_size_bucket,
+                "dominant_bucket_count": aggression.dominant_bucket_count,
+                "dominant_bucket_share": aggression.dominant_bucket_share,
+                "burst_flag": aggression.burst_flag,
+                "max_trade_size": aggression.max_trade_size,
+                "total_qty": aggression.total_qty,
+                "total_count": aggression.total_count,
+                "avg_trade_size": aggression.avg_trade_size,
+                "net_flow": aggression.net_flow,
+                "buy_sell_ratio": aggression.buy_sell_ratio,
+            }
+            for k, v in fields.items():
+                write_fields[f"{k}_{aggression.window_sec}s"] = v
+        return write_fields
+
     def _populate(self, pipeline_context: PipelineContext, stage_context: Context):
+        # Every trade feeds the builder (keeps the rolling windows exact), but we
+        # only emit ONE record per whole second — the aggression as of the last
+        # trade in that second. The sole consumer (Kilimanjaro feature_frame)
+        # buckets to 1s with last(col ORDER BY ts) GROUP BY floor(ts), so this is
+        # byte-identical to per-trade output while writing ~15x fewer rows.
         progress = StepProgressLogger(self.__class__.__name__, len(stage_context.trades))
         builder = TradeAggressionBuilder(windows_sec=self.windows_sec)
+
+        prev_ts = None
+        prev_sec = None
+        prev_in_range = False
         for trade in stage_context.trades:
+            ts = trade.get_ts()
+            sec = int(ts)  # floor for positive unix seconds; matches floor(ts)
+            # A new second started: the previous trade was the last of its
+            # second — emit its aggression (state is as-of that trade, since the
+            # current trade is not yet applied).
+            if prev_sec is not None and sec != prev_sec and prev_in_range:
+                yield (prev_ts, self._write_fields(builder.get_trade_aggression(prev_ts)))
+                progress.update()
+
             builder.on_trade(trade)
-            if not stage_context.populate_dt_range.is_within(trade.get_ts()):
-                continue
+            prev_ts, prev_sec = ts, sec
+            prev_in_range = stage_context.populate_dt_range.is_within(ts)
 
-            write_fields = {}
-            aggressions = builder.get_trade_aggression(trade.get_ts())
-            for aggression in aggressions:
-                fields = {
-                    "buy_qty": aggression.buy_qty,
-                    "sell_qty": aggression.sell_qty,
-                    "buy_count": aggression.buy_count,
-                    "sell_count": aggression.sell_count,
-                    "imbalance_qty": aggression.imbalance_qty,
-                    "imbalance_count": aggression.imbalance_count,
-                    "qty_per_sec": aggression.qty_per_sec,
-                    "trades_per_sec": aggression.trades_per_sec,
-                    "buy_qty_per_sec": aggression.buy_qty_per_sec,
-                    "sell_qty_per_sec": aggression.sell_qty_per_sec,
-                    "vwap": aggression.vwap,
-                    "vwap_buy": aggression.vwap_buy,
-                    "vwap_sell": aggression.vwap_sell,
-                    "dominant_size_bucket": aggression.dominant_size_bucket,
-                    "dominant_bucket_count": aggression.dominant_bucket_count,
-                    "dominant_bucket_share": aggression.dominant_bucket_share,
-                    "burst_flag": aggression.burst_flag,
-                    "max_trade_size": aggression.max_trade_size,
-                    "total_qty": aggression.total_qty,
-                    "total_count": aggression.total_count,
-                    "avg_trade_size": aggression.avg_trade_size,
-                    "net_flow": aggression.net_flow,
-                    "buy_sell_ratio": aggression.buy_sell_ratio,
-                }
-
-                for k, v in fields.items():
-                    write_fields[f"{k}_{aggression.window_sec}s"] = v
-
-            yield (trade.get_ts(), write_fields)
+        # Flush the final second.
+        if prev_ts is not None and prev_in_range:
+            yield (prev_ts, self._write_fields(builder.get_trade_aggression(prev_ts)))
             progress.update()
 
-        LOG.info(f"PopulateAggressionStep: Processed {progress.cnt} objects")
+        LOG.info(f"PopulateAggressionStep: Emitted {progress.cnt} per-second records")
 
 
 class AbstractPopulateChartStep(Step):

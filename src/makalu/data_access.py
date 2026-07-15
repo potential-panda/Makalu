@@ -13,7 +13,7 @@ from pathlib import Path
 import qate.env.sys_env as sys_env
 
 from makalu.cli.common import DATASETS, get_dataset_root
-from makalu.data_outage import bronze_outage_dates_between
+from makalu.data_outage import bronze_outage_dates_between, filter_bronze_outage_missing_dates
 
 KNOWN_EXCHANGES = ["BINANCE", "GMO", "BITBANK", "COINCHECK"]
 
