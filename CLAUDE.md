@@ -44,6 +44,25 @@ All technical reference lives in `doc/`. Read the relevant file before starting 
 - Official reliable data start date: **2025-07-01**. Data before 2025-07-01 may exist, but treat it as potentially incorrect unless the user explicitly approves using it.
 - Known global outage: **2026-04-02 through 2026-04-09 inclusive**. The market data collectors crashed during this window. Bronze `Trade` and `OrderBook` reads intentionally model this window as available-but-empty, so consumers should see empty data and should not try to backfill it.
 
+## Scheduled Jobs Facts
+
+The Makalu API (`src/api.py`, systemd user unit `makalu-api.service`) runs the
+daily scheduler. Jobs go through the file-based queue in `/panda-infra/makalu/jobs/`
+and the executor runs **one job at a time in creation order**.
+
+- **04:00 daily** — for each of the 9 markets in `SCHEDULED_MARKETS`, first a
+  `market-data --market <M> --days 3` download job, then a
+  `populate bronze --exchange <E> --symbol <S> --start <today-3> --end <today-2>`
+  job. All downloads are enqueued before the first populate, so populate always
+  reads raw files the same run just fetched.
+- Scheduled markets: BINANCE BTC/ETH/XRP_USDT, GMO BTC/ETH/XRP_JPY,
+  COINCHECK BTC/ETH/XRP_SPOT.
+- The bronze window ends at `today-2` per the `to_dt` rule, and starts at
+  `today-3` so each date gets two populate attempts. `populate` is idempotent,
+  so the second attempt skips any `data.parquet` already written.
+- Editing the schedule means editing `src/api.py`; the change only takes effect
+  after `systemctl --user restart makalu-api`.
+
 ## Manifest / Eviction Facts
 
 - The Makalu API schedules weekly maintenance that runs `python src/cli.py scan` and then `python src/cli.py evict --apply`. Data not yet scanned is considered fresh/protected.

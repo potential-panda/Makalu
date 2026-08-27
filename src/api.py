@@ -177,7 +177,20 @@ SCHEDULED_MARKETS = [
     "GMO:BTC_JPY",
     "GMO:ETH_JPY",
     "GMO:XRP_JPY",
+    "COINCHECK:BTC_SPOT",
+    "COINCHECK:ETH_SPOT",
+    "COINCHECK:XRP_SPOT",
 ]
+
+DAILY_SYNC_DAYS = 3  # market-data --days N: downloads today-N .. today-1
+
+# Bronze populate window, in days back from today. The upper bound stays at
+# today-2 because the collectors only deliver yesterday's data early morning,
+# and the lower bound matches what --days 3 just downloaded. Each date therefore
+# gets two populate attempts (first as today-2, again as today-3); populate is
+# idempotent, so the second pass skips any data.parquet already written.
+BRONZE_POPULATE_START_DAYS_AGO = 3
+BRONZE_POPULATE_END_DAYS_AGO = 2
 
 _next_scheduled_run: float = 0.0
 _next_weekly_maintenance_run: float = 0.0
@@ -202,13 +215,47 @@ def _next_weekly_maintenance_time() -> float:
     return candidate.timestamp()
 
 
+def _bronze_populate_window() -> tuple[str, str]:
+    today = date.today()
+    start = today - datetime.timedelta(days=BRONZE_POPULATE_START_DAYS_AGO)
+    end = today - datetime.timedelta(days=BRONZE_POPULATE_END_DAYS_AGO)
+    return start.isoformat(), end.isoformat()
+
+
 def _submit_daily_market_data() -> None:
+    """Enqueue the daily download jobs, then the bronze populate jobs.
+
+    The executor runs one job at a time in creation order, so every download
+    for the day completes before the first populate reads /panda/market-data.
+    """
     for market in SCHEDULED_MARKETS:
         job_id = str(uuid.uuid4())[:8]
-        cmd = [sys.executable, str(CLI), "market-data", "--market", market, "--days", "3"]
+        cmd = [
+            sys.executable, str(CLI), "market-data",
+            "--market", market, "--days", str(DAILY_SYNC_DAYS),
+        ]
         _submit(
             job_id,
             {"id": job_id, "type": "download", "label": f"daily sync {market}"},
+            cmd,
+        )
+
+    start, end = _bronze_populate_window()
+    for market in SCHEDULED_MARKETS:
+        exchange, symbol = market.split(":")
+        job_id = str(uuid.uuid4())[:8]
+        cmd = [
+            sys.executable, str(CLI), "populate", "bronze",
+            "--exchange", exchange, "--symbol", symbol,
+            "--start", start, "--end", end,
+        ]
+        _submit(
+            job_id,
+            {
+                "id": job_id,
+                "type": "populate",
+                "label": f"daily bronze {market} {start}→{end}",
+            },
             cmd,
         )
 
@@ -271,6 +318,9 @@ def api_scheduler():
         "weekly_scan_weekday": WEEKLY_MAINTENANCE_WEEKDAY,
         "weekly_scan_hour": WEEKLY_MAINTENANCE_HOUR,
         "markets": SCHEDULED_MARKETS,
+        "daily_sync_days": DAILY_SYNC_DAYS,
+        "daily_bronze_populate": True,
+        "daily_bronze_window": dict(zip(("start", "end"), _bronze_populate_window())),
     })
 
 

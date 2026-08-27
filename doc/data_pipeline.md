@@ -298,6 +298,48 @@ python src/cli.py metrics-data
 
 ---
 
+## 4.1 Scheduled Daily Jobs
+
+The Makalu API (`src/api.py`, systemd user unit `makalu-api.service`) enqueues
+the daily pipeline at **04:00 local time**. Jobs land in
+`/panda-infra/makalu/jobs/` and the executor runs one at a time in creation
+order.
+
+Scheduled markets (`SCHEDULED_MARKETS`):
+
+| Exchange | Symbols |
+|----------|---------|
+| BINANCE | `BTC_USDT`, `ETH_USDT`, `XRP_USDT` |
+| GMO | `BTC_JPY`, `ETH_JPY`, `XRP_JPY` |
+| COINCHECK | `BTC_SPOT`, `ETH_SPOT`, `XRP_SPOT` |
+
+Each run enqueues, in this order:
+
+1. 9 download jobs — `market-data --market <EXCHANGE:SYMBOL> --days 3`
+   (covers `today-3` → `today-1`).
+2. 9 bronze populate jobs — `populate bronze --exchange <E> --symbol <S>
+   --start <today-3> --end <today-2>`.
+
+Because the queue is sequential, all downloads finish before the first populate
+reads `/panda/market-data`.
+
+The populate window ends at `today-2` per the `to_dt` rule (§5) and starts at
+`today-3`, so every date gets two populate attempts on consecutive days. This
+is safe: `populate` skips any target `data.parquet` that already exists, so the
+second attempt is a no-op for dates already written.
+
+Weekly maintenance (`scan` + `evict --apply`) runs Sunday at 05:00.
+
+To change the schedule, edit `SCHEDULED_MARKETS`, `DAILY_SYNC_DAYS`, or
+`BRONZE_POPULATE_{START,END}_DAYS_AGO` in `src/api.py`, then:
+
+```bash
+systemctl --user restart makalu-api
+curl -s localhost:9776/api/scheduler | python -m json.tool
+```
+
+---
+
 ## 5 Key Rules
 
 - `market-data` before `populate bronze` — source files must exist first
