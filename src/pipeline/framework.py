@@ -4,9 +4,10 @@ from dataclasses import dataclass
 from logging import getLogger
 from typing import List
 
-from qate.store.market_data_store import MarketDataStore
 from qate.store.parquet_store import ParquetStore
 from qate.util.dt_range import DtRange
+
+from qate_market_data.store import MarketDataStore
 
 CHUNK_SIZE = 3
 LOG = getLogger(__name__)

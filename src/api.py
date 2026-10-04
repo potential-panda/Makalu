@@ -50,6 +50,9 @@ def _no_cache_web_assets(resp):
     if not request.path.startswith("/api/"):
         resp.headers["Cache-Control"] = "no-store, max-age=0"
         resp.headers["Pragma"] = "no-cache"
+    elif request.path in {"/api/availability", "/api/markets", "/api/datasets", "/api/dataset-availability", "/api/stats"}:
+        resp.headers["Cache-Control"] = "no-store, max-age=0"
+        resp.headers["Pragma"] = "no-cache"
     return resp
 
 
@@ -109,10 +112,15 @@ def api_availability():
     if not exchange or not symbol:
         return jsonify({"error": "exchange and symbol required"}), 400
     key = f"{exchange}_{symbol}"
-    if time.time() - _avail_cache_ts.get(key, 0) > CACHE_TTL and key not in _avail_refreshing:
+    stale = time.time() - _avail_cache_ts.get(key, 0) > CACHE_TTL
+    if stale and key not in _avail_refreshing:
         threading.Thread(target=_refresh_avail, args=(exchange, symbol), daemon=True).start()
     if key in _avail_cache:
-        return jsonify(_avail_cache[key])
+        payload = dict(_avail_cache[key])
+        if stale:
+            payload["loading"] = True
+            payload["stale"] = True
+        return jsonify(payload)
     return jsonify({"loading": True})
 
 
@@ -370,8 +378,7 @@ def api_ops_download():
     if not start or not end:
         return jsonify({"error": "start and end required"}), 400
 
-    days = (date.fromisoformat(end) - date.fromisoformat(start)).days + 1
-    cmd = [sys.executable, str(CLI), "market-data", "--days", str(days)]
+    cmd = [sys.executable, str(CLI), "market-data", "--start", start, "--end", end]
     if market:
         cmd += ["--market", market]
 

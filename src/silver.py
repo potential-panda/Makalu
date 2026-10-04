@@ -4,10 +4,10 @@ from logging import getLogger
 from qate.core.model import Market
 from qate.env import sys_env
 from qate.env.env import Env, EnvName
-from qate.store.market_data_store import MarketDataStore
 from qate.store.parquet_store import ParquetStore
 from qate.util.dt_range import DtRange
 
+from qate_market_data.store import MarketDataStore
 from feature_engineering.volatility import VolSpreadConfig
 from labeling.triple_barrier import TripleBarrierConfig
 from lead_lag.lead_lag import (

@@ -4,9 +4,10 @@ from logging import WARNING, getLogger
 
 import qate.env.sys_env as sys_env
 from qate.core.model import Market
-from qate.store.market_data_store import MarketDataStore, partition_market_events
 from qate.store.parquet_store import ParquetStore
 from qate.util.dt_range import DtRange, TimeFormat
+
+from qate_market_data.store import MarketDataStore, partition_market_events
 
 LOG = getLogger(__name__)
 

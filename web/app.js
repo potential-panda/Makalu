@@ -7,6 +7,7 @@ const API_BASE = (() => {
 
 async function apiFetch(path, opts = {}) {
   const res = await fetch(API_BASE + path, {
+    cache: 'no-store',
     headers: { 'Content-Type': 'application/json', ...opts.headers },
     ...opts,
   });

@@ -4,10 +4,10 @@ from logging import getLogger
 from qate.core.model import Market
 from qate.env import sys_env
 from qate.env.env import Env, EnvName
-from qate.store.market_data_store import MarketDataStore
 from qate.store.parquet_store import ParquetStore
 from qate.util.dt_range import DtRange
 
+from qate_market_data.store import MarketDataStore
 from pipeline.framework import Pipeline
 from pipeline.market_data_steps import PopulateOrderBookStep, PopulateTradeStep
 from pipeline.stages import MarketDataStage
