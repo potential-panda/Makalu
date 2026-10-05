@@ -99,6 +99,7 @@ class PopulateBookStateStep(Step):
         depth_imbalance_rate: List[float],
         microprice_k: List[int],
         max_spread_bps: float = 10.0,
+        min_valid_levels: int = 3,
     ):
         super().__init__()
         self.volume_imbalance_k = volume_imbalance_k
@@ -106,6 +107,7 @@ class PopulateBookStateStep(Step):
         self.depth_imbalance_rate = depth_imbalance_rate if depth_imbalance_rate else []
         self.microprice_k = microprice_k
         self.max_spread_bps = max_spread_bps
+        self.min_valid_levels = min_valid_levels
         # Precompute max k across all k-based metrics for prefix sum caching
         self._max_k = max(
             max(volume_imbalance_k, default=0),
@@ -133,6 +135,14 @@ class PopulateBookStateStep(Step):
                 skip_count += 1
                 continue
             if order_book.spread_bps > self.max_spread_bps:
+                skip_count += 1
+                continue
+            # Depth as well as the touch. A partial book from a collector
+            # resync often keeps a tight top-of-book with almost nothing
+            # behind it, which the spread check above passes but the
+            # imbalance and microprice fields below cannot be computed from.
+            # Same threshold as PopulateOrderBookStep.MIN_VALID_LEVELS.
+            if len(order_book.bids) < self.min_valid_levels or len(order_book.asks) < self.min_valid_levels:
                 skip_count += 1
                 continue
 

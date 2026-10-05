@@ -95,6 +95,8 @@ BRONZE_BATCH_DAYS = 3  # days loaded into memory at once before flushing to parq
 
 
 def execute_bronze(args):
+    from pipeline import order_book_quality
+
     getLogger("qate").setLevel(WARNING)
     market = Market.from_str(f"{args.exchange}:{args.symbol}")
     dt_range = DtRange.from_strings(args.start, args.end)
@@ -110,7 +112,7 @@ def execute_bronze(args):
     parquet_store = _create_parquet_store(args)
     trade_store = parquet_store.create_trade(market)
     ob_store = parquet_store.create_order_book(market)
-    total_trades = total_obs = 0
+    total_trades = total_obs = total_skipped = 0
 
     for batch_idx, i in enumerate(range(0, len(days), BRONZE_BATCH_DAYS)):
         batch = days[i:i + BRONZE_BATCH_DAYS]
@@ -124,17 +126,31 @@ def execute_bronze(args):
 
         for trade in trades:
             trade_store.add_trade(trade)
+        # Malformed book snapshots are dropped rather than stored: see
+        # pipeline.order_book_quality for the rule and why it exists.
+        batch_skipped = 0
         for ob in order_books:
+            if order_book_quality.is_malformed(ob):
+                batch_skipped += 1
+                continue
             ob_store.add_order_book(ob)
+        batch_obs = len(order_books) - batch_skipped
 
         total_trades += len(trades)
-        total_obs += len(order_books)
-        LOG.info(f"  Batch {batch_idx + 1}/{n_batches} ({batch[0]}..{batch[-1]}): {len(trades)} trades, {len(order_books)} order books")
+        total_obs += batch_obs
+        total_skipped += batch_skipped
+        LOG.info(f"  Batch {batch_idx + 1}/{n_batches} ({batch[0]}..{batch[-1]}): {len(trades)} trades, {batch_obs} order books, {batch_skipped} malformed skipped")
         del order_books, trades
 
     trade_store.close()
     ob_store.close()
     LOG.info(f"  Wrote  : {total_trades} trades, {total_obs} order books")
+    # Counted and logged, never silent: these rows were present from the start
+    # of collection and went unnoticed for months because nothing downstream
+    # said how many it was dropping.
+    seen_obs = total_obs + total_skipped
+    pct = (total_skipped / seen_obs * 100) if seen_obs else 0.0
+    LOG.info(f"  Skipped: {total_skipped} malformed order books of {seen_obs} ({pct:.4f}%): {order_book_quality.describe_rule()}")
     LOG.info("Done.")
 
 
