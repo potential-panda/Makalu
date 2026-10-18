@@ -198,7 +198,7 @@ Two consequences of rewriting in place, both still open:
 ### Still not covered
 
 The collector fix (`potential-panda-core` cdc172a, carried into
-`qate_exchanges`) was deployed to 1 of 4 hosts on 2026-10-05. Until the rest
+`k2_exchanges`) was deployed to 1 of 4 hosts on 2026-10-05. Until the rest
 follow, the filter above is what keeps bronze clean. It stays afterwards: a
 resync can still race a reconnect, and a guard that only runs when it is
 expected to fire is not a guard.
