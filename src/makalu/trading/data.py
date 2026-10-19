@@ -91,7 +91,8 @@ def load_pnl(env_name: str, bucket: str) -> pd.DataFrame:
             "settle_type": settle_type,
             "pnl": fields.get(Field.PNL.value, 0.0),
             "fee": fields.get(Field.FEE.value, 0.0),
-            "pnl_return": fields.get("return", 0.0),
+            # Files written before qate packed Field.RETURN carry the key "return".
+            "pnl_return": fields.get(Field.RETURN.value, fields.get("return", 0.0)),
         })
 
     if not rows:
