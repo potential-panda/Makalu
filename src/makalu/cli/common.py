@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from qate.env import sys_env
+from makalu import settings as sys_env
 
 DATASETS: dict[str, tuple[str, list[str]]] = {
     # Bronze

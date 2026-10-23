@@ -12,7 +12,7 @@ import logging
 import numpy as np
 import pandas as pd
 from qate.core.model import Market
-from qate.store.parquet_store import ParquetStore
+from makalu.storage.parquet_store import ParquetStore
 from qate.util.dt_range import DtRange
 
 LOG = logging.getLogger(__name__)

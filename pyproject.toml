@@ -14,8 +14,12 @@ authors = [
 ]
 
 dependencies = [
-    "potential-panda-core @ git+ssh://git@github.com/potential-panda/potential-panda-core.git@main",
+    "kamakuraquantlab-qate>=0.4.0",
+    "kamakuraquantlab-qate-env>=0.2.0",
     "matplotlib==3.9.2",
+    "k2-data @ git+ssh://git@github.com/potential-panda/k2-data.git@main",
+    "boto3>=1.40",
+    "msgpack>=1.1",
     "numpy==2.3.3",
     "pandas==2.3.3",
     "seaborn==0.13.2",
@@ -41,14 +45,15 @@ openai = [
 ]
 
 [project.scripts]
-makalu-pipeline = "pipeline:main"
+makalu-pipeline = "cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
+py-modules = ["cli"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["pipeline*"]
+include = ["makalu*", "pipeline*", "backtest*", "active_score*", "feature_engineering*", "labeling*", "lead_lag*", "simulation*", "training*"]
 
 # [tool.black]
 # line-length = 120

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from qate.env import sys_env
+from makalu import settings as sys_env
 
 from makalu.backtest_runner import BacktestRunner, _extract_asset, _resolve_order_size
 

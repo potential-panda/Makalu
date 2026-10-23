@@ -2,12 +2,12 @@ import argparse
 import sys
 from logging import WARNING, getLogger
 
-import qate.env.sys_env as sys_env
+import makalu.settings as sys_env
 from qate.core.model import Market
-from qate.store.parquet_store import ParquetStore
+from makalu.storage.parquet_store import ParquetStore
 from qate.util.dt_range import DtRange, TimeFormat
 
-from qate_market_data.store import MarketDataStore, partition_market_events
+from k2_data.store import MarketDataStore, partition_market_events
 
 LOG = getLogger(__name__)
 
@@ -188,7 +188,7 @@ def execute_volspread(args):
 
 
 def execute_activity_curve(args):
-    from qate.store.parquet_store import Layer
+    from makalu.storage.parquet_store import Layer
 
     from pipeline.curve_steps import build_activity_curve_rows
 
@@ -314,7 +314,7 @@ def execute_leadlag(args):
 
 def execute_leadlag_curve(args):
     from lead_lag.lead_lag import LEAD_LAG_CONFIG_MID, LEAD_LAG_CONFIG_NEARHFT
-    from qate.store.parquet_store import Layer
+    from makalu.storage.parquet_store import Layer
 
     from pipeline.curve_steps import build_leadlag_curve_rows
 

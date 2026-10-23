@@ -88,7 +88,7 @@ Call these on `pipeline_context.parquet_store` to get a writer:
 | `create_vol_spread(market, execution_size_str, param_id)` | gold | VolSpread |
 | `create_lead_lag(market_lead, market_lag, param_id)` | gold | LeadLag |
 
-Import `Layer` if needed: `from qate.store.parquet_store import Layer`
+Import `Layer` if needed: `from makalu.storage.parquet_store import Layer`
 
 ---
 

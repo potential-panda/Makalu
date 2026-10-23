@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import List
 
 from qate.core.model import Market, Trade
-from qate.trading.aggression import TradeAggressionBuilder
+from makalu.microstructure.aggression import TradeAggressionBuilder
 from qate.trading.chart import (
     BaseBarBuilder,
     CandleBarBuilder,

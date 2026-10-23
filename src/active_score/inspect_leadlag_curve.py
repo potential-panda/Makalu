@@ -29,9 +29,10 @@ import logging
 from pathlib import Path
 
 from qate.core.model import Market
-from qate.env import sys_env
-from qate.env.env import Env, EnvName
-from qate.store.parquet_store import ParquetStore
+from makalu import settings as sys_env
+from qate_env.env import Env
+from qate_env.env_name import EnvName
+from makalu.storage.parquet_store import ParquetStore
 from qate.util.dt_range import DtRange
 
 from active_score.curve_diagnostics import (
@@ -155,7 +156,7 @@ if __name__ == "__main__":
     else:
         parser.error("Pass either --pair, or both --lead-market and --lag-market.")
 
-    env = Env.load_env(sys_env.get_env_root_dir(), ENV_NAME)
+    env = Env(sys_env.get_env_root_dir(), ENV_NAME)
     env.visit()
 
     main(

@@ -3,10 +3,10 @@ import json
 import sys
 from logging import getLogger
 
-import qate.env.sys_env as sys_env
+import makalu.settings as sys_env
 from qate.core.model import Market
-from qate.store.influx_store import InfluxdbStore
-from qate.store.parquet_store import ParquetStore, TimeSeriesStore
+from makalu.storage.influx_store import InfluxdbStore
+from makalu.storage.parquet_store import ParquetStore, TimeSeriesStore
 from qate.util.dt_range import DtRange
 
 LOG = getLogger(__name__)

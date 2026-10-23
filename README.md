@@ -68,7 +68,7 @@ python src/cli.py query --sql "SELECT ts, price FROM trade WHERE exchange='GMO' 
 |----------|------|
 | Human overview | this file |
 | Claude Code entry point | `CLAUDE.md` |
-| Codex / other agents entry point | `Agent.md` |
+| Codex / other agents entry point | `AGENT.md` |
 | Data pipeline operations | `doc/data_pipeline.md` |
 | SQL querying | `doc/querying.md` |
 | Backtest workflow | `doc/backtest.md` |
@@ -77,3 +77,17 @@ python src/cli.py query --sql "SELECT ts, price FROM trade WHERE exchange='GMO' 
 | Implementing new metrics | `doc/implement_metric.md` |
 | Dataset column definitions | `doc/dataset_definitions.md` |
 | Dataset catalog | `doc/catalog.yaml` |
+
+## Framework dependencies
+
+Uses `kamakuraquantlab-qate>=0.4.0` and `kamakuraquantlab-qate-env>=0.2.0`.
+Install this checkout with `python -m pip install -e .`. No legacy core checkout
+or extension of the `qate` namespace is required. Storage and microstructure
+helpers are owned by this project; qate supplies event models and trading APIs.
+
+Raw msgpack/S3 operations use the private `k2-data` package. Credentials and
+trading environments use qate-env's `QATE_SECRET_DIR`, `QATE_ENV_ROOT`, and
+`.qate.json` settings. Hosts using the old `~/secret` directory should set
+`QATE_SECRET_DIR` to that directory. Data roots default to `/panda/market-data`
+and `/panda/makalu-data`; override them with `MAKALU_MARKET_DATA_DIR` and
+`MAKALU_PARQUET_ROOT_DIR`.

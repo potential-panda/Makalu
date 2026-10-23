@@ -3,8 +3,8 @@ from dataclasses import dataclass
 from typing import List
 
 from qate.core.model import Market, OrderBook
-from qate.trading import intent
-from qate.trading.book_change import BookChangeBuilder
+from makalu.microstructure import intent
+from makalu.microstructure.book_change import BookChangeBuilder
 
 from .framework import PipelineContext, StageContext, Step, StepProgressLogger
 

@@ -4,7 +4,7 @@ import sys
 from logging import getLogger
 from pathlib import Path
 
-import qate.env.sys_env as sys_env
+import makalu.settings as sys_env
 
 LOG = getLogger(__name__)
 

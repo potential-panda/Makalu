@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta
 from logging import getLogger
 from pathlib import Path
 
-from qate.env import sys_env
+from makalu import settings as sys_env
 
 LOG = getLogger(__name__)
 

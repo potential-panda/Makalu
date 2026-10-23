@@ -2,7 +2,7 @@ import argparse
 import json
 from logging import getLogger
 
-from qate_market_data.download import download_market_data, parse_market, target_dates
+from k2_data.download import download_market_data, parse_market, target_dates
 
 LOG = getLogger(__name__)
 

@@ -9,9 +9,9 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from qate.core.model import OrderBook, Side, Trade
-from qate.trading.aggression import TradeAggressionBuilder
-from qate.trading.book_change import BookChange, BookChangeBuilder
-from qate.trading.intent import (
+from makalu.microstructure.aggression import TradeAggressionBuilder
+from makalu.microstructure.book_change import BookChange, BookChangeBuilder
+from makalu.microstructure.intent import (
     compute_depth_imbalance,
     compute_depth_k,
     compute_microprice,

@@ -2,8 +2,8 @@ import argparse
 from logging import getLogger
 from pathlib import Path
 
-from qate.env import sys_env
-from qate.store.manifest import Manifest
+from makalu import settings as sys_env
+from makalu.storage.manifest import Manifest
 
 LOG = getLogger(__name__)
 MANIFEST_PATH = "/panda/makalu-data/manifest.db"

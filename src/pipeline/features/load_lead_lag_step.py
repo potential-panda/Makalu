@@ -2,8 +2,8 @@ import logging
 
 import pandas as pd
 from qate.core.model import Market
-from qate.env import sys_env
-from qate.store.parquet_store import ParquetStore
+from makalu import settings as sys_env
+from makalu.storage.parquet_store import ParquetStore
 
 from lead_lag.lead_lag import LeadLagConfig
 from pipeline.framework import PipelineContext, Step

@@ -2,12 +2,13 @@ import argparse
 from logging import getLogger
 
 from qate.core.model import Market
-from qate.env import sys_env
-from qate.env.env import Env, EnvName
-from qate.store.parquet_store import ParquetStore
+from makalu import settings as sys_env
+from qate_env.env import Env
+from qate_env.env_name import EnvName
+from makalu.storage.parquet_store import ParquetStore
 from qate.util.dt_range import DtRange
 
-from qate_market_data.store import MarketDataStore
+from k2_data.store import MarketDataStore
 from pipeline.framework import Pipeline
 from pipeline.market_data_steps import PopulateOrderBookStep, PopulateTradeStep
 from pipeline.stages import MarketDataStage
@@ -58,7 +59,7 @@ if __name__ == "__main__":
     market = Market.from_str(args.market)
     dt_range = DtRange.from_strings(args.from_dt, args.to_dt)
 
-    env = Env.load_env(sys_env.get_env_root_dir(), ENV_NAME)
+    env = Env(sys_env.get_env_root_dir(), ENV_NAME)
     env.enable_multiprocess_logging = True
     env.visit()
     main(market, dt_range, populate=args.populate)

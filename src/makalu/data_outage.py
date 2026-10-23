@@ -59,13 +59,13 @@ def filter_bronze_outage_missing_dates(dataset: str, missing: list[str]) -> list
     return [day for day in missing if not is_bronze_outage_date(day)]
 
 
-def install_qate_bronze_outage_patch() -> None:
-    """Patch qate parquet reads to return empty data for the known bronze gap.
+def install_bronze_outage_patch() -> None:
+    """Patch Makalu parquet reads to return empty data for the known bronze gap.
 
-    qate itself only sees missing files. Makalu knows that this exact bronze
+    The storage reader only sees missing files. Makalu knows that this exact bronze
     outage is expected and should behave like an available empty partition.
     """
-    from qate.store.parquet_store import TimeSeriesStore
+    from makalu.storage.parquet_store import TimeSeriesStore
 
     if getattr(TimeSeriesStore, "_makalu_bronze_outage_patch", False):
         return

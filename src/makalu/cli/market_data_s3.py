@@ -1,7 +1,7 @@
 import argparse
 import json
 
-from qate_market_data.inventory import date_window, load_or_refresh_inventory, missing_dates, to_ranges
+from k2_data.inventory import date_window, load_or_refresh_inventory, missing_dates, to_ranges
 
 
 def _print_market_table(inventory: dict, from_cache: bool) -> None:

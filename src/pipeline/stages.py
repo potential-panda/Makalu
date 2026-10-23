@@ -6,7 +6,7 @@ from qate.core.ev_type import EventType
 from qate.core.model import Market
 from qate.util.dt_range import DtRange, TimeFormat
 
-from qate_market_data.store import partition_market_events
+from k2_data.store import partition_market_events
 from labeling.triple_barrier import ts_index
 from lead_lag.lead_lag import prepare_returns
 

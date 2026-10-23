@@ -57,7 +57,7 @@ def _date_range(days: int) -> tuple[str, str]:
 
 def _load_market_price(exchange: str, symbol: str, execution_size: str,
                        start: str, end: str) -> pd.DataFrame:
-    import qate.env.sys_env as sys_env
+    import makalu.settings as sys_env
     root = (
         Path(sys_env.get_parquet_root_dir())
         / "silver" / "dataset=MarketPrice"
@@ -320,9 +320,9 @@ def _write_influx(resampled: dict[str, pd.DataFrame],
                   pairs: list[tuple[str, str]],
                   symbol: str) -> int:
     """Write 1s arb time-series to InfluxDB. Returns total points written."""
-    import qate.env.sys_env as sys_env
+    import makalu.settings as sys_env
     from influxdb_client import Point, WritePrecision
-    from qate.store.influx_store import InfluxdbWriter
+    from makalu.storage.influx_store import InfluxdbWriter
 
     writer = InfluxdbWriter(
         url=sys_env.get_influxdb()[1],

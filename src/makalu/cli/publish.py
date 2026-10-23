@@ -2,11 +2,11 @@ import argparse
 import logging
 import os
 
-import qate.env.sys_env as sys_env
+import makalu.settings as sys_env
 from influxdb_client import Point, WritePrecision
 from qate.core.model import Market
-from qate.store.influx_store import InfluxdbStore, convert_to_point
-from qate.store.parquet_store import ParquetStore
+from makalu.storage.influx_store import InfluxdbStore, convert_to_point
+from makalu.storage.parquet_store import ParquetStore
 from qate.util.dt_range import DtRange
 
 LOG = logging.getLogger(__name__)
@@ -34,7 +34,7 @@ def execute_trade(args):
         if df.empty:
             continue
         for row in df.itertuples(index=False):
-            writer.add(convert_to_point(store.convert_to_trade(row).to_metric_object()))
+            writer.add(convert_to_point(store.convert_to_trade(row).to_metric().to_list()))
         total += len(df)
         LOG.info(f"Published Trade {market.id} {date_str}: {len(df)} points")
 
@@ -62,7 +62,7 @@ def execute_market_price(args):
                 exchange_name=market.exchange_name,
                 exchange_ts=row.ts,
             )
-            writer.add(convert_to_point(mp.to_metric_object()))
+            writer.add(convert_to_point(mp.to_metric().to_list()))
         total += len(df)
         LOG.info(f"Published MarketPrice {market.id} {date_str}: {len(df)} points")
 
