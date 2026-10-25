@@ -1,5 +1,5 @@
 """
-Diagnostic tool: recompute the weekly ActivityCurve straight from VolSpread
+Diagnostic tool: recompute the weekly ActivityCurve straight from Volatility and Spread
 and dump it as data + a heatmap PNG for eye confirmation.
 
 Unlike `cli.py populate ActivityCurve` (the production path, which writes a
@@ -11,7 +11,7 @@ Shares its aggregation core (active_score.weekly_curve) with the production
 pipeline (pipeline/curve_steps.py), so both compute the curve the same way.
 Shares its presentation layer (heatmap, weekday summary, active window,
 stability check) with active_score/inspect_leadlag_curve.py via
-active_score.curve_diagnostics, since none of that is VolSpread-specific.
+active_score.curve_diagnostics, since none of that is Volatility-specific.
 
 Also derives a simple weekday active/inactive UTC+JST time window from the
 curve -- see doc/vol_spread.md's "Active/Inactive Window Simplification" for
@@ -22,7 +22,7 @@ split two ways (chronological first-half/second-half, and interleaved
 odd/even ISO week) and each half's curve is compared to the other, both
 overall and per weekday. This is what "Active/Inactive Window Simplification"
 in doc/vol_spread.md means by "holds up across independent halves of the
-training data" -- no extra VolSpread reads, just re-aggregating the same
+training data" -- no extra Volatility/Spread reads, just re-aggregating the same
 in-memory series. Skip with --skip-stability-check for a faster run.
 
 Usage:
@@ -47,10 +47,10 @@ from active_score.curve_diagnostics import (
     print_weekday_summary,
     run_stability_check,
 )
-from active_score.weekly_curve import aggregate_weekly, load_volspread_series
+from active_score.weekly_curve import aggregate_weekly, load_activity_series
 from makalu import settings as sys_env
+from makalu.activity_windows import ACTIVITY_SERIES
 from makalu.storage.parquet_store import ParquetStore
-from makalu.vol_spread import VOLSPREAD_PARAM_IDS
 
 LOG = logging.getLogger(__name__)
 ENV_NAME = EnvName("MARIO_MARIO")
@@ -65,24 +65,25 @@ def main(
     skip_stability_check: bool = False,
 ) -> None:
     parquet_store = ParquetStore(sys_env.get_parquet_root_dir())
-    param_ids = VOLSPREAD_PARAM_IDS
+    series = [s for pair in ACTIVITY_SERIES for s in pair]
+    param_ids = sorted({f"{dataset}/{param_id}" for dataset, param_id, _ in series})
 
     LOG.info(
-        f"Recomputing ActivityCurve from VolSpread for {market} / execution_size={execution_size}"
+        f"Recomputing ActivityCurve from Volatility and Spread for {market} / execution_size={execution_size}"
     )
     LOG.info(f"  param_ids ({len(param_ids)}): {param_ids}")
     LOG.info(f"  dt_range: {dt_range.start_str} → {dt_range.end_str}")
     LOG.info(f"  bin_size_sec: {bin_size_sec}")
 
-    series_list = load_volspread_series(
-        parquet_store, market, execution_size, param_ids, dt_range
+    series_list = load_activity_series(
+        parquet_store, market, execution_size, series, dt_range
     )
     if not series_list:
         raise ValueError(
-            "No valid VolSpread data found for any of the given param_ids -- nothing to plot."
+            "No valid Volatility or Spread data found for the windows -- nothing to plot."
         )
     LOG.info(
-        f"Combining {len(series_list)} normalized (volatility_ema/spread_pct_ema) series."
+        f"Combining {len(series_list)} normalized (vol_bps_ema/spread_bps_ema) series."
     )
 
     scores, std_scores = aggregate_weekly(series_list, bin_size_sec)
@@ -124,7 +125,7 @@ def main(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Recompute weekly ActivityCurve from VolSpread and plot for eye confirmation."
+        description="Recompute weekly ActivityCurve from Volatility and Spread and plot for eye confirmation."
     )
     parser.add_argument("--exchange", required=True)
     parser.add_argument("--symbol", required=True)

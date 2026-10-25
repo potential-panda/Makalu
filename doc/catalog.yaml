@@ -136,26 +136,41 @@ datasets:
     source_dataset: MarketPrice
     path_template: /panda/makalu-data/gold/dataset=LeadLag/market_a={market_a}/market_b={market_b}/param_id={param_id}/date={date}/data.parquet
 
-  - dataset_name: VolSpread
+  - dataset_name: Spread
     layer: gold
     description: >
-      EMA-smoothed realized volatility and spread metrics resampled to 1s.
-      Used as conditioning variables in feature generation and labelling.
-      Written by Hase (hase derive VolSpread --execution-size X --params H:L:S);
-      param_id is vs_<horizon>_<lookback>_<smooth>_<step>s. execution_size=touch
-      holds the top-of-book variant.
+      EMA of the spread, in bps, on a 1 s grid of MarketPrice at execution_size
+      (or the top of the book, execution_size=touch). Written by Hase
+      (hase derive Spread --execution-size X --params SPAN); param_id is
+      g<step>s_ema<span>s, e.g. g1s_ema300s. Column: spread_bps_ema.
+      Divide Volatility's vol_bps_ema by spread_bps_ema for the tradability ratio.
     grain: 1 second
     primary_timestamp: ts
     partition_columns: [exchange, symbol, execution_size, param_id]
     source_dataset: MarketPrice
-    path_template: /panda/makalu-data/gold/dataset=VolSpread/exchange={exchange}/symbol={symbol}/execution_size={execution_size}/param_id={param_id}/date={date}/data.parquet
+    path_template: /panda/makalu-data/gold/dataset=Spread/exchange={exchange}/symbol={symbol}/execution_size={execution_size}/param_id={param_id}/date={date}/data.parquet
+
+  - dataset_name: Volatility
+    layer: gold
+    description: >
+      Volatility in bps on a 1 s grid of MarketPrice at execution_size (or the
+      top of the book, execution_size=touch). Written by Hase (hase derive
+      Volatility --execution-size X --params H:L:S); param_id is
+      g<step>s_h<horizon>s_lb<lookback>s_ema<smooth>s, e.g. g1s_h60s_lb300s_ema120s.
+      Columns: rv_bps (realized, over lookback), vol_bps (std of horizon returns
+      over lookback), vol_bps_ema (smoothed over smooth).
+    grain: 1 second
+    primary_timestamp: ts
+    partition_columns: [exchange, symbol, execution_size, param_id]
+    source_dataset: MarketPrice
+    path_template: /panda/makalu-data/gold/dataset=Volatility/exchange={exchange}/symbol={symbol}/execution_size={execution_size}/param_id={param_id}/date={date}/data.parquet
 
   - dataset_name: ActivityCurve
     layer: gold
     description: >
       Weekly (day_of_week x time-of-day bin) volatility+spread activity curve,
-      combining VolSpread's volatility_ema and spread_pct_ema columns (z-score
-      normalized per config, then averaged) into one mean+std curve per bin,
+      combining Volatility's vol_bps_ema and Spread's spread_bps_ema (z-score
+      normalized per window, then averaged) into one mean+std curve per bin,
       min-max normalized to [0, 1]. Each populate run is a new date= snapshot
       equal to --end (the as-of date the training window describes), NOT the
       day the command happened to run -- backfilling many historical windows
@@ -167,7 +182,7 @@ datasets:
     grain: one row per (day_of_week, bucket_index) -- 7 * (86400/bin_size_sec) rows per snapshot
     primary_timestamp: ts
     partition_columns: [exchange, symbol, param_id]
-    source_dataset: VolSpread
+    source_dataset: Volatility
     path_template: /panda/makalu-data/gold/dataset=ActivityCurve/exchange={exchange}/symbol={symbol}/param_id={param_id}/date={date}/data.parquet
 
   - dataset_name: LeadLagCurve
@@ -177,7 +192,7 @@ datasets:
       shape and snapshot-per-populate-run convention as ActivityCurve, built
       from LeadLag's ll_max_corr* columns (absolute correlation strength,
       z-score normalized per window/span config, then averaged) instead of
-      VolSpread. param_id encodes bin size and training window length in days,
+      Volatility/Spread. param_id encodes bin size and training window length in days,
       e.g. bin300s_z19d.
     grain: one row per (day_of_week, bucket_index) -- 7 * (86400/bin_size_sec) rows per snapshot
     primary_timestamp: ts

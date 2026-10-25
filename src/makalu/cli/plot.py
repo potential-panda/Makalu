@@ -9,11 +9,15 @@ import makalu.settings as sys_env
 LOG = getLogger(__name__)
 
 
-def _volspread_base(exchange: str, symbol: str) -> Path:
+# Hase's measured datasets: execution_size=, then param_id=, then date=.
+MEASURED = ["Spread", "Volatility"]
+
+
+def _measured_base(dataset: str, exchange: str, symbol: str) -> Path:
     return (
         Path(sys_env.PARQUET_ROOT_DIR)
         / "gold"
-        / "dataset=VolSpread"
+        / f"dataset={dataset}"
         / f"exchange={exchange}"
         / f"symbol={symbol}"
     )
@@ -33,13 +37,13 @@ def _discover_execution_size(sym_dir: Path, requested: str | None) -> "Path | No
     return dirs[0] if dirs else None
 
 
-def execute_list_volspread(args) -> None:
-    """List available param_ids for VolSpread (called when --list-params is set).
+def execute_list_params(args) -> None:
+    """List available param_ids for a measured dataset (called when --list-params is set).
 
     Always exits 0 and returns JSON. Returns {"param_ids": [], "needs_populate": true}
     when no data exists so the agent can trigger a populate flow.
     """
-    sym_dir = _volspread_base(args.exchange, args.symbol)
+    sym_dir = _measured_base(args.dataset, args.exchange, args.symbol)
     es_dir = _discover_execution_size(sym_dir, getattr(args, "execution_size", None))
     if es_dir is None:
         # No data on disk — signal the agent to populate first
@@ -49,8 +53,8 @@ def execute_list_volspread(args) -> None:
                     "param_ids": [],
                     "needs_populate": True,
                     "message": (
-                        f"No VolSpread data found for {args.exchange} {args.symbol}. "
-                        "Derive it with hase: hase derive VolSpread --execution-size ... (needs MarketPrice)."
+                        f"No {args.dataset} data found for {args.exchange} {args.symbol}. "
+                        f"Derive it with hase: hase derive {args.dataset} --execution-size ... (needs MarketPrice)."
                     ),
                 }
             )
@@ -68,7 +72,7 @@ def execute_list_volspread(args) -> None:
     )
 
 
-def execute_plot_volspread(args) -> None:
+def execute_plot(args) -> None:
     import matplotlib
 
     matplotlib.use("Agg")
@@ -76,12 +80,12 @@ def execute_plot_volspread(args) -> None:
     import matplotlib.pyplot as plt
     import pandas as pd
 
-    sym_dir = _volspread_base(args.exchange, args.symbol)
+    sym_dir = _measured_base(args.dataset, args.exchange, args.symbol)
     es_dir = _discover_execution_size(sym_dir, getattr(args, "execution_size", None))
     if es_dir is None:
         print(
             json.dumps(
-                {"error": f"No VolSpread data for {args.exchange} {args.symbol}"}
+                {"error": f"No {args.dataset} data for {args.exchange} {args.symbol}"}
             )
         )
         sys.exit(1)
@@ -117,27 +121,14 @@ def execute_plot_volspread(args) -> None:
     df["dt"] = pd.to_datetime(df["ts"], unit="s")
 
     fig, ax = plt.subplots(figsize=(14, 5))
-    ax.plot(
-        df["dt"],
-        df["volatility_ema"],
-        label="volatility_ema",
-        linewidth=0.8,
-        color="#e74c3c",
-        alpha=0.85,
-    )
-    ax.plot(
-        df["dt"],
-        df["spread_pct_ema"],
-        label="spread_pct_ema",
-        linewidth=0.8,
-        color="#3498db",
-        alpha=0.85,
-    )
+    for column in [c for c in df.columns if c not in ("ts", "dt")]:
+        if pd.api.types.is_numeric_dtype(df[column]):
+            ax.plot(df["dt"], df[column], label=column, linewidth=0.8, alpha=0.85)
     ax.set_title(
-        f"VolSpread — {args.exchange} {args.symbol} | {args.param_id}\n{args.start} → {args.end}"
+        f"{args.dataset} — {args.exchange} {args.symbol} | {args.param_id}\n{args.start} → {args.end}"
     )
     ax.set_xlabel("Time")
-    ax.set_ylabel("Value")
+    ax.set_ylabel("bps")
     ax.legend(loc="upper right")
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%m-%d"))
     ax.xaxis.set_minor_formatter(mdates.DateFormatter("%H:%M"))
@@ -159,16 +150,14 @@ def register_cli(parser: argparse.ArgumentParser) -> None:
         help="Generate a PNG plot from a parquet dataset",
         description=(
             "Read parquet data and render a matplotlib PNG.\n\n"
-            "Supported datasets: VolSpread\n\n"
+            "Supported datasets: Spread, Volatility (Hase's; every value column is drawn)\n\n"
             "Two modes:\n"
             "  --list-params   List available param_ids for the given market (no --param-id needed)\n"
             "  normal          Generate a PNG (requires --param-id and --output)"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument(
-        "--dataset", required=True, choices=["VolSpread"], help="Dataset to plot"
-    )
+    p.add_argument("--dataset", required=True, choices=MEASURED, help="Dataset to plot")
     p.add_argument("--exchange", required=True)
     p.add_argument("--symbol", required=True)
     p.add_argument("--start", help="Start date YYYY-MM-DD")
@@ -193,15 +182,15 @@ def register_cli(parser: argparse.ArgumentParser) -> None:
 
 
 def _dispatch(args) -> None:
-    if args.dataset == "VolSpread":
+    if args.dataset in MEASURED:
         if args.list_params:
-            execute_list_volspread(args)
+            execute_list_params(args)
         else:
             if not args.param_id:
                 print(
                     json.dumps(
                         {
-                            "error": "VolSpread requires --param-id. Use --list-params to see available values."
+                            "error": f"{args.dataset} requires --param-id. Use --list-params to see available values."
                         }
                     )
                 )
@@ -209,7 +198,7 @@ def _dispatch(args) -> None:
             if not args.output:
                 print(json.dumps({"error": "--output is required"}))
                 sys.exit(1)
-            execute_plot_volspread(args)
+            execute_plot(args)
     else:
         print(json.dumps({"error": f"Unsupported dataset: {args.dataset}"}))
         sys.exit(1)

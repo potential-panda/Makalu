@@ -19,7 +19,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
-from hase.derive.vol_spread import measure
+from hase.derive import spread, volatility
 from numba import jit
 
 from .triple_barrier import ts_index
@@ -206,17 +206,20 @@ def calculate_spread_and_barriers(
     spread_resampled = (
         df["spread"].resample(config.vol_resample_interval).last().ffill()
     )
-    figures = measure(
+    # Hase's formulas, in bps; the barriers here are fractions.
+    figures = volatility.measure(
         mid_resampled,
-        spread_resampled,
         step=dt,
         horizon=config.return_shift_sec,
         lookback=config.volatility_lookback_sec,
         smooth=config.ema_span_sec,
-        spread_smooth=config.ema_span_sec,
     )
-    volatility_ema = pd.Series(figures["volatility_ema"], index=mid_resampled.index)
-    spread_pct_ema = pd.Series(figures["spread_pct_ema"], index=mid_resampled.index)
+    volatility_ema = pd.Series(figures["vol_bps_ema"] / 1e4, index=mid_resampled.index)
+    spread_bps = spread_resampled / mid_resampled * 1e4
+    spread_pct_ema = pd.Series(
+        spread.measure(spread_bps, step=dt, span=config.ema_span_sec) / 1e4,
+        index=mid_resampled.index,
+    )
 
     df["volatility_ema"] = volatility_ema.reindex(df.index, method="ffill")
     df["spread_pct_ema"] = spread_pct_ema.reindex(df.index, method="ffill")

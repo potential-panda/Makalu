@@ -22,7 +22,8 @@ _SUPPORTED_DATASETS = [
     "BookState",
     "BookChange",
     "TradeAggression",
-    "VolSpread",
+    "Spread",
+    "Volatility",
     "Chart_CANDLE",
     "Chart_HEIKIN_ASHI",
     "Chart_RANGE",
@@ -51,11 +52,14 @@ def _create_store(ps: ParquetStore, args) -> TimeSeriesStore:
         return ps.create_execution_price(
             _market(exchange, symbol), str(args.execution_size)
         )
-    if dataset == "VolSpread":
+    if dataset in ("Spread", "Volatility"):
         _require(args, "execution_size", dataset)
         _require(args, "param_id", dataset)
-        return ps.create_vol_spread(
-            _market(exchange, symbol), str(args.execution_size), str(args.param_id)
+        return ps.create_measured(
+            dataset,
+            _market(exchange, symbol),
+            str(args.execution_size),
+            str(args.param_id),
         )
     if dataset == "BacktestPnL":
         _require(args, "strategy", dataset)
@@ -159,12 +163,12 @@ def register_cli(parser: argparse.ArgumentParser) -> None:
     p.add_argument(
         "--execution-size",
         dest="execution_size",
-        help="Required for MarketPrice, VolSpread (e.g. 0.002)",
+        help="Required for MarketPrice, Spread, Volatility (e.g. 0.002)",
     )
     p.add_argument(
         "--param-id",
         dest="param_id",
-        help="Required for VolSpread, Chart_*, BacktestPnL",
+        help="Required for Spread, Volatility, Chart_*, BacktestPnL",
     )
     p.add_argument("--strategy", help="Required for BacktestPnL")
     p.add_argument(

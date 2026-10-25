@@ -5,7 +5,7 @@ Market data pipeline and backtest orchestration for the **orion** algorithmic tr
 ## What it does
 
 - Reads bronze tick data (trades + order book) through Komachi; Kitakamakura produces it
-- Derives microstructure metrics (MarketPrice, VolSpread, BookState, etc.) into silver/gold
+- Derives microstructure metrics (BookState, LeadLag, curves, etc.; MarketPrice, Spread and Volatility come from Hase) into silver/gold
 - Runs backtests via the Himalaya engine
 - Builds static report pages (`report`) and serves them read-only (`serve`, port 9776, public at `/makalu/`)
 
@@ -14,7 +14,7 @@ Market data pipeline and backtest orchestration for the **orion** algorithmic tr
 ```
 bronze   Raw Trade + OrderBook tick data (Kitakamakura's, read-only here)
 silver   Derived per-tick metrics: MarketPrice, BookState, BookChange, TradeAggression
-gold     Window-based signals: VolSpread, LeadLag, Chart_*
+gold     Window-based signals: Spread, Volatility (Hase), LeadLag, Chart_*
 ```
 
 The bronze layer contains only `Trade` and `OrderBook`. All other datasets are
@@ -74,7 +74,7 @@ python src/cli.py query --sql "SELECT ts, price FROM trade WHERE exchange='GMO' 
 | Report site | `doc/report.md` |
 | SQL querying | `doc/querying.md` |
 | Backtest workflow | `doc/backtest.md` |
-| VolSpread plots + Grafana export | `doc/plot.md` |
+| Volatility / Spread plots + Grafana export | `doc/plot.md` |
 | Local infra (Docker / InfluxDB) | `doc/local_infra.md` |
 | Implementing new metrics | `doc/implement_metric.md` |
 | Dataset column definitions | `doc/dataset_definitions.md` |

@@ -4,7 +4,7 @@ Forward Return Pipeline Step.
 Computes simple forward returns of mid price at fixed horizons
 (return_30s, return_120s, return_300s, ...) from execution-price data.
 
-This is deliberately separate from VolSpread (backward-looking volatility)
+This is deliberately separate from Hase's Volatility (backward-looking)
 and TripleBarrierLabel (a research-layer, ephemeral, strategy-specific
 label) -- forward return at a fixed horizon is a stable, widely-reusable
 quantity on its own, used by many different signal-scanning purposes that
@@ -31,7 +31,7 @@ LOG = logging.getLogger(__name__)
 class ReturnConfig:
     """horizons_sec: the forward horizons to compute, e.g. [30, 120, 300].
     resample_interval: mid price is resampled to a regular grid first
-    (the convention VolSpread used), e.g. '1s'."""
+    (the convention Hase's quote grid uses), e.g. '1s'."""
 
     horizons_sec: tuple[int, ...]
     execution_size_str: str

@@ -79,7 +79,8 @@ Available datasets (feature/research layers excluded):
   Trade, OrderBook                                    bronze — raw tick data
   BookChange, BookState, TradeAggression, MarketPrice silver — derived metrics
   Chart_CANDLE, Chart_HEIKIN_ASHI, Chart_RANGE        gold   — bar charts
-  VolSpread                                           gold   — vol/spread signals
+  Spread                                              gold   — spread EMA (Hase)
+  Volatility                                          gold   — volatility (Hase)
   LeadLag                                             gold   — cross-market lead-lag
 """
 
@@ -121,13 +122,13 @@ def register_cli(sub):
         "--execution-size",
         dest="execution_size",
         default=None,
-        help="Required for MarketPrice, VolSpread",
+        help="Required for MarketPrice, Spread, Volatility",
     )
     p.add_argument(
         "--param-id",
         dest="param_id",
         default=None,
-        help="Required for VolSpread, Chart_*, LeadLag",
+        help="Required for Spread, Volatility, Chart_*, LeadLag",
     )
     p.add_argument(
         "--market-a",

@@ -99,7 +99,7 @@ def execute_activity_curve(args):
 
     market = Market.from_str(f"{args.exchange}:{args.symbol}")
     dt_range = DtRange.from_strings(args.start, args.end)
-    from makalu.vol_spread import VOLSPREAD_PARAM_IDS as param_ids
+    from makalu.activity_windows import ACTIVITY_SERIES
 
     parquet_store = _create_parquet_store(args)
 
@@ -107,7 +107,12 @@ def execute_activity_curve(args):
         f"Building ActivityCurve: {market.id} (execution_size={args.execution_size}) trained on {args.start} → {args.end}"
     )
     rows = build_activity_curve_rows(
-        parquet_store, market, args.execution_size, param_ids, dt_range, args.bin_size
+        parquet_store,
+        market,
+        args.execution_size,
+        [s for pair in ACTIVITY_SERIES for s in pair],
+        dt_range,
+        args.bin_size,
     )
 
     n_days = len(dt_range.days)
@@ -335,18 +340,19 @@ _DATASET_META = {
         "--box-size-rate 0.0015 --start 2026-01-01 --end 2026-01-07",
     },
     "ActivityCurve": {
-        "help": "Populate a weekly (day-of-week x time-of-day) volatility+spread activity curve from VolSpread (gold layer)",
+        "help": "Populate a weekly (day-of-week x time-of-day) volatility+spread activity curve from Hase's Volatility and Spread (gold layer)",
         "description": (
-            "Combines VolSpread's volatility_ema AND spread_pct_ema columns (z-score normalized\n"
-            "per config, then averaged) into one weekly mean+std curve, binned by\n"
+            "Combines Volatility's vol_bps_ema AND Spread's spread_bps_ema (z-score normalized\n"
+            "per window, then averaged; windows in src/makalu/activity_windows.py) into one\n"
+            "weekly mean+std curve, binned by\n"
             "(day_of_week, time_of_day // --bin-size). --start/--end is the TRAINING window\n"
-            "(how many trailing days of VolSpread data the curve is built from); the curve\n"
+            "(how many trailing days of Volatility/Spread the curve is built from); the curve\n"
             "is written under a date= partition equal to --end -- the as-of date this window\n"
             "describes, NOT the day the command happens to run -- so backfilling many\n"
             "historical windows in one sitting produces one correctly-dated snapshot per\n"
             "window instead of colliding on a single today's-date partition.\n\n"
-            "Prerequisite: VolSpread must already be populated for the same market, execution_size,\n"
-            "and the same --start/--end window."
+            "Prerequisite: Hase's Volatility and Spread must already be derived for the same\n"
+            "market, execution_size, and --start/--end window."
         ),
         "example": "python cli.py populate ActivityCurve --exchange GMO --symbol BTC_JPY "
         "--start 2026-01-01 --end 2026-01-14 --execution-size 0.002",
@@ -355,7 +361,7 @@ _DATASET_META = {
         "help": "Populate a weekly (day-of-week x time-of-day) lead-lag-strength curve from LeadLag (gold layer)",
         "description": (
             "Same weekly mean+std curve as ActivityCurve, but built from LeadLag's ll_max_corr*\n"
-            "columns (absolute correlation strength) instead of VolSpread. --start/--end is the\n"
+            "columns (absolute correlation strength) instead of Volatility/Spread. --start/--end is the\n"
             "TRAINING window; the curve is written under a date= partition equal to --end (see\n"
             "ActivityCurve's help for why this isn't the day the command runs).\n\n"
             "Prerequisite: LeadLag must already be populated for the same market pair and the\n"
@@ -465,7 +471,7 @@ def _register_activity_curve(sub: argparse.ArgumentParser) -> argparse.ArgumentP
         "--execution-size",
         required=True,
         dest="execution_size",
-        help="Execution size matching the VolSpread partition to read from, e.g. 0.002.",
+        help="Execution size matching the Spread/Volatility partitions to read from, e.g. 0.002.",
     )
     p.add_argument(
         "--bin-size",
@@ -531,16 +537,18 @@ def register_cli(parser: argparse.ArgumentParser):
         description=(
             "Derive silver/gold parquet datasets from bronze. Bronze (Trade, OrderBook)\n"
             "is produced by Kitakamakura and read through Komachi; Makalu never writes it.\n"
-            "Silver MarketPrice and gold VolSpread are derived by Hase, not here:\n"
+            "Silver MarketPrice and gold Spread / Volatility are derived by Hase, not here:\n"
             "  hase derive MarketPrice --market GMO:BTC_JPY --execution-size 0.002 --start ... --end ...\n"
-            "  hase derive VolSpread --market GMO:BTC_JPY --execution-size 0.002 --start ... --end ... \\\n"
+            "  hase derive Spread --market GMO:BTC_JPY --execution-size 0.002 --start ... --end ... \\\n"
+            "      --params 300 --params 900\n"
+            "  hase derive Volatility --market GMO:BTC_JPY --execution-size 0.002 --start ... --end ... \\\n"
             "      --params 60:300:120 --params 60:900:300 --params 180:900:300 --params 300:900:300\n\n"
             "All commands are idempotent: if a target data.parquet already exists, that write is skipped.\n"
             "Use --recreate to overwrite existing target files.\n"
             "Later dates do not affect earlier ones.\n"
             "Run 'python cli.py scan' after populating to update the manifest.\n\n"
             "Data flow:\n"
-            "  bronze → MarketPrice (hase) → VolSpread (hase) → ActivityCurve\n"
+            "  bronze → MarketPrice (hase) → Spread + Volatility (hase) → ActivityCurve\n"
             "  bronze → MarketPrice (hase) → Return\n"
             "  bronze → BookState / BookChange / TradeAggression\n"
             "  bronze (Trade) → Chart_RANGE / Chart_CANDLE / Chart_HEIKIN_ASHI\n"

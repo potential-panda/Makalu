@@ -13,7 +13,8 @@ python /home/lulurun/workspace/Makalu/src/cli.py <subcommand> [args]
 bronze/  Trade + OrderBook     ← Kitakamakura (not Makalu); located via Komachi
         │
         ├──▶ MarketPrice        ← hase derive MarketPrice  (silver, Hase)
-        │         └──▶ VolSpread   (gold)
+        │         ├──▶ Spread      ← hase derive Spread      (gold, Hase)
+        │         ├──▶ Volatility  ← hase derive Volatility  (gold, Hase)
         │         └──▶ LeadLag     (gold, needs two markets)
         ├──▶ BookState          ← populate BookState    (silver)
         ├──▶ BookChange         ← populate BookChange   (silver)
@@ -81,7 +82,7 @@ Omit `--start`/`--end` to see all available dates. Omit `--exchange`/`--symbol` 
 
 For datasets with extra partitions:
 ```bash
-# MarketPrice / VolSpread require --execution-size
+# MarketPrice / Spread / Volatility require --execution-size
 python src/cli.py data-check \
   --dataset MarketPrice --exchange GMO --symbol BTC_JPY \
   --start 2026-01-01 --end 2026-03-17 --execution-size 0.002
@@ -104,21 +105,21 @@ python src/cli.py populate BookChange \
 python src/cli.py populate TradeAggression \
   --exchange GMO --symbol BTC_JPY --start 2026-03-13 --end 2026-03-17
 
-# Gold VolSpread is Hase's: one --params per window set Makalu reads
-# (src/makalu/vol_spread.py), all derived from one read of each day
-hase derive VolSpread --market GMO:BTC_JPY --execution-size 0.002 --start 2026-03-13 --end 2026-03-17 \
+# Gold Spread and Volatility are Hase's: one --params per window Makalu reads
+# (src/makalu/activity_windows.py), all from one read of each day
+hase derive Spread --market GMO:BTC_JPY --execution-size 0.002 --start 2026-03-13 --end 2026-03-17 \
+  --params 300 --params 900
+hase derive Volatility --market GMO:BTC_JPY --execution-size 0.002 --start 2026-03-13 --end 2026-03-17 \
   --params 60:300:120 --params 60:900:300 --params 180:900:300 --params 300:900:300
 
-# Overwrite existing target data.parquet files only when explicitly requested
-hase derive VolSpread --market GMO:BTC_JPY --execution-size 0.002 --start 2026-03-13 --end 2026-03-17 \
-  --params 60:300:120 --params 60:900:300 --params 180:900:300 --params 300:900:300 --recreate
+# Overwrite existing target data.parquet files only when explicitly requested: add --recreate
 ```
 
 Exec timeout: 7200 s (populate can be slow for large date ranges).
 
 #### execution_size by asset
 
-`MarketPrice`, `VolSpread`, `LeadLag` are partitioned by `execution_size`.
+`MarketPrice`, `Spread`, `Volatility`, `LeadLag` are partitioned by `execution_size`.
 Using the wrong value creates a mismatched partition.
 
 | Asset | execution_size |

@@ -32,7 +32,7 @@ All technical reference lives in `doc/`. Read the relevant file before starting 
 | Dataset column definitions | `doc/dataset_definitions.md` |
 | Full dataset catalog with paths | `doc/catalog.yaml` |
 | Running a backtest | `doc/backtest.md` |
-| VolSpread plots and Grafana export | `doc/plot.md` |
+| Volatility / Spread plots and Grafana export | `doc/plot.md` |
 | Docker/InfluxDB/Grafana infrastructure | `doc/local_infra.md` |
 | Implementing a new derived metric | `doc/implement_metric.md` |
 | Static report site (`report`, `serve`) | `doc/report.md` |

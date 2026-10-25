@@ -1,9 +1,10 @@
 """Builds ActivityCurve and LeadLagCurve rows: a (day_of_week x time-of-day
 bin) mean+std curve over a trailing training window, read from already-
-populated VolSpread/LeadLag gold data -- never recomputed from bronze.
+populated Volatility/Spread/LeadLag gold data -- never recomputed from bronze.
 
-ActivityCurve combines BOTH of VolSpread's columns (volatility_ema and
-spread_pct_ema), via active_score/weekly_curve.py's load_volspread_series --
+ActivityCurve combines Hase's Volatility (vol_bps_ema) and Spread
+(spread_bps_ema), paired per window in makalu/activity_windows.py, via
+active_score/weekly_curve.py's load_activity_series --
 shared with active_score/inspect_curve.py, the diagnostic tool that recomputes
 the same curve for eyeballing without writing gold parquet. LeadLagCurve is
 the lead-lag-strength equivalent, built from LeadLag's ll_max_corr* columns
@@ -19,8 +20,8 @@ from qate.util.dt_range import DtRange
 
 from active_score.weekly_curve import (
     aggregate_weekly,
+    load_activity_series,
     load_leadlag_series,
-    load_volspread_series,
 )
 from makalu.storage.parquet_store import ParquetStore
 
@@ -47,20 +48,18 @@ def build_activity_curve_rows(
     parquet_store: ParquetStore,
     market: Market,
     execution_size_str: str,
-    vol_param_ids: list[str],
+    series: list[tuple[str, str, str]],
     dt_range: DtRange,
     bin_size_sec: int = 300,
 ) -> list[dict]:
-    series_list = load_volspread_series(
-        parquet_store, market, execution_size_str, vol_param_ids, dt_range
+    series_list = load_activity_series(
+        parquet_store, market, execution_size_str, series, dt_range
     )
 
     if not series_list:
-        raise ValueError(
-            "No valid VolSpread data found for any of the given param_ids."
-        )
+        raise ValueError("No valid Volatility or Spread data found for the windows.")
     LOG.info(
-        f"Combining {len(series_list)} normalized (volatility_ema/spread) series into weekly ActivityCurve."
+        f"Combining {len(series_list)} normalized (volatility/spread) series into weekly ActivityCurve."
     )
 
     scores, std_scores = aggregate_weekly(series_list, bin_size_sec)

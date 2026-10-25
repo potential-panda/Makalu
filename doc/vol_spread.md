@@ -1,8 +1,8 @@
-# VolSpread
+# Spread and Volatility
 
 ## Purpose
 
-`VolSpread` measures whether a market has enough short-term movement to overcome execution cost.
+Hase's `Spread` and `Volatility` datasets together measure whether a market has enough short-term movement to overcome execution cost. (They were one dataset, `VolSpread`, until it was split: see below.)
 
 Spread is the immediate loss paid when an order is filled. Volatility over a horizon is the amount of price movement available over that same horizon. Together they describe whether a trade has enough room to become profitable:
 
@@ -23,142 +23,119 @@ The working assumptions behind this dataset are:
 3. The pattern should be relatively stable, but should drift slowly over time.
 4. Trading strategies can reference the learned pattern to set parameters dynamically.
 
-The goal of `VolSpread` is therefore not only to observe current conditions, but also to support learning a daily or weekly tradability pattern.
+The goal of these datasets is therefore not only to observe current conditions, but also to support learning a daily or weekly tradability pattern.
 
 ## Where it is computed
 
-Hase computes `VolSpread`, and every spread and volatility figure on a grid goes through one
-function, `hase.derive.vol_spread.measure` -- the labellers in `src/labeling/` call it too.
-Makalu keeps the design (this page) and the windows it reads (`src/makalu/vol_spread.py`):
+Hase computes both, from one function each -- `hase.derive.spread.measure` and
+`hase.derive.volatility.measure` -- and the labellers in `src/labeling/` call those too.
+Makalu keeps the design (this page) and the windows its curves read
+(`src/makalu/activity_windows.py`):
 
 ```bash
-hase derive VolSpread --market GMO:BTC_JPY --execution-size 0.002 --start 2026-06-01 --end 2026-06-30 \
+hase derive Spread --market GMO:BTC_JPY --execution-size 0.002 --start 2026-06-01 --end 2026-06-30 \
+  --params 300 --params 900
+hase derive Volatility --market GMO:BTC_JPY --execution-size 0.002 --start 2026-06-01 --end 2026-06-30 \
   --params 60:300:120 --params 60:900:300 --params 180:900:300 --params 300:900:300
 ```
 
 ## Source Data
 
-`VolSpread` uses silver `MarketPrice` as its source.
-
-`MarketPrice` is derived from order book snapshots and an `execution_size`. Its bid and ask represent effective execution prices for that size, not just top-of-book prices.
-
-From `MarketPrice`:
-
-```text
-mid = (bid + ask) / 2
-spread = ask - bid
-spread_pct = spread / mid
-spread_bps = spread_pct * 10000
-```
-
-Because `execution_size` changes the effective bid, ask, and spread, it must be part of the `VolSpread` partition key and parameter context.
+Both use silver `MarketPrice` at an `execution_size` as their source (or, with no size,
+the top of the book, partition `execution_size=touch`). Its bid and ask are effective
+execution prices for that size, not just top-of-book prices, so `execution_size` is part
+of both partition keys.
 
 ## Calculation Model
 
-The calculation should separate three concepts:
+### 1. The quote grid (code, not a dataset)
 
-1. Base sampling granularity
-2. Measurement horizon and lookback
-3. Emission interval
+`MarketPrice` is put on a 1-second clock first: the last bid and ask in each second,
+carried forward through a second with no update (`hase.derive.grid`). This gives a regular
+time grid and avoids tying volatility to irregular order book update frequency. Each day
+is read with the 8 hours before it, so windows at 00:00 JST are full.
 
-### 1. Base Sampling Granularity
-
-Normalize `MarketPrice` to 1-second bars before computing volatility and spread statistics:
-
-```text
-mid_1s = resample(MarketPrice.mid, 1s).last().ffill()
-spread_1s = resample(MarketPrice.spread, 1s).last().ffill()
-spread_pct_1s = spread_1s / mid_1s
-```
-
-This gives a regular time grid and avoids tying volatility to irregular order book update frequency.
-
-### 2. Measurement Horizon and Lookback
-
-There are two related but different time parameters:
-
-| Parameter | Meaning |
-|-----------|---------|
-| `return_horizon_sec` | The price-change horizon relevant to the strategy, for example 30s or 60s |
-| `lookback_sec` | The trailing window used to estimate average volatility and spread |
-
-The return series should be calculated over the strategy horizon:
+The grid is not stored: it is a tenth of a second a day from `MarketPrice`, with nothing
+to choose but the step. `hase.derive.grid.quote_grid` returns it (`ts`, `bid`, `ask`,
+`mid`, `spread_bps`) to anyone who wants the mid on a clock.
 
 ```text
-return_horizon[t] = mid_1s[t] / mid_1s[t - return_horizon_sec] - 1
+mid[t] = (bid[t] + ask[t]) / 2
+spread_bps[t] = (ask[t] - bid[t]) / mid[t] * 1e4
 ```
 
-Raw volatility is then the rolling standard deviation of these horizon returns:
+### 2. Spread
+
+Instantaneous spread is noisy, and the curves learn stable patterns, so `Spread` stores it
+smoothed. One parameter, the span:
 
 ```text
-volatility_raw[t] = rolling_std(return_horizon, window=lookback_sec)
+spread_bps_ema[t] = EMA(spread_bps, span=span)
 ```
 
-Spread should also be averaged or smoothed over the lookback window, because instantaneous spread is noisy and the dataset is intended to learn stable patterns:
+### 3. Volatility
+
+Three parameters: the return `horizon` relevant to the strategy (30s, 60s), the `lookback`
+over which it is estimated, and the `smooth` span, so the ratio does not combine a noisy
+numerator with a smoothed denominator.
 
 ```text
-spread_pct_ema[t] = EMA(spread_pct_1s, span=lookback_sec)
+return_horizon[t] = mid[t] / mid[t - horizon] - 1
+vol_bps[t]        = rolling_std(return_horizon, window=lookback) * 1e4
+vol_bps_ema[t]    = EMA(vol_bps, span=smooth)
+rv_bps[t]         = sqrt(sum over lookback of log(mid[t] / mid[t-1])^2) * 1e4
 ```
 
-Volatility should be smoothed as well, so the ratio does not combine a noisy numerator with a smoothed denominator:
+### 4. The ratio
+
+Both are in bps, so:
 
 ```text
-volatility_ema[t] = EMA(volatility_raw, span=smooth_sec)
+tradability[t] = vol_bps_ema[t] / spread_bps_ema[t]
 ```
 
-Then:
+It is not stored: which spread span to divide by which volatility window is a choice,
+and storing every pairing would be storing the choice.
 
-```text
-vol_spread_ratio[t] = volatility_ema[t] / spread_pct_ema[t]
-```
+## Why two datasets
 
-### 3. Emission Interval
+`VolSpread` held everything in one file per window set: the grid's bid, ask, mid and
+spread, the spread EMA, and the volatility. Only the volatility depended on all of its
+parameters. The grid columns were identical in every window set's file, about 40% of
+each file written four times, and the spread EMA was tied to the volatility's `lookback`,
+so a spread could not be smoothed differently without also changing the volatility.
 
-The emission interval controls how often a row is written:
+Now each dataset holds only what its own parameters make, and each parameter belongs to
+one of them.
 
-```text
-emit_interval_sec = Y
-```
+## Parameters
 
-The recommended approach is to compute from 1-second data, then emit every `Y` seconds. The emission interval should reduce storage volume, but should not change the underlying calculation.
+| Dataset | Parameter | Description |
+|---------|-----------|-------------|
+| both | `execution_size` | Order size used by `MarketPrice`, or `touch` |
+| both | `step` | Grid interval, seconds (1) |
+| `Spread` | `span` | EMA span of the spread |
+| `Volatility` | `horizon` | Horizon of the return used for volatility |
+| `Volatility` | `lookback` | Rolling window volatility is estimated over |
+| `Volatility` | `smooth` | EMA span smoothing it |
 
-## Recommended Parameters
+`param_id` spells them: `g1s_ema300s` for Spread, `g1s_h60s_lb300s_ema120s` for Volatility.
 
-Use explicit parameter names:
+## Columns
 
-| Parameter | Description |
-|-----------|-------------|
-| `execution_size` | Order size used by `MarketPrice` to calculate effective bid and ask |
-| `return_horizon_sec` | Horizon of the return used for volatility |
-| `lookback_sec` | Rolling window used to estimate volatility and spread |
-| `smooth_sec` | EMA smoothing span for volatility and spread-derived measures |
-| `emit_interval_sec` | Output cadence |
-
-Avoid overloading one parameter to mean both trading horizon and averaging window.
-
-## Recommended Columns
-
-`VolSpread` should store enough intermediate values to audit the calculation:
-
-| Column | Definition |
-|--------|------------|
-| `ts` | Unix timestamp |
-| `bid` | Effective bid execution price from `MarketPrice` |
-| `ask` | Effective ask execution price from `MarketPrice` |
-| `mid` | `(bid + ask) / 2` |
-| `spread` | `ask - bid` |
-| `spread_pct` | `spread / mid` |
-| `spread_bps` | `spread_pct * 10000` |
-| `volatility_raw` | Rolling std of horizon returns |
-| `volatility_ema` | EMA-smoothed volatility |
-| `spread_pct_ema` | Smoothed spread percentage |
-| `vol_spread_ratio` | `volatility_ema / spread_pct_ema` |
+| Dataset | Column | Definition |
+|---------|--------|------------|
+| both | `ts` | Unix timestamp of the grid point |
+| `Spread` | `spread_bps_ema` | EMA of the spread, bps |
+| `Volatility` | `rv_bps` | Realized volatility over `lookback`, bps |
+| `Volatility` | `vol_bps` | Rolling std of `horizon` returns over `lookback`, bps |
+| `Volatility` | `vol_bps_ema` | `vol_bps` smoothed over `smooth`, bps |
 
 ## Pattern Learning
 
-`VolSpread` is the observation dataset. A separate derived dataset should learn daily or weekly patterns from it.
+`Spread` and `Volatility` are the observation datasets. A separate derived dataset (`ActivityCurve`) learns daily or weekly patterns from them.
 
-For each `param_id` and `execution_size`, aggregate recent `VolSpread` rows into time bins:
+For each window and `execution_size`, aggregate recent rows into time bins:
 
 ```text
 day_of_week
@@ -169,8 +146,8 @@ Recommended aggregate fields:
 
 | Column | Meaning |
 |--------|---------|
-| `median_volatility_ema` | Typical EMA-smoothed volatility for the bin |
-| `median_spread_pct` | Typical spread for the bin |
+| `median_vol_bps_ema` | Typical EMA-smoothed volatility for the bin |
+| `median_spread_bps_ema` | Typical spread for the bin |
 | `median_vol_spread_ratio` | Typical tradability ratio for the bin |
 | `p25_vol_spread_ratio` | Lower quartile ratio |
 | `p75_vol_spread_ratio` | Upper quartile ratio |

@@ -4,7 +4,7 @@ active_score.weekly_curve.aggregate_weekly -- heatmap plotting, per-weekday
 summary, active/inactive window derivation, and the cross-period stability
 check. Operates purely on the [7][n_bins] `scores` array and the underlying
 per-series data, so it's agnostic to which dataset the curve came from
-(VolSpread-derived ActivityCurve, LeadLag-derived LeadLagCurve, etc).
+(Volatility/Spread-derived ActivityCurve, LeadLag-derived LeadLagCurve, etc).
 
 Used by active_score/inspect_curve.py (ActivityCurve) and
 active_score/inspect_leadlag_curve.py (LeadLagCurve).

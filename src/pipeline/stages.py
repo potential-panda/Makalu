@@ -178,7 +178,7 @@ class LeadLagStage(Stage):
 
 class ReturnDerivedStage(Stage):
     """Forward returns need FUTURE data beyond dt_range.end -- unlike the
-    backward-only pad VolSpread is read with (Hase reads the 8 hours before), this
+    backward-only pad Hase's Spread/Volatility read (the 8 hours before), this
     pads the read range forward by max_horizon_sec too. Without this, the
     last max_horizon_sec of every populate call would have a permanently
     missing return: ReturnStep's "idempotent, later dates do not affect

@@ -15,7 +15,8 @@ DATASETS: dict[str, tuple[str, list[str]]] = {
     "Chart_CANDLE": ("gold", ["exchange", "symbol", "param_id"]),
     "Chart_HEIKIN_ASHI": ("gold", ["exchange", "symbol", "param_id"]),
     "Chart_RANGE": ("gold", ["exchange", "symbol", "param_id"]),
-    "VolSpread": ("gold", ["exchange", "symbol", "execution_size", "param_id"]),
+    "Spread": ("gold", ["exchange", "symbol", "execution_size", "param_id"]),
+    "Volatility": ("gold", ["exchange", "symbol", "execution_size", "param_id"]),
     "LeadLag": ("gold", ["market_a", "market_b", "param_id"]),
 }
 

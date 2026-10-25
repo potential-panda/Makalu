@@ -88,7 +88,7 @@ Call these on `pipeline_context.parquet_store` to get a writer:
 | `create_single_market("DatasetName", market, layer=Layer.SILVER)` | silver | explicit layer |
 | `create_execution_price(market, execution_size_str)` | silver | datasets partitioned by execution_size (MarketPrice pattern) |
 | `create_chart(bar_type, market, param_id)` | gold | Chart datasets |
-| `create_vol_spread(market, execution_size_str, param_id)` | gold | VolSpread |
+| `create_measured(dataset, market, execution_size_str, param_id)` | gold | Spread, Volatility (Hase-written, read only) |
 | `create_lead_lag(market_lead, market_lag, param_id)` | gold | LeadLag |
 
 Import `Layer` if needed: `from makalu.storage.parquet_store import Layer`
@@ -214,4 +214,4 @@ Note: the SQL view name is the **lowercase** dataset name (`MyMetric` → `mymet
   object outside the loop and feed rows in order — the stage guarantees chronological order
 - If the metric needs a `param_id` partition (e.g. configurable window sizes), use
   `create_single_market("MyMetric_paramid", market)` and encode the param in the dataset name,
-  or add a custom Store class following the `VolSpreadStore` pattern in `qate/store/parquet_store.py`
+  or add a custom Store class following the `MeasuredStore` pattern in `qate/store/parquet_store.py`

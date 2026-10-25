@@ -27,7 +27,7 @@ All reference documentation is in `doc/`. Read the relevant file before starting
 | Dataset column definitions | `doc/dataset_definitions.md` |
 | Full dataset catalog | `doc/catalog.yaml` |
 | Run a backtest | `doc/backtest.md` |
-| VolSpread plots / Grafana export | `doc/plot.md` |
+| Volatility / Spread plots, Grafana export | `doc/plot.md` |
 | Docker / InfluxDB / Grafana infra | `doc/local_infra.md` |
 | Implement a new derived metric | `doc/implement_metric.md` |
 | Strategy configs (signal markets, order sizes) | `openclaw/knowledge/strategies.json` |
@@ -68,10 +68,11 @@ python /home/lulurun/workspace/Makalu/src/cli.py data-check \
 **2 — Populate missing silver/gold** (see `doc/data_pipeline.md` for smart populate pattern)
 
 Bronze is produced by Kitakamakura and read through Komachi; Makalu cannot download or populate it.
-Silver MarketPrice and gold VolSpread are derived by Hase, not Makalu.
+Silver MarketPrice and gold Spread / Volatility are derived by Hase, not Makalu.
 ```bash
 hase derive MarketPrice --market GMO:BTC_JPY --execution-size 0.002 --start 2026-03-13 --end 2026-03-17
-hase derive VolSpread --market GMO:BTC_JPY --execution-size 0.002 --start 2026-03-13 --end 2026-03-17 \
+hase derive Spread --market GMO:BTC_JPY --execution-size 0.002 --start 2026-03-13 --end 2026-03-17 --params 300 --params 900
+hase derive Volatility --market GMO:BTC_JPY --execution-size 0.002 --start 2026-03-13 --end 2026-03-17 \
   --params 60:300:120 --params 60:900:300 --params 180:900:300 --params 300:900:300
 python /home/lulurun/workspace/Makalu/src/cli.py scan
 ```

@@ -1,7 +1,7 @@
 {
   "uid": "makalu-vol-spread",
-  "title": "Makalu - VolSpread",
-  "description": "Volatility, spread, and vol/spread tradability ratio from the VolSpread gold dataset.",
+  "title": "Makalu - Volatility and Spread",
+  "description": "Hase's Volatility (vol_bps_ema) and Spread (spread_bps_ema), and their ratio vol/spread, computed here from the two.",
   "editable": true,
   "graphTooltip": 1,
   "liveNow": false,
@@ -49,7 +49,7 @@
             "type": "influxdb",
             "uid": "ef5hhuhvlf08wa"
           },
-          "query": "from(bucket: \"Makalu\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"VolSpread\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r.execution_size == \"${execution_size}\" and r.param_id == \"${param_id}\")\n  |> filter(fn: (r) => r._field == \"volatility_ema\" or r._field == \"volatility_raw\" or r._field == \"spread_pct_ema\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> map(fn: (r) => ({ r with _value: r._value * 10000.0 }))\n  |> yield(name: \"bps\")",
+          "query": "union(tables: [\n  from(bucket: \"Makalu\")\n    |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n    |> filter(fn: (r) => r._measurement == \"Volatility\")\n    |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n    |> filter(fn: (r) => r.execution_size == \"${execution_size}\" and r.param_id == \"${vol_param}\")\n    |> filter(fn: (r) => r._field == \"vol_bps\" or r._field == \"vol_bps_ema\")\n  ,\n  from(bucket: \"Makalu\")\n    |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n    |> filter(fn: (r) => r._measurement == \"Spread\")\n    |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n    |> filter(fn: (r) => r.execution_size == \"${execution_size}\" and r.param_id == \"${spread_param}\")\n    |> filter(fn: (r) => r._field == \"spread_bps_ema\")\n  \n])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> yield(name: \"bps\")",
           "refId": "A"
         }
       ],
@@ -116,7 +116,7 @@
             "type": "influxdb",
             "uid": "ef5hhuhvlf08wa"
           },
-          "query": "from(bucket: \"Makalu\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"VolSpread\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r.execution_size == \"${execution_size}\" and r.param_id == \"${param_id}\")\n  |> filter(fn: (r) => r._field == \"vol_spread_ratio\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> yield(name: \"ratio\")",
+          "query": "vol = from(bucket: \"Makalu\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"Volatility\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r.execution_size == \"${execution_size}\" and r.param_id == \"${vol_param}\")\n  |> filter(fn: (r) => r._field == \"vol_bps_ema\")\nspread = from(bucket: \"Makalu\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"Spread\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r.execution_size == \"${execution_size}\" and r.param_id == \"${spread_param}\")\n  |> filter(fn: (r) => r._field == \"spread_bps_ema\")\nratio = join(tables: {v: vol, s: spread}, on: [\"_time\"])\n  |> map(fn: (r) => ({ _time: r._time, _field: \"vol_spread_ratio\", _value: r._value_v / r._value_s }))\nratio\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> yield(name: \"ratio\")",
           "refId": "A"
         }
       ],
@@ -166,11 +166,11 @@
             "type": "influxdb",
             "uid": "ef5hhuhvlf08wa"
           },
-          "query": "from(bucket: \"Makalu\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"VolSpread\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r.execution_size == \"${execution_size}\" and r.param_id == \"${param_id}\")\n  |> filter(fn: (r) => r._field == \"mid\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> yield(name: \"mid\")",
+          "query": "from(bucket: \"Makalu\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"MarketPrice\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r.execution_size == \"${execution_size}\")\n  |> filter(fn: (r) => r._field == \"mid\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> yield(name: \"mid\")",
           "refId": "A"
         }
       ],
-      "title": "Effective Mid Price",
+      "title": "Effective Mid Price (MarketPrice)",
       "type": "timeseries"
     },
     {
@@ -230,7 +230,7 @@
             "type": "influxdb",
             "uid": "ef5hhuhvlf08wa"
           },
-          "query": "from(bucket: \"Makalu\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"VolSpread\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r.execution_size == \"${execution_size}\" and r.param_id == \"${param_id}\")\n  |> filter(fn: (r) => r._field == \"vol_spread_ratio\")\n  |> mean()\n  |> yield(name: \"average_ratio\")",
+          "query": "vol = from(bucket: \"Makalu\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"Volatility\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r.execution_size == \"${execution_size}\" and r.param_id == \"${vol_param}\")\n  |> filter(fn: (r) => r._field == \"vol_bps_ema\")\nspread = from(bucket: \"Makalu\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"Spread\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r.execution_size == \"${execution_size}\" and r.param_id == \"${spread_param}\")\n  |> filter(fn: (r) => r._field == \"spread_bps_ema\")\nratio = join(tables: {v: vol, s: spread}, on: [\"_time\"])\n  |> map(fn: (r) => ({ _time: r._time, _field: \"vol_spread_ratio\", _value: r._value_v / r._value_s }))\nratio\n  |> mean()\n  |> yield(name: \"average_ratio\")",
           "refId": "A"
         }
       ],
@@ -294,7 +294,7 @@
             "type": "influxdb",
             "uid": "ef5hhuhvlf08wa"
           },
-          "query": "ratio = from(bucket: \"Makalu\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"VolSpread\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r.execution_size == \"${execution_size}\" and r.param_id == \"${param_id}\")\n  |> filter(fn: (r) => r._field == \"vol_spread_ratio\")\n\ntradeable = ratio\n  |> map(fn: (r) => ({ r with _value: if r._value >= 1.0 then 1.0 else 0.0 }))\n  |> mean()\n\ntradeable",
+          "query": "vol = from(bucket: \"Makalu\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"Volatility\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r.execution_size == \"${execution_size}\" and r.param_id == \"${vol_param}\")\n  |> filter(fn: (r) => r._field == \"vol_bps_ema\")\nspread = from(bucket: \"Makalu\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"Spread\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r.execution_size == \"${execution_size}\" and r.param_id == \"${spread_param}\")\n  |> filter(fn: (r) => r._field == \"spread_bps_ema\")\nratio = join(tables: {v: vol, s: spread}, on: [\"_time\"])\n  |> map(fn: (r) => ({ _time: r._time, _field: \"vol_spread_ratio\", _value: r._value_v / r._value_s }))\nratio\n  |> map(fn: (r) => ({ r with _value: if r._value >= 1.0 then 1.0 else 0.0 }))\n  |> mean()",
           "refId": "A"
         }
       ],
@@ -354,7 +354,7 @@
             "type": "influxdb",
             "uid": "ef5hhuhvlf08wa"
           },
-          "query": "from(bucket: \"Makalu\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"VolSpread\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r.execution_size == \"${execution_size}\" and r.param_id == \"${param_id}\")\n  |> filter(fn: (r) => r._field == \"vol_spread_ratio\")\n  |> count()",
+          "query": "vol = from(bucket: \"Makalu\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"Volatility\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r.execution_size == \"${execution_size}\" and r.param_id == \"${vol_param}\")\n  |> filter(fn: (r) => r._field == \"vol_bps_ema\")\nspread = from(bucket: \"Makalu\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"Spread\")\n  |> filter(fn: (r) => r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\")\n  |> filter(fn: (r) => r.execution_size == \"${execution_size}\" and r.param_id == \"${spread_param}\")\n  |> filter(fn: (r) => r._field == \"spread_bps_ema\")\nratio = join(tables: {v: vol, s: spread}, on: [\"_time\"])\n  |> map(fn: (r) => ({ _time: r._time, _field: \"vol_spread_ratio\", _value: r._value_v / r._value_s }))\nratio\n  |> count()",
           "refId": "A"
         }
       ],
@@ -375,14 +375,14 @@
           "type": "influxdb",
           "uid": "ef5hhuhvlf08wa"
         },
-        "definition": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"Makalu\", tag: \"exchange\", predicate: (r) => r._measurement == \"VolSpread\", start: 2025-07-01T00:00:00Z)",
+        "definition": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"Makalu\", tag: \"exchange\", predicate: (r) => r._measurement == \"Volatility\", start: 2025-07-01T00:00:00Z)",
         "hide": 0,
         "includeAll": false,
         "label": "Exchange",
         "multi": false,
         "name": "exchange",
         "options": [],
-        "query": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"Makalu\", tag: \"exchange\", predicate: (r) => r._measurement == \"VolSpread\", start: 2025-07-01T00:00:00Z)",
+        "query": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"Makalu\", tag: \"exchange\", predicate: (r) => r._measurement == \"Volatility\", start: 2025-07-01T00:00:00Z)",
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,
@@ -400,14 +400,14 @@
           "type": "influxdb",
           "uid": "ef5hhuhvlf08wa"
         },
-        "definition": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"Makalu\", tag: \"symbol\", predicate: (r) => r._measurement == \"VolSpread\" and r.exchange == \"${exchange}\", start: 2025-07-01T00:00:00Z)",
+        "definition": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"Makalu\", tag: \"symbol\", predicate: (r) => r._measurement == \"Volatility\" and r.exchange == \"${exchange}\", start: 2025-07-01T00:00:00Z)",
         "hide": 0,
         "includeAll": false,
         "label": "Symbol",
         "multi": false,
         "name": "symbol",
         "options": [],
-        "query": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"Makalu\", tag: \"symbol\", predicate: (r) => r._measurement == \"VolSpread\" and r.exchange == \"${exchange}\", start: 2025-07-01T00:00:00Z)",
+        "query": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"Makalu\", tag: \"symbol\", predicate: (r) => r._measurement == \"Volatility\" and r.exchange == \"${exchange}\", start: 2025-07-01T00:00:00Z)",
         "refresh": 2,
         "regex": "",
         "skipUrlSync": false,
@@ -425,14 +425,14 @@
           "type": "influxdb",
           "uid": "ef5hhuhvlf08wa"
         },
-        "definition": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"Makalu\", tag: \"execution_size\", predicate: (r) => r._measurement == \"VolSpread\" and r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\", start: 2025-07-01T00:00:00Z)",
+        "definition": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"Makalu\", tag: \"execution_size\", predicate: (r) => r._measurement == \"Volatility\" and r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\", start: 2025-07-01T00:00:00Z)",
         "hide": 0,
         "includeAll": false,
         "label": "Execution Size",
         "multi": false,
         "name": "execution_size",
         "options": [],
-        "query": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"Makalu\", tag: \"execution_size\", predicate: (r) => r._measurement == \"VolSpread\" and r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\", start: 2025-07-01T00:00:00Z)",
+        "query": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"Makalu\", tag: \"execution_size\", predicate: (r) => r._measurement == \"Volatility\" and r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\", start: 2025-07-01T00:00:00Z)",
         "refresh": 2,
         "regex": "",
         "skipUrlSync": false,
@@ -450,14 +450,39 @@
           "type": "influxdb",
           "uid": "ef5hhuhvlf08wa"
         },
-        "definition": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"Makalu\", tag: \"param_id\", predicate: (r) => r._measurement == \"VolSpread\" and r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\" and r.execution_size == \"${execution_size}\", start: 2025-07-01T00:00:00Z)",
+        "definition": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"Makalu\", tag: \"param_id\", predicate: (r) => r._measurement == \"Volatility\" and r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\" and r.execution_size == \"${execution_size}\", start: 2025-07-01T00:00:00Z)",
         "hide": 0,
         "includeAll": false,
-        "label": "Param ID",
+        "label": "Volatility param_id",
         "multi": false,
-        "name": "param_id",
+        "name": "vol_param",
         "options": [],
-        "query": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"Makalu\", tag: \"param_id\", predicate: (r) => r._measurement == \"VolSpread\" and r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\" and r.execution_size == \"${execution_size}\", start: 2025-07-01T00:00:00Z)",
+        "query": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"Makalu\", tag: \"param_id\", predicate: (r) => r._measurement == \"Volatility\" and r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\" and r.execution_size == \"${execution_size}\", start: 2025-07-01T00:00:00Z)",
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "allValue": null,
+        "current": {
+          "selected": true,
+          "text": "vs_60_900_300_1s",
+          "value": "vs_60_900_300_1s"
+        },
+        "datasource": {
+          "type": "influxdb",
+          "uid": "ef5hhuhvlf08wa"
+        },
+        "definition": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"Makalu\", tag: \"param_id\", predicate: (r) => r._measurement == \"Spread\" and r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\" and r.execution_size == \"${execution_size}\", start: 2025-07-01T00:00:00Z)",
+        "hide": 0,
+        "includeAll": false,
+        "label": "Spread param_id",
+        "multi": false,
+        "name": "spread_param",
+        "options": [],
+        "query": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"Makalu\", tag: \"param_id\", predicate: (r) => r._measurement == \"Spread\" and r.exchange == \"${exchange}\" and r.symbol == \"${symbol}\" and r.execution_size == \"${execution_size}\", start: 2025-07-01T00:00:00Z)",
         "refresh": 2,
         "regex": "",
         "skipUrlSync": false,

@@ -27,7 +27,7 @@ Returns JSON: `{columns, row_count, rows}` — rows capped at 200.
    ```sql
    WHERE date >= '2026-01-01' AND date <= '2026-01-07'
    ```
-4. **View names** are lowercase dataset names: `Trade` → `trade`, `VolSpread` → `volspread`.
+4. **View names** are lowercase dataset names: `Trade` → `trade`, `Volatility` → `volatility`.
 5. **Required partition columns** — for datasets with extra partitions, always include them or results are mixed and meaningless:
    - `execution_size` required for `marketprice`, `volspread`
    - `param_id` required for `volspread`, `chart_*`, `backtestpnl`
@@ -73,15 +73,17 @@ ORDER BY ts
 LIMIT 100
 ```
 
-### 2.4 Gold — VolSpread (always include param_id and execution_size)
+### 2.4 Gold — Volatility and Spread (always include param_id and execution_size)
 ```sql
-SELECT ts, mid, volatility_ema, spread_pct_ema
-FROM volspread
-WHERE exchange='GMO' AND symbol='BTC_JPY'
-  AND execution_size='0.002'
-  AND param_id='vs_60_300_120_1s'
-  AND date >= '2026-03-01' AND date <= '2026-03-07'
-ORDER BY ts
+SELECT v.ts, v.vol_bps_ema, s.spread_bps_ema, v.vol_bps_ema / s.spread_bps_ema AS tradability
+FROM volatility v
+JOIN spread s USING (exchange, symbol, execution_size, date, ts)
+WHERE v.exchange='GMO' AND v.symbol='BTC_JPY'
+  AND v.execution_size='0.002'
+  AND v.param_id='g1s_h60s_lb300s_ema120s'
+  AND s.param_id='g1s_ema300s'
+  AND v.date >= '2026-03-01' AND v.date <= '2026-03-07'
+ORDER BY v.ts
 LIMIT 200
 ```
 

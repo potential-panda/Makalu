@@ -75,12 +75,12 @@ def execute_market_price(args):
 
 
 def _discover_param_ids(
-    parquet_root: str, exchange: str, symbol: str, execution_size: str
+    parquet_root: str, dataset: str, exchange: str, symbol: str, execution_size: str
 ) -> list[str]:
     path = os.path.join(
         parquet_root,
         "gold",
-        "dataset=VolSpread",
+        f"dataset={dataset}",
         f"exchange={exchange}",
         f"symbol={symbol}",
         f"execution_size={execution_size}",
@@ -94,7 +94,8 @@ def _discover_param_ids(
     )
 
 
-def execute_vol_spread(args):
+def execute_measured(args):
+    """Publish Hase's Spread or Volatility to the InfluxDB measurement of the same name."""
     market = Market.from_str(f"{args.exchange}:{args.symbol}")
     dt_range = DtRange.from_strings(args.start, args.end)
     ps = _create_parquet_store()
@@ -103,7 +104,11 @@ def execute_vol_spread(args):
         [args.param_id]
         if args.param_id
         else _discover_param_ids(
-            sys_env.PARQUET_ROOT_DIR, args.exchange, args.symbol, args.execution_size
+            sys_env.PARQUET_ROOT_DIR,
+            args.dataset,
+            args.exchange,
+            args.symbol,
+            args.execution_size,
         )
     )
     if not param_ids:
@@ -116,7 +121,7 @@ def execute_vol_spread(args):
     grand_total = 0
 
     for param_id in param_ids:
-        store = ps.create_vol_spread(market, args.execution_size, param_id)
+        store = ps.create_measured(args.dataset, market, args.execution_size, param_id)
         tags = store.get_partition_keys()
         field_cols = None
         total = 0
@@ -128,7 +133,7 @@ def execute_vol_spread(args):
             if field_cols is None:
                 field_cols = [c for c in df.columns if c != "ts"]
             for row in df.itertuples(index=False):
-                point = Point("VolSpread").time(int(row.ts * 1000), WritePrecision.MS)
+                point = Point(args.dataset).time(int(row.ts * 1000), WritePrecision.MS)
                 for k, v in tags.items():
                     point.tag(k, v)
                 for col in field_cols:
@@ -138,14 +143,14 @@ def execute_vol_spread(args):
                 writer.add(point)
             total += len(df)
             LOG.info(
-                f"Published VolSpread {market.id} {param_id} {date_str}: {len(df)} points"
+                f"Published {args.dataset} {market.id} {param_id} {date_str}: {len(df)} points"
             )
 
-        LOG.info(f"VolSpread {param_id}: {total} points total")
+        LOG.info(f"{args.dataset} {param_id}: {total} points total")
         grand_total += total
 
     writer.close()
-    LOG.info(f"Done. Total VolSpread points published: {grand_total}")
+    LOG.info(f"Done. Total {args.dataset} points published: {grand_total}")
 
 
 def _add_common_args(p: argparse.ArgumentParser) -> argparse.ArgumentParser:
@@ -170,7 +175,7 @@ def register_cli(parser: argparse.ArgumentParser):
             "Read already-populated parquet files and stream them to InfluxDB.\n"
             "Uses the same store objects as 'populate' to resolve parquet paths.\n"
             "If a date has no parquet file, it is silently skipped.\n\n"
-            "Implemented datasets: Trade (bronze), MarketPrice (silver), VolSpread (gold)."
+            "Implemented datasets: Trade (bronze), MarketPrice (silver), Spread and Volatility (gold)."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -196,22 +201,23 @@ def register_cli(parser: argparse.ArgumentParser):
     )
     mp.set_defaults(func=execute_market_price)
 
-    vs = _add_common_args(
-        sub.add_parser(
-            "VolSpread",
-            help="Publish gold VolSpread parquet → InfluxDB VolSpread measurement",
+    for dataset in ("Spread", "Volatility"):
+        ms = _add_common_args(
+            sub.add_parser(
+                dataset,
+                help=f"Publish Hase's gold {dataset} parquet → InfluxDB {dataset} measurement",
+            )
         )
-    )
-    vs.add_argument(
-        "--execution-size",
-        required=True,
-        dest="execution_size",
-        help="Execution size partition key, e.g. 0.1 for ETH_JPY",
-    )
-    vs.add_argument(
-        "--param-id",
-        dest="param_id",
-        default=None,
-        help="VolSpread param_id (e.g. vs_60_60_60_1s). If omitted, all param_ids are published.",
-    )
-    vs.set_defaults(func=execute_vol_spread)
+        ms.add_argument(
+            "--execution-size",
+            required=True,
+            dest="execution_size",
+            help="Execution size partition key, e.g. 0.1 for ETH_JPY, or touch",
+        )
+        ms.add_argument(
+            "--param-id",
+            dest="param_id",
+            default=None,
+            help="param_id (e.g. g1s_ema300s). If omitted, all param_ids are published.",
+        )
+        ms.set_defaults(func=execute_measured, dataset=dataset)

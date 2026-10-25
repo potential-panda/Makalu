@@ -282,7 +282,7 @@ class SingleMarketStore(TimeSeriesStore):
     ):
         super().__init__(root_dir, dataset)
         self.market = market
-        # Named distinctly from subclasses' own `self.param_id` (VolSpreadStore,
+        # Named distinctly from subclasses' own `self.param_id` (MeasuredStore,
         # LeadLagStore, ChartStore, ...) so this generic, base-class-level
         # partition key can never collide with -- and silently get reordered
         # by -- a subclass attribute of the same name. Confirmed for real:
@@ -493,11 +493,21 @@ class LeadLagStore(CrossMarketStore):
         return {**super().get_partition_keys(), "param_id": self.param_id}
 
 
-class VolSpreadStore(SingleMarketStore):
+class MeasuredStore(SingleMarketStore):
+    """Hase's Spread and Volatility: measured at an execution size, then a window set.
+
+    /root_dir/dataset=$dataset/exchange=$exchange/symbol=$symbol/execution_size=$size/param_id=$param_id/date=$YYYY-MM-DD/data.parquet
+    """
+
     def __init__(
-        self, root_dir: str, market: Market, execution_size_str: str, param_id: str
+        self,
+        root_dir: str,
+        dataset: str,
+        market: Market,
+        execution_size_str: str,
+        param_id: str,
     ):
-        super().__init__(root_dir, "VolSpread", market)
+        super().__init__(root_dir, dataset, market)
         self.execution_size_str = execution_size_str
         self.param_id = param_id
 
@@ -616,10 +626,17 @@ class ParquetStore:
             LeadLagStore(self.layer_dir[Layer.GOLD], market_lead, market_lag, param_id)
         )
 
-    def create_vol_spread(self, market: Market, execution_size_str: str, param_id: str):
+    def create_measured(
+        self, dataset: str, market: Market, execution_size_str: str, param_id: str
+    ):
+        """Hase's Spread or Volatility, read only: Hase writes them."""
         return self._m(
-            VolSpreadStore(
-                self.layer_dir[Layer.GOLD], market, execution_size_str, param_id
+            MeasuredStore(
+                self.layer_dir[Layer.GOLD],
+                dataset,
+                market,
+                execution_size_str,
+                param_id,
             )
         )
 

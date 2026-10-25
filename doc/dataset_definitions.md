@@ -198,49 +198,48 @@ Column naming pattern: `ll_{metric}_{window}s_{span}s`
 
 ---
 
-### dataset=VolSpread
+### dataset=Spread and dataset=Volatility
 
-Written by Hase: `hase derive VolSpread --execution-size ... --params H:L:S` (formula:
-`hase.derive.vol_spread.measure`). Makalu only reads it; the windows it reads are
-`src/makalu/vol_spread.py`.
-Source: MarketPrice at `execution_size` (Hase also writes `execution_size=touch`, the top of the book)
-Grain: resampled to 1s intervals; each day read with the 8 hours before it
-Partitioned by: `exchange`, `symbol`, `execution_size`, `param_id` (`vs_<horizon>_<lookback>_<smooth>_<step>s`)
+Written by Hase (`hase derive Spread --params SPAN`, `hase derive Volatility --params H:L:S`;
+formulas `hase.derive.spread.measure` and `hase.derive.volatility.measure`). Makalu only
+reads them; the windows its curves read are `src/makalu/activity_windows.py`. Design and
+formulas: `doc/vol_spread.md`.
+Source: MarketPrice at `execution_size`, put on a 1 s grid (last quote in each second,
+carried forward); each day read with the 8 hours before it. `execution_size=touch` is the
+top of the book instead.
+Grain: 1 second
+Partitioned by: `exchange`, `symbol`, `execution_size`, `param_id`
+(`g1s_ema300s` for Spread; `g1s_h60s_lb300s_ema120s` for Volatility)
 
-**SQL note:** always include `param_id` in the WHERE clause — without it the query scans every
-param combination and returns mixed results. Discover available values first:
-`SELECT DISTINCT param_id FROM volspread WHERE exchange='...' AND symbol='...' LIMIT 20`
+**SQL note:** always include `param_id` in the WHERE clause -- without it the query scans every
+window set and returns mixed results. Discover available values first:
+`SELECT DISTINCT param_id FROM volatility WHERE exchange='...' AND symbol='...' LIMIT 20`
 
-| Column | Definition |
-|--------|------------|
-| `ts` | Unix timestamp (seconds, float) |
-| `bid` | Effective bid execution price (carried from MarketPrice source) |
-| `ask` | Effective ask execution price (carried from MarketPrice source) |
-| `mid` | `(bid + ask) / 2` |
-| `spread` | `ask - bid` |
-| `spread_pct` | `spread / mid` |
-| `spread_bps` | `spread / mid * 10000` |
-| `volatility_raw` | `returns.rolling(lookback_sec).std()` where `returns = mid.pct_change(return_horizon_sec)` |
-| `volatility_ema` | `EMA(volatility_raw, span=smooth_sec)` |
-| `spread_pct_ema` | `EMA(spread_pct, span=lookback_sec)` |
-| `vol_spread_ratio` | `volatility_ema / spread_pct_ema` |
-| `sec` | Seconds since 00:00 JST of the partition date (Hase-written files) |
-| `rv_bps` | Realized volatility over `lookback_sec`: `sqrt(sum(log-return^2)) * 1e4` (Hase-written files) |
+| Dataset | Column | Definition |
+|---------|--------|------------|
+| both | `ts` | Unix timestamp (seconds, float) |
+| Spread | `spread_bps_ema` | `EMA(spread_bps, span)`, `spread_bps = (ask - bid) / mid * 1e4` |
+| Volatility | `rv_bps` | `sqrt(sum(log-return^2))` over `lookback`, `* 1e4` |
+| Volatility | `vol_bps` | `rolling_std(mid[t] / mid[t - horizon] - 1, lookback) * 1e4` |
+| Volatility | `vol_bps_ema` | `EMA(vol_bps, span=smooth)` |
+
+Bid, ask and mid on the grid are not stored: `hase.derive.grid.quote_grid` returns them.
+The tradability ratio is `vol_bps_ema / spread_bps_ema`, computed by the reader.
 
 ---
 
 ### dataset=ActivityCurve
 
-Source: VolSpread
+Source: Volatility and Spread (Hase)
 Grain: one row per (day_of_week, bucket_index) — a weekly snapshot, not a time series
 Partitioned by: `exchange`, `symbol`, `param_id`
 
 Built by `populate ActivityCurve` (see `src/pipeline/curve_steps.py::build_activity_curve_rows`,
-core binning math in `src/active_score/weekly_curve.py::aggregate_weekly`). For each VolSpread
-param_id config, both the `volatility_ema` and `spread_pct_ema` columns are resampled to 1-min,
+core binning math in `src/active_score/weekly_curve.py::aggregate_weekly`). For each window in
+`src/makalu/activity_windows.py`, Volatility's `vol_bps_ema` and the Spread over its lookback (`spread_bps_ema`) are resampled to 1-min,
 z-score normalized, then all of those normalized series are combined and binned by
 `(day_of_week, time_of_day // bin_size_sec)`. Mean is min-max normalized to [0, 1]; std is scaled
-by the same factor. `--start`/`--end` is the *training window* (how much trailing VolSpread
+by the same factor. `--start`/`--end` is the *training window* (how much trailing Volatility/Spread
 history the curve is built from) — the `date=` partition equals `--end`: the as-of date the
 window describes, **not** the day the command happened to run. This matters for backfilling:
 running the populate command many times in one sitting with different historical `--start`/`--end`
@@ -270,7 +269,7 @@ Partitioned by: `market_a`, `market_b`, `param_id`
 
 Same weekly-curve construction as ActivityCurve (`src/pipeline/curve_steps.py::build_leadlag_curve_rows`),
 but built from LeadLag's `ll_max_corr_*` columns (absolute value — sign/direction isn't relevant to
-"is this a good time to trade the relationship") instead of VolSpread. Whichever `ll_max_corr_*`
+"is this a good time to trade the relationship") instead of Volatility/Spread. Whichever `ll_max_corr_*`
 suffixes are actually present in the populated LeadLag param_id(s) are discovered from the data and
 all combined, rather than hardcoded.
 

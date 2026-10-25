@@ -1,10 +1,10 @@
 """Shared (day_of_week x time-of-day bin) aggregation core for any
-weekly-pattern dataset built from VolSpread (or similar per-param_id series).
+weekly-pattern dataset built from per-param_id series.
 
-Used by makalu/cli/populate.py's ActivityCurve (gold pipeline, volatility +
-spread_pct_ema combined) and LeadLagCurve (correlation strength) commands, and
-by active_score/inspect_curve.py (diagnostic tool that recomputes the same
-curve straight from VolSpread for eyeballing, without writing gold parquet).
+Used by makalu/cli/populate.py's ActivityCurve (gold pipeline, Hase's Volatility
+and Spread combined) and LeadLagCurve (correlation strength) commands, and by
+active_score/inspect_curve.py (diagnostic tool that recomputes the same curve
+straight from Volatility and Spread for eyeballing, without writing gold parquet).
 """
 
 import logging
@@ -30,39 +30,42 @@ def zscore_normalize(series: pd.Series) -> pd.Series | None:
     return (series - series.mean()) / series.std()
 
 
-def load_volspread_series(
+def load_activity_series(
     parquet_store: ParquetStore,
     market: Market,
     execution_size_str: str,
-    param_ids: list[str],
+    series: list[tuple[str, str, str]],
     dt_range: DtRange,
 ) -> list[pd.Series]:
-    """Load volatility_ema and spread_pct_ema for each param_id, z-score
-    normalize each column independently (so configs and columns of different
+    """Load each (dataset, param_id, column) of Hase's Spread and Volatility,
+    z-score normalize each independently (so windows and columns of different
     scale contribute equally), and return the list of normalized series ready
-    for aggregate_weekly. Columns/param_ids with no data or no variance are
-    skipped with a warning.
+    for aggregate_weekly. A series with no data or no variance is skipped with
+    a warning. Each (dataset, param_id) is read once, however often it appears.
     """
+    frames: dict[tuple[str, str], pd.DataFrame] = {}
     series_list = []
-    for param_id in param_ids:
-        store = parquet_store.create_vol_spread(market, execution_size_str, param_id)
-        df = store.read(dt_range)
-        if df.empty:
-            LOG.warning(f"No VolSpread data for param_id={param_id}, skipping.")
+    for dataset, param_id, column in series:
+        key = (dataset, param_id)
+        if key not in frames:
+            store = parquet_store.create_measured(
+                dataset, market, execution_size_str, param_id
+            )
+            frames[key] = store.read(dt_range)
+        df = frames[key]
+        if df.empty or column not in df.columns:
+            LOG.warning(f"No {dataset} {param_id} {column} data, skipping.")
             continue
         index = pd.to_datetime(df["ts"], unit="s", utc=True)
-        for col in ("volatility_ema", "spread_pct_ema"):
-            if col not in df.columns:
-                continue
-            z = zscore_normalize(
-                pd.Series(df[col].values, index=index, name=f"{param_id}:{col}")
+        z = zscore_normalize(
+            pd.Series(df[column].values, index=index, name=f"{param_id}:{column}")
+        )
+        if z is not None:
+            series_list.append(z)
+        else:
+            LOG.warning(
+                f"{dataset} {param_id} {column} has no variance after resampling, skipping."
             )
-            if z is not None:
-                series_list.append(z)
-            else:
-                LOG.warning(
-                    f"param_id={param_id} column={col} has no variance after resampling, skipping."
-                )
     return series_list
 
 
