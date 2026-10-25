@@ -1,13 +1,11 @@
 import argparse
 import sys
-from logging import WARNING, getLogger
+from logging import getLogger
 
 import makalu.settings as sys_env
 from qate.core.model import Market
 from makalu.storage.parquet_store import ParquetStore
-from qate.util.dt_range import DtRange, TimeFormat
-
-from k2_data.store import MarketDataStore, partition_market_events
+from qate.util.dt_range import DtRange
 
 LOG = getLogger(__name__)
 
@@ -53,16 +51,13 @@ def execute_single_market(args):
     from pipeline.order_book_derived_steps import (
         PopulateBookChangeStep,
         PopulateBookStateStep,
-        PopulateMarketPriceStep,
     )
     from pipeline.stages import OrderBookDerivedStage, TradeDerivedStage
     from pipeline.trade_derived_steps import PopulateAggressionStep
 
     market = Market.from_str(f"{args.exchange}:{args.symbol}")
     dt_range = DtRange.from_strings(args.start, args.end)
-    market_data_store = MarketDataStore(sys_env.MARKET_DATA_DIR)
-    parquet_store = _create_parquet_store(args)
-    pipeline = Pipeline(market_data_store, parquet_store)
+    pipeline = Pipeline(_create_parquet_store(args))
 
     dataset = args.dataset
     if dataset == "TradeAggression":
@@ -80,77 +75,12 @@ def execute_single_market(args):
         )
     elif dataset == "BookChange":
         pipeline.stage(OrderBookDerivedStage(market).step(PopulateBookChangeStep(k_levels=[1, 3, 5, 10])))
-    elif dataset == "MarketPrice":
-        pipeline.stage(OrderBookDerivedStage(market).step(PopulateMarketPriceStep(args.execution_size)))
     else:
         LOG.error(f"Unknown dataset for populate: {dataset}")
         sys.exit(1)
 
     LOG.info(f"Populating {dataset}: {market.id}  {args.start} → {args.end}")
     pipeline.process(dt_range)
-    LOG.info("Done.")
-
-
-BRONZE_BATCH_DAYS = 3  # days loaded into memory at once before flushing to parquet
-
-
-def execute_bronze(args):
-    from pipeline import order_book_quality
-
-    getLogger("qate").setLevel(WARNING)
-    market = Market.from_str(f"{args.exchange}:{args.symbol}")
-    dt_range = DtRange.from_strings(args.start, args.end)
-    dt_range = DtRange(dt_range._start_dt, dt_range._end_dt, TimeFormat.YYYYMMDD)
-    days = dt_range.days
-
-    n_batches = (len(days) + BRONZE_BATCH_DAYS - 1) // BRONZE_BATCH_DAYS
-    LOG.info(f"Populating bronze: {market.id}  {args.start} → {args.end}")
-    LOG.info(f"  Source : {sys_env.MARKET_DATA_DIR}")
-    LOG.info(f"  Output : {sys_env.PARQUET_ROOT_DIR}")
-    LOG.info(f"  Days   : {len(days)} in {n_batches} batch(es) of {BRONZE_BATCH_DAYS}")
-
-    parquet_store = _create_parquet_store(args)
-    trade_store = parquet_store.create_trade(market)
-    ob_store = parquet_store.create_order_book(market)
-    total_trades = total_obs = total_skipped = 0
-
-    for batch_idx, i in enumerate(range(0, len(days), BRONZE_BATCH_DAYS)):
-        batch = days[i:i + BRONZE_BATCH_DAYS]
-        batch_range = DtRange.from_strings(batch[0], batch[-1])
-        batch_range = DtRange(batch_range._start_dt, batch_range._end_dt, TimeFormat.YYYYMMDD)
-
-        loader = MarketDataStore(sys_env.MARKET_DATA_DIR).create_loader(market, event_types=None)
-        all_data = loader.batch_load_mt(batch_range, max_workers=min(len(batch), 8))
-        order_books, trades = partition_market_events(all_data)
-        del all_data  # free before writing
-
-        for trade in trades:
-            trade_store.add_trade(trade)
-        # Malformed book snapshots are dropped rather than stored: see
-        # pipeline.order_book_quality for the rule and why it exists.
-        batch_skipped = 0
-        for ob in order_books:
-            if order_book_quality.is_malformed(ob):
-                batch_skipped += 1
-                continue
-            ob_store.add_order_book(ob)
-        batch_obs = len(order_books) - batch_skipped
-
-        total_trades += len(trades)
-        total_obs += batch_obs
-        total_skipped += batch_skipped
-        LOG.info(f"  Batch {batch_idx + 1}/{n_batches} ({batch[0]}..{batch[-1]}): {len(trades)} trades, {batch_obs} order books, {batch_skipped} malformed skipped")
-        del order_books, trades
-
-    trade_store.close()
-    ob_store.close()
-    LOG.info(f"  Wrote  : {total_trades} trades, {total_obs} order books")
-    # Counted and logged, never silent: these rows were present from the start
-    # of collection and went unnoticed for months because nothing downstream
-    # said how many it was dropping.
-    seen_obs = total_obs + total_skipped
-    pct = (total_skipped / seen_obs * 100) if seen_obs else 0.0
-    LOG.info(f"  Skipped: {total_skipped} malformed order books of {seen_obs} ({pct:.4f}%): {order_book_quality.describe_rule()}")
     LOG.info("Done.")
 
 
@@ -176,7 +106,7 @@ def execute_volspread(args):
     market = Market.from_str(f"{args.exchange}:{args.symbol}")
     dt_range = DtRange.from_strings(args.start, args.end)
 
-    pipeline = Pipeline(MarketDataStore(sys_env.MARKET_DATA_DIR), _create_parquet_store(args))
+    pipeline = Pipeline(_create_parquet_store(args))
     stage = ExecutionPriceDerivedStage(market, args.execution_size)
     for config in _volspread_configs():
         stage = stage.step(VolSpreadStep(config))
@@ -225,7 +155,7 @@ def execute_return(args):
     horizons_sec = tuple(int(h) for h in args.horizons.split(","))
     config = ReturnConfig(horizons_sec=horizons_sec, execution_size_str=args.execution_size)
 
-    pipeline = Pipeline(MarketDataStore(sys_env.MARKET_DATA_DIR), _create_parquet_store(args))
+    pipeline = Pipeline(_create_parquet_store(args))
     pipeline.stage(
         ReturnDerivedStage(market, args.execution_size, max_horizon_sec=max(horizons_sec)).step(ReturnStep(config))
     )
@@ -283,7 +213,7 @@ def execute_chart_range(args):
     market = Market.from_str(f"{args.exchange}:{args.symbol}")
     dt_range = DtRange.from_strings(args.start, args.end)
 
-    pipeline = Pipeline(MarketDataStore(sys_env.MARKET_DATA_DIR), _create_parquet_store(args))
+    pipeline = Pipeline(_create_parquet_store(args))
     pipeline.stage(TradeDerivedStage(market).step(PopulateRangeBarStep(box_size_rate=args.box_size_rate)))
 
     LOG.info(f"Populating Chart_RANGE: {market.id} (box_size_rate={args.box_size_rate}) {args.start} → {args.end}")
@@ -300,7 +230,7 @@ def execute_leadlag(args):
     market_lead, market_lag, execution_size = _resolve_leadlag_markets(args)
     dt_range = DtRange.from_strings(args.start, args.end)
 
-    pipeline = Pipeline(MarketDataStore(sys_env.MARKET_DATA_DIR), _create_parquet_store(args))
+    pipeline = Pipeline(_create_parquet_store(args))
     pipeline.stage(
         LeadLagStage(market_lead, market_lag, execution_size)
         .step(LeadLagStep(config=LEAD_LAG_CONFIG_NEARHFT))
@@ -339,18 +269,6 @@ def execute_leadlag_curve(args):
 
 
 _DATASET_META = {
-    "bronze": {
-        "help": "Populate Trade + OrderBook (always together, sourced from raw msgpack files)",
-        "description": (
-            "Reads raw msgpack files from /panda/market-data/ and writes two parquet datasets:\n"
-            "  Trade     — one row per exchange trade (price, size, side)\n"
-            "  OrderBook — full 20-level order book snapshots\n\n"
-            "Source file pattern: {MARKET_DATA_DIR}/{exchange}_{symbol}_{YYYYMMDD}.msgpack\n"
-            "This is always the FIRST step. All silver datasets depend on this.\n\n"
-            "Existing target data.parquet files are skipped by default. Use --recreate to overwrite."
-        ),
-        "example": "python cli.py populate bronze --exchange GMO --symbol BTC_JPY --start 2026-01-01 --end 2026-01-07",
-    },
     "TradeAggression": {
         "help": "Populate rolling trade flow metrics derived from Trade (silver layer)",
         "description": (
@@ -380,18 +298,6 @@ _DATASET_META = {
         ),
         "example": "python cli.py populate BookChange --exchange GMO --symbol BTC_JPY --start 2026-01-01 "
         "--end 2026-01-07",
-    },
-    "MarketPrice": {
-        "help": "Populate effective execution prices by walking the order book (silver layer)",
-        "description": (
-            "Walks the order book by a fixed execution_size to compute effective\n"
-            "bid, ask, mid, spread, and spread_bps at each book snapshot.\n"
-            "execution_size is stored as a partition key — use the same value consistently.\n\n"
-            "Prerequisite: bronze must be populated for the same market and date range.\n"
-            "MarketPrice is itself a prerequisite for VolSpread (gold layer)."
-        ),
-        "example": "python cli.py populate MarketPrice --exchange GMO --symbol BTC_JPY --start 2026-01-01 "
-        "--end 2026-01-07 --execution-size 0.002",
     },
     "VolSpread": {
         "help": "Populate volatility and spread EMA metrics derived from MarketPrice (gold layer)",
@@ -487,17 +393,6 @@ def _register_dataset_single_market(sub: argparse.ArgumentParser, dataset: str) 
         "--recreate",
         action="store_true",
         help="Overwrite existing target data.parquet files instead of skipping them.",
-    )
-    return p
-
-
-def _register_market_price(sub: argparse.ArgumentParser) -> argparse.ArgumentParser:
-    p = _register_dataset_single_market(sub, "MarketPrice")
-    p.add_argument(
-        "--execution-size",
-        required=True,
-        dest="execution_size",
-        help="Order size used to walk the book, e.g. 0.002. Becomes a partition key — use consistently.",
     )
     return p
 
@@ -615,17 +510,19 @@ def _register_leadlag_curve(sub: argparse.ArgumentParser) -> argparse.ArgumentPa
 def register_cli(parser: argparse.ArgumentParser):
     p = parser.add_parser(
         "populate",
-        help="Write parquet data from raw sources or derived computations (idempotent)",
+        help="Derive silver/gold parquet from bronze (idempotent)",
         description=(
-            "Populate parquet datasets from raw msgpack files (bronze) or by deriving\n"
-            "metrics from already-populated bronze data (silver/gold).\n\n"
+            "Derive silver/gold parquet datasets from bronze. Bronze (Trade, OrderBook)\n"
+            "is produced by Kitakamakura and read through Komachi; Makalu never writes it.\n"
+            "Silver MarketPrice is derived by Hase, not here:\n"
+            "  hase derive MarketPrice --market GMO:BTC_JPY --execution-size 0.002 --start ... --end ...\n\n"
             "All commands are idempotent: if a target data.parquet already exists, that write is skipped.\n"
             "Use --recreate to overwrite existing target files.\n"
             "Later dates do not affect earlier ones.\n"
             "Run 'python cli.py scan' after populating to update the manifest.\n\n"
             "Data flow:\n"
-            "  bronze → MarketPrice → VolSpread → ActivityCurve\n"
-            "  bronze → MarketPrice → Return\n"
+            "  bronze → MarketPrice (hase) → VolSpread → ActivityCurve\n"
+            "  bronze → MarketPrice (hase) → Return\n"
             "  bronze → BookState / BookChange / TradeAggression\n"
             "  bronze (Trade) → Chart_RANGE / Chart_CANDLE / Chart_HEIKIN_ASHI\n"
             "  MarketPrice (both markets) → LeadLag → LeadLagCurve"
@@ -634,11 +531,9 @@ def register_cli(parser: argparse.ArgumentParser):
     )
 
     sub = p.add_subparsers(dest="dataset", required=True)
-    _register_dataset_single_market(sub, "bronze").set_defaults(func=execute_bronze)
     _register_dataset_single_market(sub, "BookChange").set_defaults(func=execute_single_market)
     _register_dataset_single_market(sub, "BookState").set_defaults(func=execute_single_market)
     _register_dataset_single_market(sub, "TradeAggression").set_defaults(func=execute_single_market)
-    _register_market_price(sub).set_defaults(func=execute_single_market)
     _register_volspread(sub).set_defaults(func=execute_volspread)
     _register_return(sub).set_defaults(func=execute_return)
     _register_leadlag(sub).set_defaults(func=execute_leadlag)

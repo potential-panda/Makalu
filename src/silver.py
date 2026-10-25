@@ -8,7 +8,6 @@ from qate_env.env_name import EnvName
 from makalu.storage.parquet_store import ParquetStore
 from qate.util.dt_range import DtRange
 
-from k2_data.store import MarketDataStore
 from feature_engineering.volatility import VolSpreadConfig
 from labeling.triple_barrier import TripleBarrierConfig
 from lead_lag.lead_lag import (
@@ -36,7 +35,6 @@ from pipeline.market_pair import EXECUTION_SIZE, LEAD_LAG_PAIRS, find_pair_key
 from pipeline.order_book_derived_steps import (
     PopulateBookChangeStep,
     PopulateBookStateStep,
-    PopulateMarketPriceStep,
 )
 from pipeline.stages import (
     ExecutionPriceDerivedStage,
@@ -59,10 +57,9 @@ ENV_NAME = EnvName("MARIO_MARIO")
 
 def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
     market_lead, market_lag = LEAD_LAG_PAIRS.get(pair_key)
-    market_data_store = MarketDataStore(sys_env.get_market_data_dir())
     parquet_store = ParquetStore(sys_env.get_parquet_root_dir())
 
-    pipeline = Pipeline(market_data_store, parquet_store)
+    pipeline = Pipeline(parquet_store)
 
     if "TradeDerived" in run_stages:
         pipeline.stage(
@@ -81,18 +78,6 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
             .step(
                 PopulateRangeBarStep(box_size_rate=0.001)
             )  # 0.1% range bars (example)
-        )
-
-    if "ExecutionPrice" in run_stages:
-        pipeline.stage(
-            OrderBookDerivedStage(market_lead).step(
-                PopulateMarketPriceStep(EXECUTION_SIZE.get(market_lead.symbol))
-            )
-        )
-        pipeline.stage(
-            OrderBookDerivedStage(market_lag).step(
-                PopulateMarketPriceStep(EXECUTION_SIZE.get(market_lag.symbol))
-            )
         )
 
     if "ExectuionPriceDerived" in run_stages:

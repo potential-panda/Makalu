@@ -1,0 +1,14 @@
+[Unit]
+Description=Makalu report site (static, read-only) on 127.0.0.1:9776
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/lulurun/workspace/potential-panda/Makalu
+Environment=PATH=/home/lulurun/.pyenv/versions/3.13.9/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/home/lulurun/.pyenv/versions/3.13.9/bin/python src/cli.py serve
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

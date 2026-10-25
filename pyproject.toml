@@ -16,8 +16,9 @@ authors = [
 dependencies = [
     "kamakuraquantlab-qate>=0.4.0",
     "kamakuraquantlab-qate-env>=0.2.0",
+    "kamakuraquantlab-komachi>=0.8.0",  # bronze file lookup and the datalake root
     "matplotlib==3.9.2",
-    "k2-data @ git+ssh://git@github.com/potential-panda/k2-data.git@main",
+    "k2-data @ git+ssh://git@github.com/potential-panda/k2-data.git@main",  # metrics-data S3 transfer
     "boto3>=1.40",
     "msgpack>=1.1",
     "numpy==2.3.3",
@@ -50,6 +51,9 @@ makalu-pipeline = "cli:main"
 [tool.setuptools]
 package-dir = {"" = "src"}
 py-modules = ["cli"]
+
+[tool.setuptools.package-data]
+"makalu.report" = ["static/*", "static/vendor/*"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

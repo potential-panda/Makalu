@@ -6,7 +6,7 @@ lookup and is_active(ts) gate for use in the trading engine.
 """
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 THRESHOLD_KEYS = ("std", "std1dev", "std2dev", "std3dev")
@@ -43,7 +43,7 @@ class ActiveScore:
 
     def get_score(self, ts: float) -> float:
         """Return the activity score in [0.0, 1.0] for the given Unix timestamp (UTC seconds)."""
-        dt = datetime.fromtimestamp(ts, tz=timezone.utc)
+        dt = datetime.fromtimestamp(ts, tz=UTC)
         dow = dt.weekday()  # 0=Monday, 6=Sunday
         seconds = dt.hour * 3600 + dt.minute * 60 + dt.second
         bin_idx = seconds // self._bin_size_sec

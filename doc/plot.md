@@ -54,16 +54,15 @@ CLI="python /home/lulurun/workspace/Makalu/src/cli.py"
 # 1. Check bronze
 $CLI data-check --dataset Trade --exchange GMO --symbol BTC_JPY --start ... --end ...
 
-# 2. If gaps → populate bronze
-$CLI populate bronze --exchange GMO --symbol BTC_JPY --start ... --end ...
+# 2. If gaps → bronze is Kitakamakura's to fill; Makalu cannot populate it
 
 # 3. Check MarketPrice (execution_size required)
 $CLI data-check --dataset MarketPrice --exchange GMO --symbol BTC_JPY \
   --start ... --end ... --execution-size 0.002
 
-# 4. Populate missing MarketPrice
-$CLI populate MarketPrice --exchange GMO --symbol BTC_JPY \
-  --start ... --end ... --execution-size 0.002
+# 4. Derive missing MarketPrice (Hase)
+hase derive MarketPrice --market GMO:BTC_JPY --execution-size 0.002 \
+  --start ... --end ...
 
 # 5. Check VolSpread (execution_size required)
 $CLI data-check --dataset VolSpread --exchange GMO --symbol BTC_JPY \

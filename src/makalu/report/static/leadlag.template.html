@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>{{TITLE}}</title>
+  <link rel="stylesheet" href="../../static/style.css">
+</head>
+<body>
+  <main class="page">
+    <nav class="crumbs"><a href="../../">Makalu reports</a></nav>
+    <header class="head">
+      <h1 class="title" id="title">{{TITLE}}</h1>
+      <p class="take" id="takeaway">Loading…</p>
+      <p class="sub" id="period-label"></p>
+      <div class="toggles">
+        <div class="toggle" id="toggle" role="group" aria-label="Periods to compare"></div>
+        <div class="toggle hourly" id="basis" role="group" aria-label="Sections 1–4 measured per"></div>
+      </div>
+    </header>
+
+    <section class="card" id="s1">
+      <h2><span class="sec">1</span>Period comparison</h2>
+      <p class="note" id="s1-note"></p>
+      <div class="tiles" id="tiles"></div>
+    </section>
+
+    <section class="card" id="s2">
+      <h2><span class="sec">2</span>Lead-lag strength next to the market around it, weekly</h2>
+      <p class="note"><span id="s2-basis">Weekly medians of daily values.</span> The shaded bands are the two periods being compared. Read down: when the top line drops, check whether volatility dropped or the tick got coarser in the same weeks.</p>
+      <div class="legend" id="band-legend"></div>
+      <div class="multi" id="multi"></div>
+    </section>
+
+    <div class="grid">
+      <section class="card" id="s3">
+        <h2><span class="sec">3</span>Cross-correlation by lag</h2>
+        <p class="note" id="curve-note"></p>
+        <div class="legend" id="curve-legend"></div>
+        <div class="chart" id="curve"></div>
+      </section>
+      <section class="card" id="s4">
+        <h2><span class="sec">4</span>Strength against volatility, per <span id="s4-unit">day</span></h2>
+        <p class="note"><span id="s4-basis">Each dot is one day.</span> If the two periods sit on one cloud, the weaker signal is explained by a quieter market; if the later period sits below at the same volatility, something else changed.</p>
+        <div class="legend" id="scatter-legend"></div>
+        <div class="chart" id="scatter"></div>
+      </section>
+    </div>
+
+    <section class="card" id="s5">
+      <h2><span class="sec">5</span>Month by month</h2>
+      <p class="note">Medians of daily values. The marker on the left shows which comparison period a month falls in.</p>
+      <div class="tablewrap">
+        <table id="monthly"><thead><tr></tr></thead><tbody></tbody></table>
+      </div>
+    </section>
+
+    <section class="card hourly" id="s6">
+      <h2><span class="sec">6</span>Through the day, by JST hour</h2>
+      <p class="note">Median over every hour at that clock hour in each period, each hour measured on its own. Where the lines split at the same hour, the change is not about which session is trading.</p>
+      <div class="legend" id="hour-legend"></div>
+      <div class="hours" id="hour-profile"></div>
+    </section>
+
+    <div class="grid hourly">
+      <section class="card" id="s7">
+        <h2><span class="sec">7</span>Strength at the same volatility, per hour</h2>
+        <p class="note" id="volbin-note"></p>
+        <div class="legend" id="volbin-legend"></div>
+        <div class="chart" id="volbin"></div>
+      </section>
+      <section class="card" id="s8">
+        <h2><span class="sec">8</span>ρ next second, week × hour</h2>
+        <p class="note">Each cell is the median over that week's hours at that JST clock hour; darker is a stronger delayed response. The bars under the axis mark the two periods being compared.</p>
+        <div class="legend" id="heat-legend"></div>
+        <div class="heat" id="heat"></div>
+      </section>
+    </div>
+
+    <section class="card hourly" id="s9">
+      <h2><span class="sec">9</span>ρ next second, day of week × hour</h2>
+      <p class="note">Each cell is the median over every hour at that JST weekday and clock hour. Pooling all weeks averages out most of the week-to-week swings in section 8, so what remains is the shape of the trading week. Days are JST calendar days, so Saturday 0:00–6:00 JST is still Friday in New York.</p>
+      <div class="toggles"><div class="toggle dow-range" role="group" aria-label="Weeks included"></div></div>
+      <div class="legend" id="dow-legend"></div>
+      <div class="dow" id="dow"></div>
+    </section>
+
+    <section class="card hourly" id="s10">
+      <h2><span class="sec">10</span><span class="lead-name">Lead</span> volatility, day of week × hour</h2>
+      <p class="note">Median realised volatility of the lead market's 100ms returns in that hour, bps per hour. Set against section 9: where both are dark, the delayed response is strong because the market is busy.</p>
+      <div class="toggles"><div class="toggle dow-range" role="group" aria-label="Weeks included"></div></div>
+      <div class="legend" id="dowvol-legend"></div>
+      <div class="dow" id="dowvol"></div>
+    </section>
+
+    <section class="card hourly" id="s11">
+      <h2><span class="sec">11</span><span class="lag-name">Lag</span> spread, day of week × hour</h2>
+      <p class="note">Median spread of the lag market at the report's execution size in that hour, bps; darker is wider. Market makers quote wider when the market moves, so within the week this mostly follows section 10. The part that does not, such as a wide spread in a quiet hour, points to a thinner book.</p>
+      <div class="toggles"><div class="toggle dow-range" role="group" aria-label="Weeks included"></div></div>
+      <div class="legend" id="dowspr-legend"></div>
+      <div class="dow" id="dowspr"></div>
+    </section>
+
+    <section class="card" id="s12">
+      <h2><span class="sec">12</span>How these numbers are made</h2>
+      <div class="method note" id="method-text"></div>
+    </section>
+
+    <p class="foot" id="foot"></p>
+  </main>
+  <script src="../../static/vendor/d3-7.9.0.min.js"></script>
+  <script src="../../static/leadlag.js"></script>
+</body>
+</html>

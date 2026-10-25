@@ -19,8 +19,9 @@ import logging
 
 import pandas as pd
 from qate.core.model import Market
-from makalu.storage.parquet_store import ParquetStore
 from qate.util.dt_range import DtRange
+
+from makalu.storage.parquet_store import ParquetStore
 
 LOG = logging.getLogger(__name__)
 
@@ -94,7 +95,9 @@ def _load_bars(
     raw = raw.sort_index()
 
     if _SAR_UP_COL not in raw.columns:
-        LOG.warning(f"load_strategy_df: '{_SAR_UP_COL}' column not found in Backtest_Bar")
+        LOG.warning(
+            f"load_strategy_df: '{_SAR_UP_COL}' column not found in Backtest_Bar"
+        )
         raw["sar_direction"] = float("nan")
     else:
         raw["sar_direction"] = raw[_SAR_UP_COL].map({True: 1, False: -1})

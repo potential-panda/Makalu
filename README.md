@@ -4,16 +4,15 @@ Market data pipeline and backtest orchestration for the **orion** algorithmic tr
 
 ## What it does
 
-- Downloads raw tick data (trades + order book) from S3
-- Converts and stores it as a layered parquet data warehouse
-- Derives microstructure metrics (MarketPrice, VolSpread, BookState, etc.)
+- Reads bronze tick data (trades + order book) through Komachi; Kitakamakura produces it
+- Derives microstructure metrics (MarketPrice, VolSpread, BookState, etc.) into silver/gold
 - Runs backtests via the Himalaya engine
-- Exposes a job queue API (port 9776) with daily data-sync and weekly scan+evict maintenance schedulers
+- Builds static report pages (`report`) and serves them read-only (`serve`, port 9776, public at `/makalu/`)
 
 ## Data warehouse layers
 
 ```
-bronze   Raw Trade + OrderBook tick data
+bronze   Raw Trade + OrderBook tick data (Kitakamakura's, read-only here)
 silver   Derived per-tick metrics: MarketPrice, BookState, BookChange, TradeAggression
 gold     Window-based signals: VolSpread, LeadLag, Chart_*
 ```
@@ -21,12 +20,15 @@ gold     Window-based signals: VolSpread, LeadLag, Chart_*
 The bronze layer contains only `Trade` and `OrderBook`. All other datasets are
 derived and live in silver, gold, feature, or research layers.
 
-Data lives at `/panda/makalu-data/`. Raw msgpack source files at `/panda/market-data/`.
+The datalake root is Komachi's `ROOT_PATH` (`~/.kamakuraquantlab.env`), which is
+`/panda/makalu-data/` on the warehouse host. Makalu never downloads, merges or
+writes bronze: Kitakamakura does, and Makalu finds a market-day's file with
+`komachi.bronze.file`.
 
-`/panda/makalu-data/manifest.db` tracks parquet file metadata for eviction:
-path, row count, file size, and write timestamp. The API schedules weekly
-maintenance that runs `python src/cli.py scan` and then
-`python src/cli.py evict --apply`. Data that has not been scanned yet is
+`<root>/manifest.db` tracks Makalu's parquet file metadata (every layer except
+bronze) for eviction: path, row count, file size, and write timestamp. Run
+`python src/cli.py scan` and then `python src/cli.py evict` by hand; nothing
+schedules them. Data that has not been scanned yet is
 treated as fresh/protected because `evict` only deletes files registered in the
 manifest. Makalu does not depend on OS file-read access time. The parquet disk
 cap is stored in the manifest settings table and can be set with
@@ -56,8 +58,7 @@ pip install -e .
 python src/cli.py <subcommand> [args]
 
 # Examples
-python src/cli.py market-data --market GMO:BTC_JPY --days 3
-python src/cli.py populate bronze --exchange GMO --symbol BTC_JPY --start 2026-01-01 --end 2026-01-07
+hase derive MarketPrice --market GMO:BTC_JPY --execution-size 0.002 --start 2026-01-01 --end 2026-01-07   # silver MarketPrice comes from Hase
 python src/cli.py data-check --dataset Trade --exchange GMO --symbol BTC_JPY
 python src/cli.py query --sql "SELECT ts, price FROM trade WHERE exchange='GMO' AND symbol='BTC_JPY' AND date='2026-01-01' LIMIT 10"
 ```
@@ -70,6 +71,7 @@ python src/cli.py query --sql "SELECT ts, price FROM trade WHERE exchange='GMO' 
 | Claude Code entry point | `CLAUDE.md` |
 | Codex / other agents entry point | `AGENT.md` |
 | Data pipeline operations | `doc/data_pipeline.md` |
+| Report site | `doc/report.md` |
 | SQL querying | `doc/querying.md` |
 | Backtest workflow | `doc/backtest.md` |
 | VolSpread plots + Grafana export | `doc/plot.md` |
@@ -80,14 +82,14 @@ python src/cli.py query --sql "SELECT ts, price FROM trade WHERE exchange='GMO' 
 
 ## Framework dependencies
 
-Uses `kamakuraquantlab-qate>=0.4.0` and `kamakuraquantlab-qate-env>=0.2.0`.
+Uses `kamakuraquantlab-qate>=0.4.0`, `kamakuraquantlab-qate-env>=0.2.0` and
+`kamakuraquantlab-komachi>=0.8.0`.
 Install this checkout with `python -m pip install -e .`. No legacy core checkout
 or extension of the `qate` namespace is required. Storage and microstructure
 helpers are owned by this project; qate supplies event models and trading APIs.
 
-Raw msgpack/S3 operations use the private `k2-data` package. Credentials and
-trading environments use qate-env's `QATE_SECRET_DIR`, `QATE_ENV_ROOT`, and
+`metrics-data` uses the private `k2-data` package for S3 transfer. Credentials
+and trading environments use qate-env's `QATE_SECRET_DIR`, `QATE_ENV_ROOT`, and
 `.qate.json` settings. Hosts using the old `~/secret` directory should set
-`QATE_SECRET_DIR` to that directory. Data roots default to `/panda/market-data`
-and `/panda/makalu-data`; override them with `MAKALU_MARKET_DATA_DIR` and
-`MAKALU_PARQUET_ROOT_DIR`.
+`QATE_SECRET_DIR` to that directory. The datalake root comes from Komachi
+(`komachi.data_root()`); change it with `ROOT_PATH` in `~/.kamakuraquantlab.env`.

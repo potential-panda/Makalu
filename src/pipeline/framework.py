@@ -7,8 +7,6 @@ from typing import List
 from makalu.storage.parquet_store import ParquetStore
 from qate.util.dt_range import DtRange
 
-from k2_data.store import MarketDataStore
-
 CHUNK_SIZE = 3
 LOG = getLogger(__name__)
 
@@ -33,7 +31,6 @@ class StageContext:
 
 @dataclass
 class PipelineContext:
-    market_data_store: MarketDataStore
     parquet_store: ParquetStore
 
 
@@ -99,8 +96,8 @@ class Stage(ABC):
 
 
 class Pipeline:
-    def __init__(self, market_data_store: MarketDataStore, parquet_store: ParquetStore):
-        self._context = PipelineContext(market_data_store, parquet_store)
+    def __init__(self, parquet_store: ParquetStore):
+        self._context = PipelineContext(parquet_store)
         self._stages: List[Stage] = []
 
     def stage(self, stage: Stage):

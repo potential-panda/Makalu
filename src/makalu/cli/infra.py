@@ -6,7 +6,9 @@ from makalu.infra import docker_observability
 
 
 def register_cli(subparsers) -> None:
-    p = subparsers.add_parser("docker-observability", help="Check Grafana and InfluxDB Docker stack health")
+    p = subparsers.add_parser(
+        "docker-observability", help="Check Grafana and InfluxDB Docker stack health"
+    )
     p.add_argument("--format", choices=["json", "text"], default="json")
     p.set_defaults(func=run)
 

@@ -4,62 +4,55 @@ Makalu data warehouse CLI.
 
 PURPOSE
 -------
-Manage the Makalu parquet data warehouse, which stores crypto market microstructure
-data across four processing layers. All data lives under /panda/makalu-data/.
+Derive and manage the silver/gold layers of the parquet datalake, which stores
+crypto market microstructure data. The datalake root is Komachi's ROOT_PATH
+(komachi.data_root(), /panda/makalu-data/ on the warehouse host).
 
 DATA FLOW (must be populated in this order)
 -------------------------------------------
-  Raw msgpack files (/panda/market-data/)
-      │
-      ▼  populate bronze
-  bronze/  Trade, OrderBook            ← raw tick data from exchanges
+  bronze/  Trade, OrderBook            ← written by Kitakamakura; read via Komachi
       │
       ▼  populate BookChange / BookState / TradeAggression / MarketPrice
   silver/  derived per-tick metrics    ← requires bronze to exist first
       │
-      ▼  (gold layer — not yet in this CLI)
+      ▼  populate VolSpread / LeadLag / Chart_RANGE / ...
   gold/    VolSpread, LeadLag, Charts  ← requires silver/MarketPrice to exist first
+
+Makalu does not download, merge, or write bronze.
 
 SUBCOMMANDS
 -----------
   data-check    READ-ONLY.  Inspect what parquet data is on disk. Safe to run anytime.
-  populate      WRITE.      Convert or derive parquet files. Skips writes whose
+  populate      WRITE.      Derive silver/gold parquet files. Skips writes whose
                 target data.parquet already exists; use --recreate to overwrite.
-  market-data   WRITE.      Download raw msgpack market data from S3 to /panda/market-data/.
-                Idempotent. Run this before 'populate bronze'.
-  market-data-s3
-                READ-ONLY.  Inspect raw market-data availability in S3.
-                Cached locally; use --refresh to rescan S3.
-  market-data-cleanup
-                DESTRUCTIVE. Delete raw msgpack files already populated to bronze.
-                Always dry-run by default; requires --apply to delete.
   metrics-data  WRITE.      Download 5-min trading metrics from S3 and push to InfluxDB.
                 Idempotent. Looks back up to 28 days for missing intervals.
-  scan          WRITE.      Register existing parquet files into the manifest database.
-                Scheduled weekly by the API; safe to run manually after populate.
-  evict         DESTRUCTIVE. If parquet usage exceeds the configured cap, delete
-                manifest-tracked files past retention: bronze 12 months,
-                all other layers 6 months.
-                Always dry-run by default; requires --apply to delete.
+  scan          WRITE.      Register existing non-bronze parquet files into the manifest
+                database. Safe to run manually after populate.
+  evict         DESTRUCTIVE. If Makalu's parquet usage (all layers but bronze) exceeds
+                the configured cap, delete manifest-tracked files older than 6 months.
+                Never touches bronze. Always dry-run by default; requires --apply.
   grafana-export WRITE.     Push a date range of parquet data to InfluxDB and
                 return a Grafana dashboard URL. JSON output: {grafana_url, ...}.
+  report        WRITE.      Build static HTML reports (e.g. 'report leadlag') into the site
+                folder, ~/env/LUIGI_MARIO/site. Writes nothing to the warehouse.
+  serve         READ-ONLY.  Serve the site folder as static files on 127.0.0.1:9776,
+                public as http://<ip>:7700/makalu/ through the pisces-01 tunnel.
 
 TYPICAL WORKFLOW
 ----------------
-  1. Check what bronze data exists:
+  1. Check what bronze data exists (gaps are Kitakamakura's to fill):
        python cli.py data-check --dataset Trade --exchange GMO --symbol BTC_JPY
 
-  2. Populate missing bronze data:
-       python cli.py populate bronze --exchange GMO --symbol BTC_JPY --start 2026-01-01 --end 2026-01-07
-
-  3. Populate silver datasets that depend on bronze:
-       python cli.py populate MarketPrice --exchange GMO --symbol BTC_JPY --start 2026-01-01 --end 2026-01-07 \
+  2. Derive silver MarketPrice with Hase, then populate what depends on it:
+       hase derive MarketPrice --market GMO:BTC_JPY --execution-size 0.002 --start 2026-01-01 --end 2026-01-07
+       python cli.py populate VolSpread --exchange GMO --symbol BTC_JPY --start 2026-01-01 --end 2026-01-07 \
           --execution-size 0.002
 
-  4. Update manifest after populating, or rely on the weekly scheduled scan:
+  3. Update manifest after populating:
        python cli.py scan
 
-  5. Configure and periodically review parquet cleanup:
+  4. Configure and periodically review parquet cleanup:
        python cli.py evict --set-max-size 500GiB
        python cli.py evict           # dry-run: shows what would be deleted
        python cli.py evict --apply   # actually deletes
@@ -80,14 +73,12 @@ from makalu.cli import (
     evict,
     grafana_export,
     infra,
-    market_data,
-    market_data_cleanup,
-    market_data_s3,
     metrics_data,
     plot,
     populate,
     publish,
     query,
+    report,
     scan,
     trading_chart,
 )
@@ -120,15 +111,13 @@ def main():
     arb_spot.register_cli(sub)
     populate.register_cli(sub)
     publish.register_cli(sub)
-    market_data.register_cli(sub)
-    market_data_s3.register_cli(sub)
-    market_data_cleanup.register_cli(sub)
     metrics_data.register_cli(sub)
     plot.register_cli(sub)
     grafana_export.register_cli(sub)
     scan.register_cli(sub)
     evict.register_cli(sub)
     query.register_cli(sub)
+    report.register_cli(sub)
     backtest.register_cli(sub)
     trading_chart.register_cli(sub)
     infra.register_cli(sub)

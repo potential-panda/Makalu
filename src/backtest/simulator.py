@@ -7,8 +7,9 @@ calculates features, makes trading decisions, and tracks PnL.
 
 import logging
 import pickle
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Iterable, Optional
+from typing import Optional
 
 from qate.core.model import OrderBook, Trade
 
@@ -68,10 +69,10 @@ class Simulator:
 
         # State
         self._result = SimulationResult()
-        self._current_position: Optional[Position] = None
+        self._current_position: Position | None = None
         self._cumulative_pnl = 0.0
         self._event_count = 0
-        self._last_features: Optional[dict] = None
+        self._last_features: dict | None = None
 
     def run(self, events: Iterable[Event]) -> SimulationResult:
         """
@@ -90,7 +91,9 @@ class Simulator:
             self._event_count += 1
 
             if self._event_count % 100000 == 0:
-                LOG.info(f"Processed {self._event_count} events, {len(self._result.trades)} trades")
+                LOG.info(
+                    f"Processed {self._event_count} events, {len(self._result.trades)} trades"
+                )
 
         # Force exit any remaining position
         if self._position_mgr.has_position:
@@ -101,7 +104,9 @@ class Simulator:
                 )
                 self._record_trade(last_ob.get_ts(), pnl, reason)
 
-        LOG.info(f"Simulation complete: {self._event_count} events, {len(self._result.trades)} trades")
+        LOG.info(
+            f"Simulation complete: {self._event_count} events, {len(self._result.trades)} trades"
+        )
         return self._result
 
     def _process_event(self, event: Event) -> None:
@@ -314,7 +319,9 @@ class SimulatorV2(Simulator):
             self._event_count += 1
 
             if self._event_count % 100000 == 0:
-                LOG.info(f"Processed {self._event_count} events, {len(self._result.trades)} trades")
+                LOG.info(
+                    f"Processed {self._event_count} events, {len(self._result.trades)} trades"
+                )
 
         # Force exit any remaining position
         if self._position_mgr.has_position:
@@ -339,5 +346,7 @@ class SimulatorV2(Simulator):
                     reason=reason,
                 )
 
-        LOG.info(f"Simulation complete: {self._event_count} events, {len(self._result.trades)} trades")
+        LOG.info(
+            f"Simulation complete: {self._event_count} events, {len(self._result.trades)} trades"
+        )
         return self._result

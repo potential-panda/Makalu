@@ -3,11 +3,12 @@ import json
 import sys
 from logging import getLogger
 
-import makalu.settings as sys_env
 from qate.core.model import Market
+from qate.util.dt_range import DtRange
+
+import makalu.settings as sys_env
 from makalu.storage.influx_store import InfluxdbStore
 from makalu.storage.parquet_store import ParquetStore, TimeSeriesStore
-from qate.util.dt_range import DtRange
 
 LOG = getLogger(__name__)
 
@@ -15,13 +16,20 @@ GRAFANA_HOST = "http://localhost:3000"
 EXPLORER_DASHBOARD_UID = "makalu-explorer"
 
 _SUPPORTED_DATASETS = [
-    "Trade", "OrderBook",
-    "MarketPrice", "BookState", "BookChange", "TradeAggression",
+    "Trade",
+    "OrderBook",
+    "MarketPrice",
+    "BookState",
+    "BookChange",
+    "TradeAggression",
     "VolSpread",
-    "Chart_CANDLE", "Chart_HEIKIN_ASHI", "Chart_RANGE",
+    "Chart_CANDLE",
+    "Chart_HEIKIN_ASHI",
+    "Chart_RANGE",
     "LeadLag",
     "BacktestPnL",
-    "Feature_Mid", "Feature_NearHFT",
+    "Feature_Mid",
+    "Feature_NearHFT",
 ]
 
 
@@ -40,33 +48,49 @@ def _create_store(ps: ParquetStore, args) -> TimeSeriesStore:
         return ps.create_order_book(_market(exchange, symbol))
     if dataset == "MarketPrice":
         _require(args, "execution_size", dataset)
-        return ps.create_execution_price(_market(exchange, symbol), str(args.execution_size))
+        return ps.create_execution_price(
+            _market(exchange, symbol), str(args.execution_size)
+        )
     if dataset == "VolSpread":
         _require(args, "execution_size", dataset)
         _require(args, "param_id", dataset)
-        return ps.create_vol_spread(_market(exchange, symbol), str(args.execution_size), str(args.param_id))
+        return ps.create_vol_spread(
+            _market(exchange, symbol), str(args.execution_size), str(args.param_id)
+        )
     if dataset == "BacktestPnL":
         _require(args, "strategy", dataset)
         _require(args, "param_id", dataset)
-        return ps.create_pnl(_market(exchange, symbol), args.strategy, str(args.param_id))
+        return ps.create_pnl(
+            _market(exchange, symbol), args.strategy, str(args.param_id)
+        )
     if dataset.startswith("Feature_"):
-        feature_name = dataset[len("Feature_"):]
+        feature_name = dataset[len("Feature_") :]
         return ps.create_feature(_market(exchange, symbol), feature_name)
     if dataset.startswith("Chart_"):
-        chart_type = dataset[len("Chart_"):]
+        chart_type = dataset[len("Chart_") :]
         _require(args, "param_id", dataset)
-        return ps.create_chart(chart_type, _market(exchange, symbol), str(args.param_id))
+        return ps.create_chart(
+            chart_type, _market(exchange, symbol), str(args.param_id)
+        )
     if dataset == "LeadLag":
         _require(args, "exchange_b", dataset)
         _require(args, "symbol_b", dataset)
         market_b = _market(args.exchange_b, args.symbol_b)
-        return ps.create_lead_lag(_market(exchange, symbol), market_b, str(args.param_id or ""))
+        return ps.create_lead_lag(
+            _market(exchange, symbol), market_b, str(args.param_id or "")
+        )
     raise ValueError(f"Unsupported dataset: {dataset}")
 
 
 def _require(args, attr: str, dataset: str) -> None:
     if not getattr(args, attr, None):
-        print(json.dumps({"error": f"--{attr.replace('_', '-')} is required for dataset {dataset}"}))
+        print(
+            json.dumps(
+                {
+                    "error": f"--{attr.replace('_', '-')} is required for dataset {dataset}"
+                }
+            )
+        )
         sys.exit(1)
 
 
@@ -122,14 +146,29 @@ def register_cli(parser: argparse.ArgumentParser) -> None:
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("--dataset", required=True, choices=_SUPPORTED_DATASETS, help="Dataset to export")
+    p.add_argument(
+        "--dataset",
+        required=True,
+        choices=_SUPPORTED_DATASETS,
+        help="Dataset to export",
+    )
     p.add_argument("--start", required=True, help="Start date YYYY-MM-DD")
     p.add_argument("--end", required=True, help="End date YYYY-MM-DD")
     p.add_argument("--exchange", help="Exchange (e.g. GMO, BINANCE)")
     p.add_argument("--symbol", help="Symbol (e.g. BTC_JPY, BTC_USDT)")
-    p.add_argument("--execution-size", dest="execution_size", help="Required for MarketPrice, VolSpread (e.g. 0.002)")
-    p.add_argument("--param-id", dest="param_id", help="Required for VolSpread, Chart_*, BacktestPnL")
+    p.add_argument(
+        "--execution-size",
+        dest="execution_size",
+        help="Required for MarketPrice, VolSpread (e.g. 0.002)",
+    )
+    p.add_argument(
+        "--param-id",
+        dest="param_id",
+        help="Required for VolSpread, Chart_*, BacktestPnL",
+    )
     p.add_argument("--strategy", help="Required for BacktestPnL")
-    p.add_argument("--exchange-b", dest="exchange_b", help="Second exchange for LeadLag")
+    p.add_argument(
+        "--exchange-b", dest="exchange_b", help="Second exchange for LeadLag"
+    )
     p.add_argument("--symbol-b", dest="symbol_b", help="Second symbol for LeadLag")
     p.set_defaults(func=execute)

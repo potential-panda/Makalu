@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from makalu import settings as sys_env
-
 from makalu.backtest_runner import BacktestRunner, _extract_asset, _resolve_order_size
 
 
 def register_cli(subparsers) -> None:
-    setup_p = subparsers.add_parser("setup-backtest-env", help="Set up backtest env files for Himalaya")
+    setup_p = subparsers.add_parser(
+        "setup-backtest-env", help="Set up backtest env files for Himalaya"
+    )
     setup_p.add_argument("--strategy", required=True, help="Strategy name, e.g. orion")
     setup_p.add_argument("--trading-market", required=True, help="e.g. GMO:BTC_JPY")
     setup_p.add_argument("--from-dt", required=True, help="Start date YYYYMMDD")
@@ -15,8 +16,12 @@ def register_cli(subparsers) -> None:
     setup_p.add_argument("--env", default="BENJAMIN_TATUM", help="Target env name")
     setup_p.set_defaults(func=run_setup)
 
-    publish_p = subparsers.add_parser("publish-results", help="Publish backtest run-logs to Kilimanjaro viewer")
-    publish_p.add_argument("--env", default="BENJAMIN_TATUM", help="Env name whose run_log/ to publish")
+    publish_p = subparsers.add_parser(
+        "publish-results", help="Publish backtest run-logs to Kilimanjaro viewer"
+    )
+    publish_p.add_argument(
+        "--env", default="BENJAMIN_TATUM", help="Env name whose run_log/ to publish"
+    )
     publish_p.set_defaults(func=run_publish)
 
 
@@ -30,7 +35,9 @@ def run_setup(args) -> None:
     asset = _extract_asset(args.trading_market)
     signal_market = k["asset_signal_map"].get(asset)
     if signal_market is None:
-        print(f"No signal market mapping for asset '{asset}' in strategy '{args.strategy}'.")
+        print(
+            f"No signal market mapping for asset '{asset}' in strategy '{args.strategy}'."
+        )
         return
 
     variant = args.variant or k["default_variant"]
@@ -52,7 +59,9 @@ def run_setup(args) -> None:
         f"  /panda/potential-panda/Himalaya/start.sh --env {args.env}"
         f" --from-dt {args.from_dt} --to-dt {args.to_dt} --optimize"
     )
-    print(f"  python /home/lulurun/workspace/Makalu/cli.py publish-results --env {args.env}")
+    print(
+        f"  python /home/lulurun/workspace/Makalu/cli.py publish-results --env {args.env}"
+    )
 
 
 def run_publish(args) -> None:

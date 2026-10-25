@@ -6,7 +6,7 @@ datasets:
 
   # ---------------------------------------------------------------------------
   # Bronze Layer — /panda/makalu-data/bronze/
-  # Raw structured data derived directly from msgpack archives.
+  # Written by Kitakamakura from the raw msgpack; Makalu reads it via Komachi.
   # No analytics. No derived metrics.
   # Bronze contains only Trade and OrderBook.
   # ---------------------------------------------------------------------------
@@ -61,7 +61,9 @@ datasets:
     layer: silver
     description: >
       Effective execution prices after walking the order book by a fixed execution_size.
-      Includes bid, ask, mid, spread, and spread_bps.
+      Includes bid, ask, mid, spread, and spread_bps. Written by Hase (hase derive
+      MarketPrice), which drops snapshots that cannot fill the size or whose walked
+      spread exceeds 100 bps.
       IMPORTANT: execution_size is a required partition — always filter by it.
       Before querying, discover available values with:
         SELECT DISTINCT execution_size FROM marketprice WHERE exchange='X' AND symbol='Y' LIMIT 20

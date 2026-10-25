@@ -21,7 +21,7 @@ import numpy as np
 import pandas as pd
 from numba import jit
 
-from .triple_barrier import filter_by_vol_spread_ratio, ts_index
+from .triple_barrier import ts_index
 
 LOG = logging.getLogger(__name__)
 
@@ -176,7 +176,9 @@ def _compute_buy_labels_numba(
 # ---------------------------------------------------------------------------
 
 
-def calculate_spread_and_barriers(df: pd.DataFrame, config: BuyLabelConfig) -> pd.DataFrame:
+def calculate_spread_and_barriers(
+    df: pd.DataFrame, config: BuyLabelConfig
+) -> pd.DataFrame:
     """
     Compute ``spread_pct_ema``, ``volatility_ema``, ``pt_pct``, and ``sl_pct``
     for each tick.
@@ -199,11 +201,13 @@ def calculate_spread_and_barriers(df: pd.DataFrame, config: BuyLabelConfig) -> p
     df = df.sort_index()
 
     dt = pd.Timedelta(config.vol_resample_interval).total_seconds()
-    shift_periods = int(round(config.return_shift_sec / dt))
-    lookback_periods = int(round(config.volatility_lookback_sec / dt))
+    shift_periods = round(config.return_shift_sec / dt)
+    lookback_periods = round(config.volatility_lookback_sec / dt)
 
     mid_resampled = df["mid"].resample(config.vol_resample_interval).last().ffill()
-    spread_resampled = df["spread"].resample(config.vol_resample_interval).last().ffill()
+    spread_resampled = (
+        df["spread"].resample(config.vol_resample_interval).last().ffill()
+    )
 
     returns = mid_resampled.pct_change(periods=shift_periods)
     volatility = returns.rolling(window=lookback_periods, min_periods=1).std()

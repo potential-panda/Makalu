@@ -22,7 +22,9 @@ LOG = logging.getLogger(__name__)
 DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 
-def find_active_window(hourly_scores: np.ndarray) -> tuple[int, int, float, float] | None:
+def find_active_window(
+    hourly_scores: np.ndarray,
+) -> tuple[int, int, float, float] | None:
     """Longest contiguous UTC-hour run above the day's own mean score -- the
     simplification described in doc/vol_spread.md's "Active/Inactive Window
     Simplification" (raw 5-min bins are too noisy to schedule against; the
@@ -57,7 +59,12 @@ def find_active_window(hourly_scores: np.ndarray) -> tuple[int, int, float, floa
     end = (start + best_len) % n
     idx = [(start + i) % n for i in range(best_len)]
     outside_idx = [h for h in range(n) if h not in idx]
-    return start, end, float(hourly_scores[idx].mean()), float(hourly_scores[outside_idx].mean())
+    return (
+        start,
+        end,
+        float(hourly_scores[idx].mean()),
+        float(hourly_scores[outside_idx].mean()),
+    )
 
 
 def _fmt_utc_jst(hour: int) -> str:
@@ -69,7 +76,11 @@ def weekday_hourly(scores: np.ndarray, bin_size_sec: int) -> np.ndarray:
     bins_per_hour = 3600 // bin_size_sec
     weekday_avg = scores[0:5].mean(axis=0)
     n_hours = len(weekday_avg) // bins_per_hour
-    return weekday_avg[: n_hours * bins_per_hour].reshape(n_hours, bins_per_hour).mean(axis=1)
+    return (
+        weekday_avg[: n_hours * bins_per_hour]
+        .reshape(n_hours, bins_per_hour)
+        .mean(axis=1)
+    )
 
 
 def print_active_window(scores: np.ndarray, bin_size_sec: int) -> dict:
@@ -84,14 +95,21 @@ def print_active_window(scores: np.ndarray, bin_size_sec: int) -> dict:
         print("  No contiguous active window found (curve too flat).")
         return {}
     start, end, inside_mean, outside_mean = window
-    print(f"  Active:   {_fmt_utc_jst(start)} -> {_fmt_utc_jst(end)}  (mean={inside_mean:.4f})")
-    print(f"  Inactive: {_fmt_utc_jst(end)} -> {_fmt_utc_jst(start)}  (mean={outside_mean:.4f})")
-    print(f"  Weekend:  inactive (all)")
+    print(
+        f"  Active:   {_fmt_utc_jst(start)} -> {_fmt_utc_jst(end)}  (mean={inside_mean:.4f})"
+    )
+    print(
+        f"  Inactive: {_fmt_utc_jst(end)} -> {_fmt_utc_jst(start)}  (mean={outside_mean:.4f})"
+    )
+    print("  Weekend:  inactive (all)")
     print(f"  active/inactive ratio: {inside_mean / outside_mean:.2f}x")
     print("───────────────────────────────────────────────────────────\n")
     return {
         "weekday_active_utc": [f"{start:02d}:00", f"{end:02d}:00"],
-        "weekday_active_jst": [f"{(start + 9) % 24:02d}:00", f"{(end + 9) % 24:02d}:00"],
+        "weekday_active_jst": [
+            f"{(start + 9) % 24:02d}:00",
+            f"{(end + 9) % 24:02d}:00",
+        ],
         "weekend": "inactive",
         "inside_mean": inside_mean,
         "outside_mean": outside_mean,
@@ -105,12 +123,20 @@ def print_weekday_summary(scores: np.ndarray) -> None:
     (correlations near 1.0 for every day => no real day-of-week structure)."""
     avg_day = scores.mean(axis=0)
     print("\n── Per-weekday summary ──────────────────────────────────────")
-    print(f"  {'day':<5}  {'mean':>7}  {'std':>7}  {'min':>7}  {'max':>7}  {'corr_vs_avg_day':>16}")
-    print(f"  {'-'*58}")
+    print(
+        f"  {'day':<5}  {'mean':>7}  {'std':>7}  {'min':>7}  {'max':>7}  {'corr_vs_avg_day':>16}"
+    )
+    print(f"  {'-' * 58}")
     for d in range(7):
         row = scores[d]
-        corr = np.corrcoef(row, avg_day)[0, 1] if row.std() > 0 and avg_day.std() > 0 else float("nan")
-        print(f"  {DAY_NAMES[d]:<5}  {row.mean():>7.4f}  {row.std():>7.4f}  {row.min():>7.4f}  {row.max():>7.4f}  {corr:>16.4f}")
+        corr = (
+            np.corrcoef(row, avg_day)[0, 1]
+            if row.std() > 0 and avg_day.std() > 0
+            else float("nan")
+        )
+        print(
+            f"  {DAY_NAMES[d]:<5}  {row.mean():>7.4f}  {row.std():>7.4f}  {row.min():>7.4f}  {row.max():>7.4f}  {corr:>16.4f}"
+        )
     print("────────────────────────────────────────────────────────────\n")
 
 
@@ -129,19 +155,40 @@ def _compare_curves(a: np.ndarray, b: np.ndarray) -> dict:
     cell are highly autocorrelated) while agreement between two disjoint
     halves of the data is not."""
     fa, fb = a.flatten(), b.flatten()
-    overall_corr = float(np.corrcoef(fa, fb)[0, 1]) if fa.std() > 0 and fb.std() > 0 else float("nan")
+    overall_corr = (
+        float(np.corrcoef(fa, fb)[0, 1])
+        if fa.std() > 0 and fb.std() > 0
+        else float("nan")
+    )
     per_day = {}
     for d in range(7):
         row_a, row_b = a[d], b[d]
-        corr = float(np.corrcoef(row_a, row_b)[0, 1]) if row_a.std() > 0 and row_b.std() > 0 else float("nan")
-        per_day[DAY_NAMES[d]] = {"corr": corr, "mean_abs_diff": float(np.mean(np.abs(row_a - row_b)))}
-    return {"overall_corr": overall_corr, "overall_mean_abs_diff": float(np.mean(np.abs(fa - fb))), "per_day": per_day}
+        corr = (
+            float(np.corrcoef(row_a, row_b)[0, 1])
+            if row_a.std() > 0 and row_b.std() > 0
+            else float("nan")
+        )
+        per_day[DAY_NAMES[d]] = {
+            "corr": corr,
+            "mean_abs_diff": float(np.mean(np.abs(row_a - row_b))),
+        }
+    return {
+        "overall_corr": overall_corr,
+        "overall_mean_abs_diff": float(np.mean(np.abs(fa - fb))),
+        "per_day": per_day,
+    }
 
 
-def _apply_window(scores: np.ndarray, bin_size_sec: int, start: int, end: int) -> tuple[float, float]:
+def _apply_window(
+    scores: np.ndarray, bin_size_sec: int, start: int, end: int
+) -> tuple[float, float]:
     hourly = weekday_hourly(scores, bin_size_sec)
     n = len(hourly)
-    idx = list(range(start, end)) if start < end else list(range(start, n)) + list(range(0, end))
+    idx = (
+        list(range(start, end))
+        if start < end
+        else list(range(start, n)) + list(range(end))
+    )
     outside_idx = [h for h in range(n) if h not in idx]
     return float(hourly[idx].mean()), float(hourly[outside_idx].mean())
 
@@ -169,7 +216,9 @@ def run_stability_check(
     span_days = (overall_max - overall_min).days
     print("\n── Cross-period stability check ──────────────────────────────")
     if span_days < min_span_days:
-        print(f"  Skipped: date range only spans {span_days}d, need >= {min_span_days}d for a meaningful check.")
+        print(
+            f"  Skipped: date range only spans {span_days}d, need >= {min_span_days}d for a meaningful check."
+        )
         print("─────────────────────────────────────────────────────────────\n")
         return {}
 
@@ -186,22 +235,29 @@ def run_stability_check(
     }
     curves = {}
     for key, (label_a, label_b, sa, sb) in splits.items():
-        ca, cb = _curve_from_subset(sa, bin_size_sec), _curve_from_subset(sb, bin_size_sec)
+        ca, cb = (
+            _curve_from_subset(sa, bin_size_sec),
+            _curve_from_subset(sb, bin_size_sec),
+        )
         curves[key] = (ca, cb)
         if ca is None or cb is None:
             print(f"  {key}: skipped -- one half had no usable data.")
             continue
         cmp = _compare_curves(ca, cb)
         result[key] = cmp
-        print(f"  {key} ({label_a} vs {label_b}): overall corr={cmp['overall_corr']:.4f}  "
-              f"mean|Δ|={cmp['overall_mean_abs_diff']:.4f}")
+        print(
+            f"  {key} ({label_a} vs {label_b}): overall corr={cmp['overall_corr']:.4f}  "
+            f"mean|Δ|={cmp['overall_mean_abs_diff']:.4f}"
+        )
         for day, d in cmp["per_day"].items():
             print(f"    {day}: corr={d['corr']:.4f}  mean|Δ|={d['mean_abs_diff']:.4f}")
 
     if active_window:
         start = int(active_window["weekday_active_utc"][0].split(":")[0])
         end = int(active_window["weekday_active_utc"][1].split(":")[0])
-        print(f"\n  Active window generalization (UTC {start:02d}:00-{end:02d}:00, from full-sample curve):")
+        print(
+            f"\n  Active window generalization (UTC {start:02d}:00-{end:02d}:00, from full-sample curve):"
+        )
         window_result = {}
         for key, (label_a, label_b, _, _) in splits.items():
             ca, cb = curves[key]
@@ -210,8 +266,14 @@ def run_stability_check(
             for label, c in ((label_a, ca), (label_b, cb)):
                 inside, outside = _apply_window(c, bin_size_sec, start, end)
                 ratio = inside / outside if outside > 0 else float("nan")
-                print(f"    {label}: inside={inside:.4f}  outside={outside:.4f}  ratio={ratio:.2f}x")
-                window_result[label] = {"inside_mean": inside, "outside_mean": outside, "ratio": ratio}
+                print(
+                    f"    {label}: inside={inside:.4f}  outside={outside:.4f}  ratio={ratio:.2f}x"
+                )
+                window_result[label] = {
+                    "inside_mean": inside,
+                    "outside_mean": outside,
+                    "ratio": ratio,
+                }
         result["active_window_generalization"] = window_result
 
     print("─────────────────────────────────────────────────────────────\n")
@@ -219,7 +281,11 @@ def run_stability_check(
 
 
 def plot_heatmap(
-    scores: np.ndarray, bin_size_sec: int, title: str, output_path: Path, value_label: str = "score (0-1)"
+    scores: np.ndarray,
+    bin_size_sec: int,
+    title: str,
+    output_path: Path,
+    value_label: str = "score (0-1)",
 ) -> None:
     import matplotlib
 
@@ -230,7 +296,14 @@ def plot_heatmap(
     bins_per_hour = 3600 // bin_size_sec
 
     fig, ax = plt.subplots(figsize=(18, 4))
-    im = ax.imshow(scores, aspect="auto", cmap="viridis", vmin=0.0, vmax=1.0, interpolation="nearest")
+    im = ax.imshow(
+        scores,
+        aspect="auto",
+        cmap="viridis",
+        vmin=0.0,
+        vmax=1.0,
+        interpolation="nearest",
+    )
 
     ax.set_yticks(range(7))
     ax.set_yticklabels(DAY_NAMES)

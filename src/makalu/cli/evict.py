@@ -7,12 +7,13 @@ from makalu import settings as sys_env
 from makalu.storage.manifest import Manifest
 
 LOG = getLogger(__name__)
-MANIFEST_PATH = "/panda/makalu-data/manifest.db"
+MANIFEST_PATH = sys_env.MANIFEST_PATH
 ROOT = Path(sys_env.get_parquet_root_dir())
 
 MAX_SIZE_SETTING = "max_size_bytes"
-BRONZE_RETENTION_DAYS = 365
-OTHER_LAYER_RETENTION_DAYS = 180
+# Bronze is Kitakamakura's: it is neither counted against the cap nor deleted here.
+PROTECTED_LAYERS = {"bronze"}
+RETENTION_DAYS = 180
 SIZE_UNITS = {
     "b": 1,
     "k": 1_000,
@@ -41,10 +42,6 @@ def _tracked_age_timestamp(record: dict) -> float:
     return record["write_ts"]
 
 
-def _retention_days(layer: str) -> int:
-    return BRONZE_RETENTION_DAYS if layer == "bronze" else OTHER_LAYER_RETENTION_DAYS
-
-
 def _ensure_settings_table(manifest: Manifest) -> None:
     manifest._conn.execute(
         """
@@ -58,7 +55,9 @@ def _ensure_settings_table(manifest: Manifest) -> None:
 
 
 def _get_setting(manifest: Manifest, key: str) -> str | None:
-    row = manifest._conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+    row = manifest._conn.execute(
+        "SELECT value FROM settings WHERE key = ?", (key,)
+    ).fetchone()
     return row[0] if row else None
 
 
@@ -95,7 +94,9 @@ def _parse_size(value: str) -> int:
         raise ValueError(f"invalid size: {value}")
     multiplier = SIZE_UNITS.get("".join(unit) or "b")
     if multiplier is None:
-        raise ValueError(f"unknown size unit in {value!r}; use bytes, GB, GiB, TB, or TiB")
+        raise ValueError(
+            f"unknown size unit in {value!r}; use bytes, GB, GiB, TB, or TiB"
+        )
     return int(float("".join(number)) * multiplier)
 
 
@@ -111,6 +112,8 @@ def _format_size(num_bytes: int) -> str:
 def _actual_root_size() -> int:
     total = 0
     for path in ROOT.rglob("data.parquet"):
+        if _infer_layer(str(path)) in PROTECTED_LAYERS:
+            continue
         try:
             total += path.stat().st_size
         except FileNotFoundError:
@@ -140,7 +143,9 @@ def execute(args):
 
     max_size = int(max_size_value)
     current_size = _actual_root_size()
-    LOG.info(f"Makalu parquet usage: {_format_size(current_size)} / cap {_format_size(max_size)}")
+    LOG.info(
+        f"Makalu parquet usage: {_format_size(current_size)} / cap {_format_size(max_size)}"
+    )
     if current_size <= max_size:
         LOG.info("Usage is below cap. Nothing to evict.")
         manifest.close()
@@ -152,31 +157,32 @@ def execute(args):
 
     for r in records:
         layer = _infer_layer(r["path"])
-        if not layer:
+        if not layer or layer in PROTECTED_LAYERS:
             continue
-        retention_days = _retention_days(layer)
-        cutoff = now - retention_days * 86_400
+        cutoff = now - RETENTION_DAYS * 86_400
         if _tracked_age_timestamp(r) < cutoff:
             to_delete.append(r)
 
     if not to_delete:
         LOG.info(
             "Usage is above cap, but no manifest-tracked files exceed the retention "
-            f"thresholds: bronze {BRONZE_RETENTION_DAYS} days, other layers "
-            f"{OTHER_LAYER_RETENTION_DAYS} days."
+            f"threshold of {RETENTION_DAYS} days."
         )
         manifest.close()
         return
 
     total_size = sum(r["file_size"] for r in to_delete)
-    LOG.info(f"{'Action':<14} {'Layer':<10} {'Age (days)':>10} {'Keep (days)':>11}  Path")
+    LOG.info(
+        f"{'Action':<14} {'Layer':<10} {'Age (days)':>10} {'Keep (days)':>11}  Path"
+    )
     LOG.info("-" * 80)
     for r in to_delete:
         layer = _infer_layer(r["path"])
         age_days = int((now - _tracked_age_timestamp(r)) / 86_400)
-        retention_days = _retention_days(layer or "")
         action = "DELETE" if args.apply else "WOULD DELETE"
-        LOG.info(f"{action:<14} {layer:<10} {age_days:>10}d {retention_days:>11}d  {r['path']}")
+        LOG.info(
+            f"{action:<14} {layer:<10} {age_days:>10}d {RETENTION_DAYS:>11}d  {r['path']}"
+        )
 
     LOG.info(f"Total: {len(to_delete)} file(s), {_format_size(total_size)}")
 
@@ -212,12 +218,12 @@ def register_cli(sub):
         "evict",
         help="Delete stale manifest-tracked files when parquet usage exceeds the configured cap",
         description=(
-            "Reads /panda/makalu-data/manifest.db and only considers files registered there.\n"
+            "Reads <root>/manifest.db and only considers files registered there.\n"
             "Files that are not in the manifest are never deleted by evict.\n\n"
-            "Eviction is disk-cap driven: if /panda/makalu-data is above the configured\n"
-            "cap, evict selects manifest-tracked files by write_ts age:\n"
-            "  bronze      : 12 months (365 days)\n"
-            "  other layers:  6 months (180 days)\n"
+            "Eviction is disk-cap driven: if Makalu's layers (everything under the datalake\n"
+            "root except bronze) are above the configured cap, evict deletes manifest-tracked\n"
+            "files older than 6 months (180 days) by write_ts.\n"
+            "Bronze is Kitakamakura's: never counted against the cap and never deleted.\n"
             "Makalu does not use OS file-read access time for eviction.\n\n"
             "There is no per-path or per-dataset delete option in this command.\n"
             "IMPORTANT: Always run without --apply first to review what would be deleted.\n"
@@ -231,7 +237,9 @@ def register_cli(sub):
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("--apply", action="store_true", help="Actually delete files (default: dry-run)")
+    p.add_argument(
+        "--apply", action="store_true", help="Actually delete files (default: dry-run)"
+    )
     p.add_argument(
         "--set-max-size",
         metavar="SIZE",

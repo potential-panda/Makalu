@@ -6,9 +6,9 @@ Calculates features from BINANCE market data (order books and trades) in real-ti
 
 import logging
 from dataclasses import dataclass, field
-from typing import Optional
 
-from qate.core.model import OrderBook, Side, Trade
+from qate.core.model import OrderBook, Trade
+
 from makalu.microstructure.aggression import TradeAggressionBuilder
 from makalu.microstructure.book_change import BookChange, BookChangeBuilder
 from makalu.microstructure.intent import (
@@ -36,7 +36,9 @@ class FeatureConfig:
     book_change_depths: list[int] = field(default_factory=lambda: [5, 10, 20])
 
     # Depth imbalance distance rates
-    depth_imbalance_rates: list[float] = field(default_factory=lambda: [0.001, 0.005, 0.01])
+    depth_imbalance_rates: list[float] = field(
+        default_factory=lambda: [0.001, 0.005, 0.01]
+    )
 
     # Minimum number of order books required before returning features
     min_orderbooks: int = 10
@@ -68,10 +70,10 @@ class FeatureCalculator:
         )
 
         # Latest book change (for each depth level)
-        self._last_book_changes: Optional[list[BookChange]] = None
+        self._last_book_changes: list[BookChange] | None = None
 
         # Latest order book state
-        self._last_orderbook: Optional[OrderBook] = None
+        self._last_orderbook: OrderBook | None = None
         self._orderbook_count = 0
 
     def on_orderbook(self, orderbook: OrderBook) -> None:
@@ -86,7 +88,7 @@ class FeatureCalculator:
         """Process a trade."""
         self._aggression_builder.on_trade(trade)
 
-    def get_features(self) -> Optional[dict[str, float]]:
+    def get_features(self) -> dict[str, float] | None:
         """
         Get current features based on accumulated state.
 
@@ -117,19 +119,25 @@ class FeatureCalculator:
         microprice = compute_microprice(ob, k=1)
         if microprice is not None:
             features["microprice"] = microprice
-            features["microprice_vs_mid"] = (microprice - mid) / mid * 10000 if mid > 0 else 0
+            features["microprice_vs_mid"] = (
+                (microprice - mid) / mid * 10000 if mid > 0 else 0
+            )
 
         # Volume imbalance at different levels
         for k in [1, 3, 5]:
             features[f"volume_imbalance_{k}"] = compute_volume_imbalance(ob, k=k)
 
         # Weighted imbalance
-        features["weighted_imbalance"] = compute_weighted_imbalance(ob, k=self.config.book_levels)
+        features["weighted_imbalance"] = compute_weighted_imbalance(
+            ob, k=self.config.book_levels
+        )
 
         # Depth imbalance at different distance rates
         for rate in self.config.depth_imbalance_rates:
             rate_name = str(int(rate * 1000))  # e.g., 0.001 -> "1"
-            features[f"depth_imbalance_{rate_name}bps"] = compute_depth_imbalance(ob, distance_rate=rate)
+            features[f"depth_imbalance_{rate_name}bps"] = compute_depth_imbalance(
+                ob, distance_rate=rate
+            )
 
         # Depth at different levels
         for k in [1, 3, 5]:
@@ -168,12 +176,16 @@ class FeatureCalculator:
                 total_refill = bc.refill_bid_rate + bc.refill_ask_rate
 
                 if total_pull > 0:
-                    features[f"pull_imbalance_{k}"] = (bc.pull_bid_rate - bc.pull_ask_rate) / total_pull
+                    features[f"pull_imbalance_{k}"] = (
+                        bc.pull_bid_rate - bc.pull_ask_rate
+                    ) / total_pull
                 else:
                     features[f"pull_imbalance_{k}"] = 0.0
 
                 if total_refill > 0:
-                    features[f"refill_imbalance_{k}"] = (bc.refill_bid_rate - bc.refill_ask_rate) / total_refill
+                    features[f"refill_imbalance_{k}"] = (
+                        bc.refill_bid_rate - bc.refill_ask_rate
+                    ) / total_refill
                 else:
                     features[f"refill_imbalance_{k}"] = 0.0
 
@@ -204,26 +216,30 @@ class FeatureCalculator:
 
         # Trade aggression
         for window in self.config.aggression_windows_sec:
-            names.extend([
-                f"buy_qty_{window}s",
-                f"sell_qty_{window}s",
-                f"aggression_imbalance_{window}s",
-                f"trades_per_sec_{window}s",
-                f"qty_per_sec_{window}s",
-            ])
+            names.extend(
+                [
+                    f"buy_qty_{window}s",
+                    f"sell_qty_{window}s",
+                    f"aggression_imbalance_{window}s",
+                    f"trades_per_sec_{window}s",
+                    f"qty_per_sec_{window}s",
+                ]
+            )
 
         # Book change
         for k in self.config.book_change_depths:
-            names.extend([
-                f"delta_depth_bid_{k}",
-                f"delta_depth_ask_{k}",
-                f"pull_bid_rate_{k}",
-                f"pull_ask_rate_{k}",
-                f"refill_bid_rate_{k}",
-                f"refill_ask_rate_{k}",
-                f"pull_imbalance_{k}",
-                f"refill_imbalance_{k}",
-            ])
+            names.extend(
+                [
+                    f"delta_depth_bid_{k}",
+                    f"delta_depth_ask_{k}",
+                    f"pull_bid_rate_{k}",
+                    f"pull_ask_rate_{k}",
+                    f"refill_bid_rate_{k}",
+                    f"refill_ask_rate_{k}",
+                    f"pull_imbalance_{k}",
+                    f"refill_imbalance_{k}",
+                ]
+            )
 
         return names
 

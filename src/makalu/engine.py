@@ -17,7 +17,6 @@ import yaml
 _MAKALU_ROOT = Path(__file__).parents[2]
 _CATALOG_PATH = _MAKALU_ROOT / "doc" / "catalog.yaml"
 _DEFINITIONS_PATH = _MAKALU_ROOT / "doc" / "dataset_definitions.md"
-_DEFAULT_ROOT = "/panda/makalu-data"
 
 
 def _view(dataset_name: str) -> str:
@@ -27,10 +26,14 @@ def _view(dataset_name: str) -> str:
 class Engine:
     def __init__(
         self,
-        root: str = _DEFAULT_ROOT,
+        root: str | None = None,
         catalog: str = str(_CATALOG_PATH),
         definitions: str = str(_DEFINITIONS_PATH),
     ):
+        if root is None:
+            from makalu import settings
+
+            root = settings.get_parquet_root_dir()
         self._root = Path(root)
         self.definitions_path = Path(definitions)
         self._catalog: list[dict[str, Any]] = self._load_catalog(catalog)

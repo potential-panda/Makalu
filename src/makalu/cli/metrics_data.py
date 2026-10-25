@@ -7,8 +7,9 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import msgpack
-import makalu.settings as sys_env
 from k2_data.s3 import download, list_files
+
+import makalu.settings as sys_env
 from makalu.storage.influx_store import InfluxdbStore, convert_to_point
 
 LOG = getLogger(__name__)
@@ -80,7 +81,9 @@ def _update_env(host: str, env_name: str, base_dir: Path, client) -> dict:
             continue
         to_download.append(s3_name)
 
-    LOG.info(f"{host}/{env_name}: {len(to_download)} to download, {stats['skipped']} already local/current")
+    LOG.info(
+        f"{host}/{env_name}: {len(to_download)} to download, {stats['skipped']} already local/current"
+    )
 
     for s3_name in sorted(to_download):
         try:

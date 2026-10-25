@@ -2,18 +2,15 @@ import time
 from datetime import timedelta
 from logging import getLogger
 
-from qate.core.ev_type import EventType
 from qate.core.model import Market
-from qate.util.dt_range import DtRange, TimeFormat
+from qate.util.dt_range import DtRange
 
-from k2_data.store import partition_market_events
 from labeling.triple_barrier import ts_index
 from lead_lag.lead_lag import prepare_returns
 
 from .execution_price_derived_steps import Context as ExecutionPriceDerivedContext
 from .framework import NoDataForChunk, PipelineContext, Stage, StageContext
 from .lead_lag_steps import Context as LeadLagContext
-from .market_data_steps import Context as MarketDataContext
 from .order_book_derived_steps import Context as OrderBookDerivedContext
 from .return_steps import Context as ReturnContext
 from .trade_derived_steps import Context as TradeDerivedContext
@@ -36,37 +33,6 @@ def _safe_read(read_fn, *args, label: str = "", **kwargs):
         return read_fn(*args, **kwargs)
     except KeyError as e:
         raise NoDataForChunk(f"{label}: no data for this range ({e})") from e
-
-
-class MarketDataStage(Stage):
-    def __init__(self, market: Market):
-        super().__init__()
-        self.market = market
-
-    def before(self, dt_range: DtRange, pipeline_context: PipelineContext) -> StageContext:
-        start_time = time.time()
-
-        loader = pipeline_context.market_data_store.create_loader(
-            self.market,
-            [EventType.MARKET_ORDER_BOOK, EventType.MARKET_TRADE],
-        )
-        # TODO
-        # remove this after fully migrate the date format in market data files
-        dt_range = DtRange(dt_range._start_dt, dt_range._end_dt, TimeFormat.YYYYMMDD)
-
-        all_data = loader.batch_load_mt(dt_range, max_workers=8)
-        order_books, trades = partition_market_events(all_data)
-        end_time = time.time()
-        LOG.info(
-            f"MarketDataStage: Loaded {len(order_books)} order books and {len(trades)} trades"
-            f" in {end_time - start_time:.2f} seconds."
-        )
-        return MarketDataContext(
-            dt_range,
-            self.market,
-            trades,
-            order_books,
-        )
 
 
 class OrderBookDerivedStage(Stage):

@@ -1,6 +1,5 @@
 import logging
 from dataclasses import dataclass
-from typing import Dict, List
 
 import pandas as pd
 
@@ -30,7 +29,9 @@ class VolSpreadConfig:
         return f"vs_{'_'.join(map(str, params))}"
 
 
-def build_volatility_features(source_df: pd.DataFrame, features: Dict[str, pd.Series], windows: List[str]) -> None:
+def build_volatility_features(
+    source_df: pd.DataFrame, features: dict[str, pd.Series], windows: list[str]
+) -> None:
     """Build volatility and spread dynamics features (Section 7)."""
     LOG.info("Building volatility features...")
     mid = source_df["mid"]

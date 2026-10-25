@@ -8,10 +8,10 @@ import logging
 from dataclasses import dataclass
 
 from qate.core.model import Market, OrderBook, Trade
-from makalu.storage.parquet_store import ParquetStore
 from qate.util.dt_range import DtRange
 
 from makalu.data_outage import install_bronze_outage_patch
+from makalu.storage.parquet_store import ParquetStore
 
 LOG = logging.getLogger(__name__)
 

@@ -27,8 +27,8 @@ def calc_ew_corr_numba(target_returns, leader_returns, alpha):
         diff_l = leader_returns[i]
 
         ew_cov = alpha * (diff_t * diff_l) + (1 - alpha) * ew_cov
-        ew_var_t = alpha * (diff_t ** 2) + (1 - alpha) * ew_var_t
-        ew_var_l = alpha * (diff_l ** 2) + (1 - alpha) * ew_var_l
+        ew_var_t = alpha * (diff_t**2) + (1 - alpha) * ew_var_t
+        ew_var_l = alpha * (diff_l**2) + (1 - alpha) * ew_var_l
 
     if ew_var_t > 0 and ew_var_l > 0:
         return ew_cov / np.sqrt(ew_var_t * ew_var_l)
@@ -93,7 +93,9 @@ def compute_lead_lag_features(target_returns, leader_returns, lags, alpha):
             "ll_corr_at_zero": 0.0,
         }
 
-    best_corr, best_lag = lead_lag_search_numba(target_returns, leader_returns, lags, alpha)
+    best_corr, best_lag = lead_lag_search_numba(
+        target_returns, leader_returns, lags, alpha
+    )
 
     # Correlation at zero lag
     corr_at_zero = calc_ew_corr_numba(target_returns, leader_returns, alpha)

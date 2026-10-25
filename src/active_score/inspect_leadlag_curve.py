@@ -29,11 +29,9 @@ import logging
 from pathlib import Path
 
 from qate.core.model import Market
-from makalu import settings as sys_env
+from qate.util.dt_range import DtRange
 from qate_env.env import Env
 from qate_env.env_name import EnvName
-from makalu.storage.parquet_store import ParquetStore
-from qate.util.dt_range import DtRange
 
 from active_score.curve_diagnostics import (
     plot_heatmap,
@@ -43,6 +41,8 @@ from active_score.curve_diagnostics import (
 )
 from active_score.weekly_curve import aggregate_weekly, load_leadlag_series
 from lead_lag.lead_lag import LEAD_LAG_CONFIG_MID, LEAD_LAG_CONFIG_NEARHFT
+from makalu import settings as sys_env
+from makalu.storage.parquet_store import ParquetStore
 from pipeline.market_pair import LEAD_LAG_PAIRS
 
 LOG = logging.getLogger(__name__)
@@ -75,9 +75,13 @@ def main(
     LOG.info(f"  dt_range: {dt_range.start_str} → {dt_range.end_str}")
     LOG.info(f"  bin_size_sec: {bin_size_sec}")
 
-    series_list = load_leadlag_series(parquet_store, market_lead, market_lag, param_ids, dt_range)
+    series_list = load_leadlag_series(
+        parquet_store, market_lead, market_lag, param_ids, dt_range
+    )
     if not series_list:
-        raise ValueError("No valid LeadLag data found for any of the given param_ids -- nothing to plot.")
+        raise ValueError(
+            "No valid LeadLag data found for any of the given param_ids -- nothing to plot."
+        )
     LOG.info(f"Combining {len(series_list)} normalized |ll_max_corr| series.")
 
     scores, std_scores = aggregate_weekly(series_list, bin_size_sec)
@@ -117,20 +121,48 @@ def main(
         f"{market_lag.exchange_name.name}:{market_lag.symbol.name}\n"
         f"{dt_range.start_str} → {dt_range.end_str}  (bin={bin_size_sec}s)"
     )
-    plot_heatmap(scores, bin_size_sec, title, png_path, value_label="|lead-lag corr| (z-scored, 0-1)")
+    plot_heatmap(
+        scores,
+        bin_size_sec,
+        title,
+        png_path,
+        value_label="|lead-lag corr| (z-scored, 0-1)",
+    )
 
     print(f"Done.\n  data → {json_path}\n  plot → {png_path}")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Recompute weekly LeadLagCurve from LeadLag and plot for eye confirmation.")
-    parser.add_argument("--pair", help="Known pair shorthand, e.g. btc, eth, xrp, sol (see pipeline/market_pair.py)")
-    parser.add_argument("--lead-market", help="e.g. BINANCE:ETH_USDT -- alternative to --pair")
-    parser.add_argument("--lag-market", help="e.g. GMO:ETH_JPY -- alternative to --pair")
-    parser.add_argument("--start", required=True, help="Start date YYYYMMDD or YYYY-MM-DD")
-    parser.add_argument("--end", help="End date YYYYMMDD or YYYY-MM-DD (default: today)")
-    parser.add_argument("--bin-size", type=int, default=300, help="Curve bin size in seconds (default: 300)")
-    parser.add_argument("--output-dir", default="models", help="Output directory for JSON + PNG (default: models/)")
+    parser = argparse.ArgumentParser(
+        description="Recompute weekly LeadLagCurve from LeadLag and plot for eye confirmation."
+    )
+    parser.add_argument(
+        "--pair",
+        help="Known pair shorthand, e.g. btc, eth, xrp, sol (see pipeline/market_pair.py)",
+    )
+    parser.add_argument(
+        "--lead-market", help="e.g. BINANCE:ETH_USDT -- alternative to --pair"
+    )
+    parser.add_argument(
+        "--lag-market", help="e.g. GMO:ETH_JPY -- alternative to --pair"
+    )
+    parser.add_argument(
+        "--start", required=True, help="Start date YYYYMMDD or YYYY-MM-DD"
+    )
+    parser.add_argument(
+        "--end", help="End date YYYYMMDD or YYYY-MM-DD (default: today)"
+    )
+    parser.add_argument(
+        "--bin-size",
+        type=int,
+        default=300,
+        help="Curve bin size in seconds (default: 300)",
+    )
+    parser.add_argument(
+        "--output-dir",
+        default="models",
+        help="Output directory for JSON + PNG (default: models/)",
+    )
     parser.add_argument(
         "--configs",
         default="nearhft,mid",
@@ -144,7 +176,9 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+    )
 
     if args.pair and (args.lead_market or args.lag_market):
         parser.error("--pair is mutually exclusive with --lead-market/--lag-market.")

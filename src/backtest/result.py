@@ -5,7 +5,6 @@ Simulation result container and analysis utilities.
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -31,7 +30,9 @@ class SimulationResult:
     """Container for simulation results and analysis methods."""
 
     trades: list[TradeRecord] = field(default_factory=list)
-    pnl_history: list[tuple[float, float]] = field(default_factory=list)  # (ts, cumulative_pnl)
+    pnl_history: list[tuple[float, float]] = field(
+        default_factory=list
+    )  # (ts, cumulative_pnl)
 
     @property
     def total_pnl(self) -> float:
@@ -85,7 +86,7 @@ class SimulationResult:
         gross_profit = sum(t.pnl for t in self.trades if t.pnl > 0)
         gross_loss = abs(sum(t.pnl for t in self.trades if t.pnl < 0))
         if gross_loss == 0:
-            return float('inf') if gross_profit > 0 else 0.0
+            return float("inf") if gross_profit > 0 else 0.0
         return gross_profit / gross_loss
 
     @property
@@ -96,11 +97,9 @@ class SimulationResult:
         peak = 0.0
         max_dd = 0.0
         for _, pnl in self.pnl_history:
-            if pnl > peak:
-                peak = pnl
+            peak = max(peak, pnl)
             dd = peak - pnl
-            if dd > max_dd:
-                max_dd = dd
+            max_dd = max(max_dd, dd)
         return max_dd
 
     def to_dataframe(self) -> pd.DataFrame:
@@ -110,18 +109,20 @@ class SimulationResult:
 
         records = []
         for t in self.trades:
-            records.append({
-                "entry_ts": t.entry_ts,
-                "exit_ts": t.exit_ts,
-                "entry_time": datetime.fromtimestamp(t.entry_ts),
-                "exit_time": datetime.fromtimestamp(t.exit_ts),
-                "direction": "LONG" if t.direction == 1 else "SHORT",
-                "entry_price": t.entry_price,
-                "exit_price": t.exit_price,
-                "pnl": t.pnl,
-                "exit_reason": t.exit_reason,
-                "hold_time_sec": t.exit_ts - t.entry_ts,
-            })
+            records.append(
+                {
+                    "entry_ts": t.entry_ts,
+                    "exit_ts": t.exit_ts,
+                    "entry_time": datetime.fromtimestamp(t.entry_ts),
+                    "exit_time": datetime.fromtimestamp(t.exit_ts),
+                    "direction": "LONG" if t.direction == 1 else "SHORT",
+                    "entry_price": t.entry_price,
+                    "exit_price": t.exit_price,
+                    "pnl": t.pnl,
+                    "exit_reason": t.exit_reason,
+                    "hold_time_sec": t.exit_ts - t.entry_ts,
+                }
+            )
 
         return pd.DataFrame(records)
 
@@ -137,15 +138,24 @@ class SimulationResult:
             reasons[reason]["trades"].append(t.pnl)
 
         for reason, data in reasons.items():
-            data["avg_pnl"] = data["total_pnl"] / data["count"] if data["count"] > 0 else 0.0
-            data["win_rate"] = sum(1 for p in data["trades"] if p > 0) / data["count"] if data["count"] > 0 else 0.0
+            data["avg_pnl"] = (
+                data["total_pnl"] / data["count"] if data["count"] > 0 else 0.0
+            )
+            data["win_rate"] = (
+                sum(1 for p in data["trades"] if p > 0) / data["count"]
+                if data["count"] > 0
+                else 0.0
+            )
             del data["trades"]
 
         return reasons
 
     def get_pnl_by_direction(self) -> dict[str, dict]:
         """Get PnL statistics grouped by direction."""
-        directions = {"LONG": {"count": 0, "total_pnl": 0.0, "wins": 0}, "SHORT": {"count": 0, "total_pnl": 0.0, "wins": 0}}
+        directions = {
+            "LONG": {"count": 0, "total_pnl": 0.0, "wins": 0},
+            "SHORT": {"count": 0, "total_pnl": 0.0, "wins": 0},
+        }
         for t in self.trades:
             key = "LONG" if t.direction == 1 else "SHORT"
             directions[key]["count"] += 1
@@ -154,8 +164,12 @@ class SimulationResult:
                 directions[key]["wins"] += 1
 
         for key, data in directions.items():
-            data["avg_pnl"] = data["total_pnl"] / data["count"] if data["count"] > 0 else 0.0
-            data["win_rate"] = data["wins"] / data["count"] if data["count"] > 0 else 0.0
+            data["avg_pnl"] = (
+                data["total_pnl"] / data["count"] if data["count"] > 0 else 0.0
+            )
+            data["win_rate"] = (
+                data["wins"] / data["count"] if data["count"] > 0 else 0.0
+            )
 
         return directions
 
@@ -171,11 +185,13 @@ class SimulationResult:
         pnls = [pnl for _, pnl in self.pnl_history]
 
         ax.plot(times, pnls, linewidth=1)
-        ax.axhline(y=0, color='gray', linestyle='--', alpha=0.5)
+        ax.axhline(y=0, color="gray", linestyle="--", alpha=0.5)
 
         ax.set_xlabel("Time")
         ax.set_ylabel("Cumulative PnL")
-        ax.set_title(f"Cumulative PnL (Total: {self.total_pnl:.6f}, Trades: {self.trade_count})")
+        ax.set_title(
+            f"Cumulative PnL (Total: {self.total_pnl:.6f}, Trades: {self.trade_count})"
+        )
         ax.grid(True, alpha=0.3)
 
         plt.tight_layout()
@@ -204,7 +220,7 @@ class SimulationResult:
         hourly_pnl = df.groupby("hour")["pnl"].sum()
         colors = ["green" if p > 0 else "red" for p in hourly_pnl.values]
         ax2.bar(hourly_pnl.index, hourly_pnl.values, color=colors)
-        ax2.axhline(y=0, color='gray', linestyle='--', alpha=0.5)
+        ax2.axhline(y=0, color="gray", linestyle="--", alpha=0.5)
         ax2.set_xlabel("Hour of Day")
         ax2.set_ylabel("Total PnL")
         ax2.set_title("PnL by Hour")
@@ -223,9 +239,15 @@ class SimulationResult:
 
         pnls = [t.pnl for t in self.trades]
 
-        ax.hist(pnls, bins=50, edgecolor='black', alpha=0.7)
-        ax.axvline(x=0, color='red', linestyle='--', alpha=0.7)
-        ax.axvline(x=self.avg_pnl_per_trade, color='blue', linestyle='--', alpha=0.7, label=f'Mean: {self.avg_pnl_per_trade:.6f}')
+        ax.hist(pnls, bins=50, edgecolor="black", alpha=0.7)
+        ax.axvline(x=0, color="red", linestyle="--", alpha=0.7)
+        ax.axvline(
+            x=self.avg_pnl_per_trade,
+            color="blue",
+            linestyle="--",
+            alpha=0.7,
+            label=f"Mean: {self.avg_pnl_per_trade:.6f}",
+        )
 
         ax.set_xlabel("PnL")
         ax.set_ylabel("Frequency")
@@ -267,9 +289,13 @@ class SimulationResult:
         print()
         print("By Exit Reason:")
         for reason, stats in self.get_pnl_by_exit_reason().items():
-            print(f"  {reason:10s}: {stats['count']:4d} trades, PnL={stats['total_pnl']:.6f}, WR={stats['win_rate']:.2%}")
+            print(
+                f"  {reason:10s}: {stats['count']:4d} trades, PnL={stats['total_pnl']:.6f}, WR={stats['win_rate']:.2%}"
+            )
         print()
         print("By Direction:")
         for direction, stats in self.get_pnl_by_direction().items():
-            print(f"  {direction:10s}: {stats['count']:4d} trades, PnL={stats['total_pnl']:.6f}, WR={stats['win_rate']:.2%}")
+            print(
+                f"  {direction:10s}: {stats['count']:4d} trades, PnL={stats['total_pnl']:.6f}, WR={stats['win_rate']:.2%}"
+            )
         print("=" * 60)

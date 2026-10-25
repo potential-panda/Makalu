@@ -4,15 +4,10 @@ Reads already-populated MarketPrice data for GMO, BITBANK, and COINCHECK,
 then computes cross-exchange spread and price-flip statistics.
 
 Prerequisites (run these first):
-  python cli.py market-data --market GMO:XRP_SPOT --days 7
-  python cli.py market-data --market BITBANK:XRP_SPOT --days 7
-  python cli.py market-data --market COINCHECK:XRP_SPOT --days 7
-  python cli.py populate bronze  --exchange GMO      --symbol XRP_SPOT --start ... --end ...
-  python cli.py populate bronze  --exchange BITBANK   --symbol XRP_SPOT --start ... --end ...
-  python cli.py populate bronze  --exchange COINCHECK --symbol XRP_SPOT --start ... --end ...
-  python cli.py populate MarketPrice --exchange GMO      --symbol XRP_SPOT --start ... --end ... --execution-size 150
-  python cli.py populate MarketPrice --exchange BITBANK   --symbol XRP_SPOT --start ... --end ... --execution-size 150
-  python cli.py populate MarketPrice --exchange COINCHECK --symbol XRP_SPOT --start ... --end ... --execution-size 150
+  (bronze for all three markets, delivered by Kitakamakura)
+  hase derive MarketPrice --market GMO:XRP_SPOT       --execution-size 150 --start ... --end ...
+  hase derive MarketPrice --market BITBANK:XRP_SPOT   --execution-size 150 --start ... --end ...
+  hase derive MarketPrice --market COINCHECK:XRP_SPOT --execution-size 150 --start ... --end ...
   python cli.py scan
 """
 
@@ -37,11 +32,15 @@ SYMBOL_ALIAS = {
 
 
 def _execution_size(symbol_upper: str) -> str:
-    from pipeline.market_pair import EXECUTION_SIZE
     from qate.core.model import Symbol
+
+    from pipeline.market_pair import EXECUTION_SIZE
+
     sym = Symbol[symbol_upper]
     if sym not in EXECUTION_SIZE:
-        raise ValueError(f"No canonical execution_size defined for {symbol_upper}. Add it to market_pair.EXECUTION_SIZE.")
+        raise ValueError(
+            f"No canonical execution_size defined for {symbol_upper}. Add it to market_pair.EXECUTION_SIZE."
+        )
     return EXECUTION_SIZE[sym]
 
 
@@ -55,13 +54,18 @@ def _date_range(days: int) -> tuple[str, str]:
 # Data loading
 # ---------------------------------------------------------------------------
 
-def _load_market_price(exchange: str, symbol: str, execution_size: str,
-                       start: str, end: str) -> pd.DataFrame:
+
+def _load_market_price(
+    exchange: str, symbol: str, execution_size: str, start: str, end: str
+) -> pd.DataFrame:
     import makalu.settings as sys_env
+
     root = (
         Path(sys_env.get_parquet_root_dir())
-        / "silver" / "dataset=MarketPrice"
-        / f"exchange={exchange}" / f"symbol={symbol}"
+        / "silver"
+        / "dataset=MarketPrice"
+        / f"exchange={exchange}"
+        / f"symbol={symbol}"
         / f"execution_size={execution_size}"
     )
     dfs = []
@@ -83,6 +87,7 @@ def _jst():
     global _JST
     if _JST is None:
         from datetime import timezone
+
         _JST = timezone(timedelta(hours=9))
     return _JST
 
@@ -107,6 +112,7 @@ def _resample_1s(df: pd.DataFrame) -> pd.DataFrame:
 # Analysis
 # ---------------------------------------------------------------------------
 
+
 def _count_flips(mid_a: np.ndarray, mid_b: np.ndarray) -> int:
     """
     Count sign changes in (mid_a - mid_b).
@@ -119,7 +125,9 @@ def _count_flips(mid_a: np.ndarray, mid_b: np.ndarray) -> int:
 def _merge_pair(df_a: pd.DataFrame, df_b: pd.DataFrame) -> pd.DataFrame | None:
     merged = pd.merge_asof(
         df_a.sort_values("ts"),
-        df_b.sort_values("ts").rename(columns={"bid": "bid_b", "ask": "ask_b", "mid": "mid_b", "dt": "dt_b"}),
+        df_b.sort_values("ts").rename(
+            columns={"bid": "bid_b", "ask": "ask_b", "mid": "mid_b", "dt": "dt_b"}
+        ),
         on="ts",
         tolerance=2.0,
         direction="nearest",
@@ -141,8 +149,9 @@ def _merge_pair(df_a: pd.DataFrame, df_b: pd.DataFrame) -> pd.DataFrame | None:
     return merged
 
 
-def _analyze_pair(df_a: pd.DataFrame, df_b: pd.DataFrame,
-                  name_a: str, name_b: str) -> pd.DataFrame:
+def _analyze_pair(
+    df_a: pd.DataFrame, df_b: pd.DataFrame, name_a: str, name_b: str
+) -> pd.DataFrame:
     merged = _merge_pair(df_a, df_b)
     if merged is None:
         return pd.DataFrame()
@@ -152,18 +161,20 @@ def _analyze_pair(df_a: pd.DataFrame, df_b: pd.DataFrame,
         hours = n / 3600
         arb_n = ((g["arb_ab"] > 0) | (g["arb_ba"] > 0)).sum()
         flips = _count_flips(g["mid"].values, g["mid_b"].values)
-        records.append({
-            "date": str(d),
-            "pair": f"{name_a}/{name_b}",
-            "samples": n,
-            "arb_opp_pct": round(arb_n / n * 100, 2) if n else 0.0,
-            "avg_bps": round(g["cross_bps"].mean(), 2),
-            "max_bps": round(g["cross_bps"].max(), 2),
-            "min_bps": round(g["cross_bps"].min(), 2),
-            "std_bps": round(g["cross_bps"].std(), 2),
-            "flips": flips,
-            "flips_per_hr": round(flips / hours, 1) if hours > 0 else 0.0,
-        })
+        records.append(
+            {
+                "date": str(d),
+                "pair": f"{name_a}/{name_b}",
+                "samples": n,
+                "arb_opp_pct": round(arb_n / n * 100, 2) if n else 0.0,
+                "avg_bps": round(g["cross_bps"].mean(), 2),
+                "max_bps": round(g["cross_bps"].max(), 2),
+                "min_bps": round(g["cross_bps"].min(), 2),
+                "std_bps": round(g["cross_bps"].std(), 2),
+                "flips": flips,
+                "flips_per_hr": round(flips / hours, 1) if hours > 0 else 0.0,
+            }
+        )
     return pd.DataFrame(records)
 
 
@@ -171,15 +182,20 @@ def _analyze_pair(df_a: pd.DataFrame, df_b: pd.DataFrame,
 # Table output
 # ---------------------------------------------------------------------------
 
+
 def _print_table(summary: pd.DataFrame) -> None:
     for pair, group in summary.groupby("pair", sort=False):
         name_a, name_b = pair.split("/")
-        print(f"\n{'─'*74}")
-        print(f"  {name_a}  vs  {name_b}"
-              f"   (cross_bps = mid_{name_a} − mid_{name_b}; positive = {name_a} costlier)")
-        print(f"{'─'*74}")
-        print(f"  {'Date':<12} {'Arb%':>6} {'Avg':>8} {'Max':>8} {'Min':>8} {'Std':>6}  {'Flips':>6}  {'Flips/hr':>8}")
-        print(f"  {'-'*70}")
+        print(f"\n{'─' * 74}")
+        print(
+            f"  {name_a}  vs  {name_b}"
+            f"   (cross_bps = mid_{name_a} − mid_{name_b}; positive = {name_a} costlier)"
+        )
+        print(f"{'─' * 74}")
+        print(
+            f"  {'Date':<12} {'Arb%':>6} {'Avg':>8} {'Max':>8} {'Min':>8} {'Std':>6}  {'Flips':>6}  {'Flips/hr':>8}"
+        )
+        print(f"  {'-' * 70}")
         for _, r in group.sort_values("date").iterrows():
             print(
                 f"  {r['date']:<12}"
@@ -197,10 +213,12 @@ def _print_table(summary: pd.DataFrame) -> None:
 # Plot
 # ---------------------------------------------------------------------------
 
-def _plot(resampled: dict[str, pd.DataFrame],
-          pairs: list[tuple[str, str]],
-          output_path: str) -> None:
+
+def _plot(
+    resampled: dict[str, pd.DataFrame], pairs: list[tuple[str, str]], output_path: str
+) -> None:
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.dates as mdates
     import matplotlib.pyplot as plt
@@ -213,7 +231,14 @@ def _plot(resampled: dict[str, pd.DataFrame],
     for ax, (name_a, name_b) in zip(axes, pairs):
         merged = _merge_pair(resampled[name_a], resampled[name_b])
         if merged is None:
-            ax.text(0.5, 0.5, "No overlapping data", transform=ax.transAxes, ha="center", va="center")
+            ax.text(
+                0.5,
+                0.5,
+                "No overlapping data",
+                transform=ax.transAxes,
+                ha="center",
+                va="center",
+            )
             ax.set_title(f"{name_a} vs {name_b}")
             continue
 
@@ -224,10 +249,24 @@ def _plot(resampled: dict[str, pd.DataFrame],
         ax.axhline(0, color="black", lw=0.8, linestyle="--", alpha=0.5)
 
         # Shade true-arb windows
-        ax.fill_between(dt, cross, 0, where=(merged["arb_ab"] > 0).values,
-                        color="#27ae60", alpha=0.4, label=f"Buy {name_b} / Sell {name_a}")
-        ax.fill_between(dt, cross, 0, where=(merged["arb_ba"] > 0).values,
-                        color="#e74c3c", alpha=0.4, label=f"Buy {name_a} / Sell {name_b}")
+        ax.fill_between(
+            dt,
+            cross,
+            0,
+            where=(merged["arb_ab"] > 0).values,
+            color="#27ae60",
+            alpha=0.4,
+            label=f"Buy {name_b} / Sell {name_a}",
+        )
+        ax.fill_between(
+            dt,
+            cross,
+            0,
+            where=(merged["arb_ba"] > 0).values,
+            color="#e74c3c",
+            alpha=0.4,
+            label=f"Buy {name_a} / Sell {name_b}",
+        )
 
         # Orange tick at every flip
         signs = pd.Series(np.sign(cross.values)).replace(0, np.nan).ffill()
@@ -235,14 +274,20 @@ def _plot(resampled: dict[str, pd.DataFrame],
         for flip_dt in dt[flip_mask]:
             ax.axvline(flip_dt, color="orange", lw=0.5, alpha=0.35)
 
-        ax.set_title(f"{name_a} vs {name_b}  —  mid spread (bps)   orange = price flip", fontsize=10)
+        ax.set_title(
+            f"{name_a} vs {name_b}  —  mid spread (bps)   orange = price flip",
+            fontsize=10,
+        )
         ax.set_ylabel("bps", fontsize=9)
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%m/%d", tz="UTC"))
         ax.xaxis.set_major_locator(mdates.DayLocator(tz="UTC"))
         ax.legend(fontsize=8, loc="upper right")
         ax.grid(True, alpha=0.25)
 
-    fig.suptitle(f"Cross-exchange spot arbitrage — {list(resampled)[0].split('_')[0]}", fontsize=12)
+    fig.suptitle(
+        f"Cross-exchange spot arbitrage — {list(resampled)[0].split('_')[0]}",
+        fontsize=12,
+    )
     plt.tight_layout()
     plt.savefig(output_path, dpi=150, bbox_inches="tight")
     print(f"\nPlot saved: {output_path}")
@@ -251,6 +296,7 @@ def _plot(resampled: dict[str, pd.DataFrame],
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
+
 
 def execute(args) -> None:
     symbol_upper = SYMBOL_ALIAS.get(args.symbol.lower(), args.symbol.upper())
@@ -261,8 +307,10 @@ def execute(args) -> None:
         sys.exit(1)
 
     start, end = _date_range(args.days)
-    print(f"arb-spot: {symbol_upper}  |  {', '.join(EXCHANGES)}"
-          f"  |  {start} → {end}  |  execution_size={execution_size}")
+    print(
+        f"arb-spot: {symbol_upper}  |  {', '.join(EXCHANGES)}"
+        f"  |  {start} → {end}  |  execution_size={execution_size}"
+    )
     print()
 
     # Load MarketPrice for each exchange
@@ -272,9 +320,8 @@ def execute(args) -> None:
         df = _load_market_price(exchange, symbol_upper, execution_size, start, end)
         if df.empty:
             missing_hint.append(
-                f"  python cli.py populate MarketPrice --exchange {exchange}"
-                f" --symbol {symbol_upper} --start {start} --end {end}"
-                f" --execution-size {execution_size}"
+                f"  hase derive MarketPrice --market {exchange}:{symbol_upper}"
+                f" --execution-size {execution_size} --start {start} --end {end}"
             )
             LOG.warning(f"No MarketPrice data for {exchange}:{symbol_upper} — skipping")
             continue
@@ -289,17 +336,16 @@ def execute(args) -> None:
         print()
 
     if len(resampled) < 2:
-        LOG.error("Need data from at least 2 exchanges. Populate MarketPrice data first.")
+        LOG.error(
+            "Need data from at least 2 exchanges. Populate MarketPrice data first."
+        )
         sys.exit(1)
 
     # All pairs among available exchanges
     available = [e for e in EXCHANGES if e in resampled]
-    pairs = [(a, b) for i, a in enumerate(available) for b in available[i + 1:]]
+    pairs = [(a, b) for i, a in enumerate(available) for b in available[i + 1 :]]
 
-    summaries = [
-        _analyze_pair(resampled[a], resampled[b], a, b)
-        for a, b in pairs
-    ]
+    summaries = [_analyze_pair(resampled[a], resampled[b], a, b) for a, b in pairs]
     summaries = [s for s in summaries if not s.empty]
 
     if not summaries:
@@ -316,12 +362,13 @@ BUCKET = "makalu_ArbSpot"
 MEASUREMENT = "ArbSpot"
 
 
-def _write_influx(resampled: dict[str, pd.DataFrame],
-                  pairs: list[tuple[str, str]],
-                  symbol: str) -> int:
+def _write_influx(
+    resampled: dict[str, pd.DataFrame], pairs: list[tuple[str, str]], symbol: str
+) -> int:
     """Write 1s arb time-series to InfluxDB. Returns total points written."""
-    import makalu.settings as sys_env
     from influxdb_client import Point, WritePrecision
+
+    import makalu.settings as sys_env
     from makalu.storage.influx_store import InfluxdbWriter
 
     writer = InfluxdbWriter(
@@ -374,8 +421,10 @@ def execute_export(args) -> None:
         sys.exit(1)
 
     start, end = _date_range(args.days)
-    print(f"arb-spot-export: {symbol_upper}  |  {', '.join(EXCHANGES)}"
-          f"  |  {start} → {end}  →  InfluxDB bucket={BUCKET}")
+    print(
+        f"arb-spot-export: {symbol_upper}  |  {', '.join(EXCHANGES)}"
+        f"  |  {start} → {end}  →  InfluxDB bucket={BUCKET}"
+    )
     print()
 
     resampled: dict[str, pd.DataFrame] = {}
@@ -392,11 +441,13 @@ def execute_export(args) -> None:
         sys.exit(1)
 
     available = [e for e in EXCHANGES if e in resampled]
-    pairs = [(a, b) for i, a in enumerate(available) for b in available[i + 1:]]
+    pairs = [(a, b) for i, a in enumerate(available) for b in available[i + 1 :]]
 
     print("\nWriting to InfluxDB...")
     total = _write_influx(resampled, pairs, symbol_upper)
-    print(f"\nDone — {total:,} total points in bucket '{BUCKET}', measurement '{MEASUREMENT}'")
+    print(
+        f"\nDone — {total:,} total points in bucket '{BUCKET}', measurement '{MEASUREMENT}'"
+    )
 
 
 def register_cli(sub) -> None:
@@ -406,7 +457,7 @@ def register_cli(sub) -> None:
         description=(
             "Reads already-populated MarketPrice data for GMO, BITBANK, and COINCHECK,\n"
             "then computes cross-exchange spread and price-flip statistics.\n\n"
-            "Run market-data + populate bronze + populate MarketPrice + scan first.\n\n"
+            "Run 'hase derive MarketPrice' + scan first (bronze comes from Kitakamakura).\n\n"
             "Columns:\n"
             "  Arb%      — % of 1s windows with a profitable cross-exchange opportunity\n"
             "  Avg/Max/Min/Std bps — mid-price spread statistics (positive = first exchange costlier)\n"
@@ -445,7 +496,14 @@ def register_cli(sub) -> None:
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    q.add_argument("--symbol", required=True, choices=["btc_spot", "eth_spot", "xrp_spot"])
-    q.add_argument("--days", type=int, default=7, metavar="N",
-                   help="Trailing days to export (default: 7)")
+    q.add_argument(
+        "--symbol", required=True, choices=["btc_spot", "eth_spot", "xrp_spot"]
+    )
+    q.add_argument(
+        "--days",
+        type=int,
+        default=7,
+        metavar="N",
+        help="Trailing days to export (default: 7)",
+    )
     q.set_defaults(func=execute_export)

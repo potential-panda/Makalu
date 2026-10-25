@@ -6,9 +6,9 @@ Merges events from different exchanges into a single chronologically ordered str
 
 import heapq
 import logging
+from collections.abc import Generator
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Generator, Union
 
 from qate.core.model import OrderBook, Trade
 
@@ -29,7 +29,7 @@ class Event:
 
     ts: float
     event_type: EventType
-    data: Union[OrderBook, Trade]
+    data: OrderBook | Trade
 
     def __lt__(self, other: "Event") -> bool:
         """Compare events by timestamp for heap ordering."""
@@ -82,12 +82,14 @@ class EventMerger:
             else:
                 iterators.append((None, event_type))
 
-        LOG.info(f"EventMerger: Merging {len(binance_orderbooks)} BINANCE OBs, "
-                 f"{len(binance_trades)} BINANCE trades, {len(gmo_orderbooks)} GMO OBs")
+        LOG.info(
+            f"EventMerger: Merging {len(binance_orderbooks)} BINANCE OBs, "
+            f"{len(binance_trades)} BINANCE trades, {len(gmo_orderbooks)} GMO OBs"
+        )
 
         count = 0
         while heap:
-            ts, source_idx, event = heapq.heappop(heap)
+            _ts, source_idx, event = heapq.heappop(heap)
             yield event
             count += 1
 

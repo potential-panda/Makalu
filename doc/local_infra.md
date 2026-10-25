@@ -46,11 +46,9 @@ If InfluxDB is down before a backtest: warn the user, ask whether to start it or
 |----------|------|
 | Makalu CLI | `/home/lulurun/workspace/Makalu/src/cli.py` |
 | Himalaya runner | `/home/lulurun/workspace/Himalaya/start.sh` |
-| Raw market data | `/panda/market-data/` |
 | Parquet warehouse | `/panda/makalu-data/` |
 | Backtest env dir | `~/env/` |
 | Dataset catalog | `/home/lulurun/workspace/Makalu/doc/catalog.yaml` |
 | Dataset definitions | `/home/lulurun/workspace/Makalu/doc/dataset_definitions.md` |
 | Strategy configs | `/home/lulurun/workspace/Makalu/openclaw/knowledge/strategies.json` |
 | Docker compose | `/panda-infra/Infra/docker/grafana/` |
-| Jobs dir | `/panda-infra/makalu/jobs/` |

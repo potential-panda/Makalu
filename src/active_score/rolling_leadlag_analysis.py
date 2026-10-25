@@ -24,15 +24,19 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from qate.core.model import Market
-from makalu import settings as sys_env
+from qate.util.dt_range import DtRange
 from qate_env.env import Env
 from qate_env.env_name import EnvName
-from makalu.storage.parquet_store import ParquetStore
-from qate.util.dt_range import DtRange
 
-from active_score.curve_diagnostics import plot_heatmap, print_active_window, run_stability_check
+from active_score.curve_diagnostics import (
+    plot_heatmap,
+    print_active_window,
+    run_stability_check,
+)
 from active_score.weekly_curve import aggregate_weekly, load_leadlag_series
 from lead_lag.lead_lag import LEAD_LAG_CONFIG_MID, LEAD_LAG_CONFIG_NEARHFT
+from makalu import settings as sys_env
+from makalu.storage.parquet_store import ParquetStore
 from pipeline.market_pair import LEAD_LAG_PAIRS
 
 LOG = logging.getLogger(__name__)
@@ -59,7 +63,9 @@ def _add_months(ym: tuple[int, int], n: int) -> tuple[int, int]:
     return total // 12, total % 12 + 1
 
 
-def _month_window_dates(start_ym: tuple[int, int], window_months: int) -> tuple[str, str]:
+def _month_window_dates(
+    start_ym: tuple[int, int], window_months: int
+) -> tuple[str, str]:
     """Calendar-month window [start_ym, start_ym + window_months) as inclusive date strings."""
     start_date = date(start_ym[0], start_ym[1], 1)
     end_ym = _add_months(start_ym, window_months)
@@ -126,7 +132,9 @@ def run_one_window(
     parquet_store = ParquetStore(sys_env.get_parquet_root_dir())
 
     LOG.info(f"[{label}] window {start_str} -> {end_str}")
-    series_list = load_leadlag_series(parquet_store, market_lead, market_lag, param_ids, dt_range)
+    series_list = load_leadlag_series(
+        parquet_store, market_lead, market_lag, param_ids, dt_range
+    )
     if not series_list:
         LOG.warning(f"[{label}] no data, skipping.")
         return None
@@ -134,7 +142,9 @@ def run_one_window(
     scores, std_scores = aggregate_weekly(series_list, bin_size_sec)
     active_window = print_active_window(scores, bin_size_sec)
     stability = run_stability_check(series_list, bin_size_sec, active_window)
-    raw_strength = raw_strength_stats(parquet_store, market_lead, market_lag, param_ids, dt_range)
+    raw_strength = raw_strength_stats(
+        parquet_store, market_lead, market_lag, param_ids, dt_range
+    )
 
     stem = (
         f"leadlag_curve_{market_lead.exchange_name.name}_{market_lead.symbol.name}"
@@ -163,7 +173,13 @@ def run_one_window(
         f"LeadLagCurve — {market_lead.exchange_name.name}:{market_lead.symbol.name} -> "
         f"{market_lag.exchange_name.name}:{market_lag.symbol.name}\n{start_str} → {end_str}  (bin={bin_size_sec}s)"
     )
-    plot_heatmap(scores, bin_size_sec, title, png_path, value_label="|lead-lag corr| (z-scored, 0-1)")
+    plot_heatmap(
+        scores,
+        bin_size_sec,
+        title,
+        png_path,
+        value_label="|lead-lag corr| (z-scored, 0-1)",
+    )
 
     chrono_corr = stability.get("chronological", {}).get("overall_corr")
     interleaved_corr = stability.get("interleaved", {}).get("overall_corr")
@@ -179,7 +195,9 @@ def run_one_window(
         "chronological_corr": chrono_corr,
         "interleaved_corr": interleaved_corr,
         "active_inactive_ratio": ratio,
-        "mean_abs_corr_weekday": raw_strength["mean_abs_corr_weekday"] if raw_strength else None,
+        "mean_abs_corr_weekday": raw_strength["mean_abs_corr_weekday"]
+        if raw_strength
+        else None,
         "json_path": str(json_path),
         "png_path": str(png_path),
     }
@@ -211,9 +229,17 @@ def plot_trend(results: list[dict], output_path: Path) -> None:
     lines1, labels1 = ax1.get_legend_handles_labels()
     lines2, labels2 = ax2.get_legend_handles_labels()
     ax1.legend(lines1 + lines2, labels1 + labels2, loc="upper left", fontsize=8)
-    ax1.set_title("Rolling 3-month LeadLagCurve: shape stability (top) vs raw strength (bottom)")
+    ax1.set_title(
+        "Rolling 3-month LeadLagCurve: shape stability (top) vs raw strength (bottom)"
+    )
 
-    ax3.plot(x, raw_strength, marker="d", color="#9b59b6", label="raw mean |ll_max_corr| (weekday, unnormalized)")
+    ax3.plot(
+        x,
+        raw_strength,
+        marker="d",
+        color="#9b59b6",
+        label="raw mean |ll_max_corr| (weekday, unnormalized)",
+    )
     ax3.set_ylabel("raw |correlation|")
     ax3.set_xticks(list(x))
     ax3.set_xticklabels(labels, rotation=45, ha="right", fontsize=8)
@@ -250,7 +276,16 @@ def main(
     for start in windows:
         window_end = _add_months(start, window_months - 1)
         label = f"{start[0]:04d}{start[1]:02d}-{window_end[0]:04d}{window_end[1]:02d}"
-        r = run_one_window(market_lead, market_lag, param_ids, start, window_months, bin_size_sec, output_dir, label)
+        r = run_one_window(
+            market_lead,
+            market_lag,
+            param_ids,
+            start,
+            window_months,
+            bin_size_sec,
+            output_dir,
+            label,
+        )
         if r is not None:
             results.append(r)
 
@@ -280,20 +315,55 @@ def main(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Rolling N-month LeadLagCurve stability/strength analysis.")
+    parser = argparse.ArgumentParser(
+        description="Rolling N-month LeadLagCurve stability/strength analysis."
+    )
     parser.add_argument("--pair", help="Known pair shorthand, e.g. btc, eth, xrp, sol")
-    parser.add_argument("--lead-market", help="e.g. BINANCE:ETH_USDT -- alternative to --pair")
-    parser.add_argument("--lag-market", help="e.g. GMO:ETH_JPY -- alternative to --pair")
-    parser.add_argument("--configs", default="mid", help="Comma-separated subset of {nearhft,mid} (default: mid)")
-    parser.add_argument("--start-month", required=True, help="First window's start month, YYYY-MM")
-    parser.add_argument("--end-window-start-month", required=True, help="Last window's start month, YYYY-MM")
-    parser.add_argument("--window-months", type=int, default=3, help="Window length in calendar months (default: 3)")
-    parser.add_argument("--step-months", type=int, default=1, help="Step between windows in months (default: 1)")
-    parser.add_argument("--bin-size", type=int, default=300, help="Curve bin size in seconds (default: 300)")
-    parser.add_argument("--output-dir", default="models", help="Output directory (default: models/)")
+    parser.add_argument(
+        "--lead-market", help="e.g. BINANCE:ETH_USDT -- alternative to --pair"
+    )
+    parser.add_argument(
+        "--lag-market", help="e.g. GMO:ETH_JPY -- alternative to --pair"
+    )
+    parser.add_argument(
+        "--configs",
+        default="mid",
+        help="Comma-separated subset of {nearhft,mid} (default: mid)",
+    )
+    parser.add_argument(
+        "--start-month", required=True, help="First window's start month, YYYY-MM"
+    )
+    parser.add_argument(
+        "--end-window-start-month",
+        required=True,
+        help="Last window's start month, YYYY-MM",
+    )
+    parser.add_argument(
+        "--window-months",
+        type=int,
+        default=3,
+        help="Window length in calendar months (default: 3)",
+    )
+    parser.add_argument(
+        "--step-months",
+        type=int,
+        default=1,
+        help="Step between windows in months (default: 1)",
+    )
+    parser.add_argument(
+        "--bin-size",
+        type=int,
+        default=300,
+        help="Curve bin size in seconds (default: 300)",
+    )
+    parser.add_argument(
+        "--output-dir", default="models", help="Output directory (default: models/)"
+    )
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+    )
 
     if args.pair and (args.lead_market or args.lag_market):
         parser.error("--pair is mutually exclusive with --lead-market/--lag-market.")

@@ -1,5 +1,4 @@
 import logging
-from typing import Dict
 
 import pandas as pd
 
@@ -19,17 +18,21 @@ def _window_to_span_steps(index: pd.DatetimeIndex, window: str) -> int:
         return 2
 
     window_td = pd.Timedelta(window)
-    span_steps = int(round(window_td / step))
+    span_steps = round(window_td / step)
     return max(2, span_steps)
 
 
-def build_trend_features(source_df: pd.DataFrame, features: Dict[str, pd.Series], trend_windows: list[str]) -> None:
+def build_trend_features(
+    source_df: pd.DataFrame, features: dict[str, pd.Series], trend_windows: list[str]
+) -> None:
     """Build price trend and momentum features (Section 6)."""
     LOG.info("Building trend features...")
     mid = source_df["mid"]
     if mid.index.duplicated().any():
         n_dupes = mid.index.duplicated().sum()
-        LOG.warning(f"build_trend_features: {n_dupes} duplicate timestamps in source_df, deduplicating (keep=last)")
+        LOG.warning(
+            f"build_trend_features: {n_dupes} duplicate timestamps in source_df, deduplicating (keep=last)"
+        )
         mid = mid[~mid.index.duplicated(keep="last")]
 
     for w in trend_windows:
@@ -41,4 +44,6 @@ def build_trend_features(source_df: pd.DataFrame, features: Dict[str, pd.Series]
     span_slow = _window_to_span_steps(mid.index, trend_windows[-1])
     ema_fast = mid.ewm(span=span_fast, adjust=False).mean()
     ema_slow = mid.ewm(span=span_slow, adjust=False).mean()
-    features[f"tr_ema_spread_{trend_windows[0]}_{trend_windows[-1]}"] = (ema_fast / (ema_slow + EPS)) - 1
+    features[f"tr_ema_spread_{trend_windows[0]}_{trend_windows[-1]}"] = (
+        ema_fast / (ema_slow + EPS)
+    ) - 1

@@ -10,8 +10,8 @@ Reference: doc/lead_lag_spec.md
 
 import logging
 from collections import deque
+from collections.abc import Generator
 from dataclasses import dataclass
-from typing import Generator
 
 import numpy as np
 import pandas as pd
@@ -63,9 +63,7 @@ class LeadLagConfig:
         spans_str = "_".join(str(s) for s in self.decay_spans_sec)
         windows_str = "_".join(str(w) for w in self.windows_sec)
         lb_str = "_".join(str(lb) for lb in self.stability_lookbacks)
-        return (
-            f"l{lags_str}_s{spans_str}_w{windows_str}_wsz{self.window_size_sec}_wst{self.window_step_sec}_lb{lb_str}"
-        )
+        return f"l{lags_str}_s{spans_str}_w{windows_str}_wsz{self.window_size_sec}_wst{self.window_step_sec}_lb{lb_str}"
 
 
 # target to hold positions for 20s-30s
@@ -241,7 +239,9 @@ def compute_sliding_windows(
                 span_steps = span_sec / resample_sec
                 alpha = 2.0 / (span_steps + 1.0)
 
-                result = compute_lead_lag_features(w_lag, w_lead, config.lag_steps, alpha)
+                result = compute_lead_lag_features(
+                    w_lag, w_lead, config.lag_steps, alpha
+                )
 
                 suffix = f"_{window_sec}s_{span_sec}s"
                 max_corr = result["ll_max_corr"]
@@ -252,7 +252,9 @@ def compute_sliding_windows(
                 # Alpha gain: How much better is the optimal lag vs zero lag?
                 # Clipped at 100.0 to prevent division-by-zero noise from dominating ML training.
                 if abs(corr_at_zero) > 1e-6:
-                    alpha_gain = float(np.clip(abs(max_corr) / abs(corr_at_zero), 1.0, 100.0))
+                    alpha_gain = float(
+                        np.clip(abs(max_corr) / abs(corr_at_zero), 1.0, 100.0)
+                    )
                 else:
                     # If corr_at_zero is basically zero, but max_corr exists, it's high gain
                     alpha_gain = 100.0 if abs(max_corr) > 1e-6 else 1.0
@@ -273,11 +275,15 @@ def compute_sliding_windows(
                     drift = 0.0
 
                 # Normalization (spec §6)
-                norm_lag = opt_lag_ms / config.max_lag_ms if config.max_lag_ms > 0 else 0.0
+                norm_lag = (
+                    opt_lag_ms / config.max_lag_ms if config.max_lag_ms > 0 else 0.0
+                )
                 # Keep units consistent with ll_opt_lag_ms (normalized [0, 1]).
                 norm_drift = drift / config.max_lag_ms if config.max_lag_ms > 0 else 0.0
 
-                fields[f"ll_corr_at_zero{suffix}"] = float(np.clip(corr_at_zero, -1.0, 1.0))
+                fields[f"ll_corr_at_zero{suffix}"] = float(
+                    np.clip(corr_at_zero, -1.0, 1.0)
+                )
                 fields[f"ll_max_corr{suffix}"] = float(np.clip(max_corr, -1.0, 1.0))
                 fields[f"ll_opt_lag_ms{suffix}"] = norm_lag
                 fields[f"ll_alpha_gain{suffix}"] = alpha_gain
@@ -291,7 +297,9 @@ def compute_sliding_windows(
                         stability = float(np.std(recent_hist))
                     else:
                         stability = 0.0
-                    fields[f"ll_lag_stability_lb{lb}{suffix}"] = float(np.log1p(stability))
+                    fields[f"ll_lag_stability_lb{lb}{suffix}"] = float(
+                        np.log1p(stability)
+                    )
 
         if fields:
             yield window_end_ts, fields

@@ -16,7 +16,9 @@ def execute(args):
         "market_a": args.market_a,
         "market_b": args.market_b,
     }
-    info = dataset_availability(dataset, partitions=partitions, start=args.start, end=args.end)
+    info = dataset_availability(
+        dataset, partitions=partitions, start=args.start, end=args.end
+    )
 
     if info.get("state") == "unknown_dataset":
         LOG.error(info["error"])
@@ -115,10 +117,35 @@ def register_cli(sub):
     )
     p.add_argument("--exchange", default=None, help="Exchange name, e.g. GMO, BINANCE")
     p.add_argument("--symbol", default=None, help="Symbol name, e.g. BTC_JPY, BTC_USDT")
-    p.add_argument("--execution-size", dest="execution_size", default=None, help="Required for MarketPrice, VolSpread")
-    p.add_argument("--param-id", dest="param_id", default=None, help="Required for VolSpread, Chart_*, LeadLag")
-    p.add_argument("--market-a", dest="market_a", default=None, help="Required for LeadLag (e.g. BINANCE:BTC_USDT)")
-    p.add_argument("--market-b", dest="market_b", default=None, help="Required for LeadLag")
-    p.add_argument("--start", default=None, help="Start date YYYY-MM-DD — narrows the missing-date check window")
-    p.add_argument("--end", default=None, help="End date YYYY-MM-DD — narrows the missing-date check window")
+    p.add_argument(
+        "--execution-size",
+        dest="execution_size",
+        default=None,
+        help="Required for MarketPrice, VolSpread",
+    )
+    p.add_argument(
+        "--param-id",
+        dest="param_id",
+        default=None,
+        help="Required for VolSpread, Chart_*, LeadLag",
+    )
+    p.add_argument(
+        "--market-a",
+        dest="market_a",
+        default=None,
+        help="Required for LeadLag (e.g. BINANCE:BTC_USDT)",
+    )
+    p.add_argument(
+        "--market-b", dest="market_b", default=None, help="Required for LeadLag"
+    )
+    p.add_argument(
+        "--start",
+        default=None,
+        help="Start date YYYY-MM-DD — narrows the missing-date check window",
+    )
+    p.add_argument(
+        "--end",
+        default=None,
+        help="End date YYYY-MM-DD — narrows the missing-date check window",
+    )
     p.set_defaults(func=execute)

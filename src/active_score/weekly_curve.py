@@ -12,8 +12,9 @@ import logging
 import numpy as np
 import pandas as pd
 from qate.core.model import Market
-from makalu.storage.parquet_store import ParquetStore
 from qate.util.dt_range import DtRange
+
+from makalu.storage.parquet_store import ParquetStore
 
 LOG = logging.getLogger(__name__)
 
@@ -53,11 +54,15 @@ def load_volspread_series(
         for col in ("volatility_ema", "spread_pct_ema"):
             if col not in df.columns:
                 continue
-            z = zscore_normalize(pd.Series(df[col].values, index=index, name=f"{param_id}:{col}"))
+            z = zscore_normalize(
+                pd.Series(df[col].values, index=index, name=f"{param_id}:{col}")
+            )
             if z is not None:
                 series_list.append(z)
             else:
-                LOG.warning(f"param_id={param_id} column={col} has no variance after resampling, skipping.")
+                LOG.warning(
+                    f"param_id={param_id} column={col} has no variance after resampling, skipping."
+                )
     return series_list
 
 
@@ -89,15 +94,21 @@ def load_leadlag_series(
             LOG.warning(f"param_id={param_id} has no ll_max_corr* columns, skipping.")
             continue
         for col in corr_cols:
-            z = zscore_normalize(pd.Series(df[col].abs().values, index=index, name=f"{param_id}:{col}"))
+            z = zscore_normalize(
+                pd.Series(df[col].abs().values, index=index, name=f"{param_id}:{col}")
+            )
             if z is not None:
                 series_list.append(z)
             else:
-                LOG.warning(f"param_id={param_id} column={col} has no variance after resampling, skipping.")
+                LOG.warning(
+                    f"param_id={param_id} column={col} has no variance after resampling, skipping."
+                )
     return series_list
 
 
-def aggregate_weekly(series_list: list[pd.Series], bin_size_sec: int) -> tuple[np.ndarray, np.ndarray]:
+def aggregate_weekly(
+    series_list: list[pd.Series], bin_size_sec: int
+) -> tuple[np.ndarray, np.ndarray]:
     """Combine already-normalized series into one (mean, std) pair of
     [7, n_bins] arrays, binned by (day_of_week, time_of_day // bin_size_sec).
     mean is min-max normalized to [0, 1]; std is scaled by the same factor.
@@ -109,7 +120,9 @@ def aggregate_weekly(series_list: list[pd.Series], bin_size_sec: int) -> tuple[n
 
     combined = pd.concat(series_list)
     dow = combined.index.dayofweek
-    seconds = combined.index.hour * 3600 + combined.index.minute * 60 + combined.index.second
+    seconds = (
+        combined.index.hour * 3600 + combined.index.minute * 60 + combined.index.second
+    )
     bin_idx = seconds // bin_size_sec
 
     n_bins = 86400 // bin_size_sec

@@ -1,12 +1,16 @@
-"""Makalu-owned data paths; environment and credentials come from qate-env."""
+"""Where Makalu's data is; environment and credentials come from qate-env.
+
+The datalake root is Komachi's answer (`ROOT_PATH` in ~/.kamakuraquantlab.env):
+Kitakamakura writes bronze there, Komachi says where a market-day is, and
+Makalu derives silver and gold beside it.
+"""
 import os
-from qate_env.sys_env import get_api_keys, get_env_root_dir, get_influxdb, get_secret_dir, load_env, read_keys
 
-MARKET_DATA_DIR = os.environ.get("MAKALU_MARKET_DATA_DIR", "/panda/market-data")
-PARQUET_ROOT_DIR = os.environ.get("MAKALU_PARQUET_ROOT_DIR", "/panda/makalu-data")
+import komachi
+from qate_env.sys_env import get_api_keys, get_env_root_dir, get_influxdb, get_secret_dir, read_keys  # noqa: F401
 
-def get_market_data_dir():
-    return MARKET_DATA_DIR
+PARQUET_ROOT_DIR = str(komachi.data_root())
+MANIFEST_PATH = os.path.join(PARQUET_ROOT_DIR, "manifest.db")
 
 def get_parquet_root_dir():
     return PARQUET_ROOT_DIR

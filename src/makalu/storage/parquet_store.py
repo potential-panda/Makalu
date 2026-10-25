@@ -7,7 +7,8 @@ from pathlib import Path
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
-
+from komachi import bronze as komachi_bronze
+from komachi.layout import data_path as komachi_data_path
 from qate.core.ev_type import EventType
 from qate.core.model import Market, OrderBook, OrderLevel, Side, Trade
 from qate.util.dt_range import DtRange, TimeFormat
@@ -85,9 +86,13 @@ class TimeSeriesStore(ABC):
         #     existing_table = pq.read_table(parquet_path)
         #     table = pa.concat_tables([existing_table, table])
         pq.write_table(table, parquet_path, compression="zstd")
-        LOG.info(f"Flushed {len(self._buffer)} records to {parquet_path} (total: {table.num_rows} records)")
+        LOG.info(
+            f"Flushed {len(self._buffer)} records to {parquet_path} (total: {table.num_rows} records)"
+        )
         if self.manifest:
-            self.manifest.record_write(str(parquet_path), table.num_rows, parquet_path.stat().st_size)
+            self.manifest.record_write(
+                str(parquet_path), table.num_rows, parquet_path.stat().st_size
+            )
         self._buffer.clear()
 
     def read_a_day(self, date_str) -> pd.DataFrame:
@@ -115,8 +120,12 @@ class TimeSeriesStore(ABC):
             # Filter by exact timestamp range
             if result.empty:
                 return result
-            result = result[(result["ts"] >= dt_range.start_ts) & (result["ts"] <= dt_range.end_ts)]
-            LOG.info(f"Read {len(result)} records for range{dt_range.start_str} to {dt_range.end_str}")
+            result = result[
+                (result["ts"] >= dt_range.start_ts) & (result["ts"] <= dt_range.end_ts)
+            ]
+            LOG.info(
+                f"Read {len(result)} records for range{dt_range.start_str} to {dt_range.end_str}"
+            )
         elif isinstance(date_arg, list):
             days = date_arg
             result = self.read_days(days)
@@ -145,7 +154,10 @@ class TimeSeriesStore(ABC):
                     # Concatenate incrementally to avoid doubling memory usage
                     result = pd.concat([result, df], ignore_index=True)
                     for w in caught:
-                        if "DataFrame concatenation with empty or all-NA entries" in str(w.message):
+                        if (
+                            "DataFrame concatenation with empty or all-NA entries"
+                            in str(w.message)
+                        ):
                             all_na_cols = df.columns[df.isna().all()].tolist()
                             message = (
                                 f"FutureWarning during concat: day={day}, days={days}, "
@@ -173,7 +185,9 @@ class TimeSeriesStore(ABC):
         # Handle DatetimeIndex
         if ts_column is None:
             if not isinstance(df.index, pd.DatetimeIndex):
-                raise ValueError("DataFrame must have DatetimeIndex when ts_column is None")
+                raise ValueError(
+                    "DataFrame must have DatetimeIndex when ts_column is None"
+                )
             for idx, row in df.iterrows():
                 ts = idx.timestamp()
                 data = row.to_dict()
@@ -263,7 +277,9 @@ class SingleMarketStore(TimeSeriesStore):
     /root_dir/dataset=$dataset/exchange=$exchange/symbol=$symbol/date=$YYYY-MM-DD/data.parquet
     """
 
-    def __init__(self, root_dir: str, dataset: str, market: Market, param_id: str | None = None):
+    def __init__(
+        self, root_dir: str, dataset: str, market: Market, param_id: str | None = None
+    ):
         super().__init__(root_dir, dataset)
         self.market = market
         # Named distinctly from subclasses' own `self.param_id` (VolSpreadStore,
@@ -286,7 +302,43 @@ class SingleMarketStore(TimeSeriesStore):
         return keys
 
 
-class TradeStore(SingleMarketStore):
+class BronzeStore(SingleMarketStore):
+    """Read-only bronze. Kitakamakura writes it; Komachi says where a market-day is.
+
+    `root_dir` is the datalake's bronze directory, so the datalake root handed
+    to Komachi is its parent. A day Komachi does not hold reads as empty, the
+    same as a missing file for every other layer.
+    """
+
+    def __init__(self, root_dir: str, dataset: str, market: Market):
+        super().__init__(root_dir, dataset, market)
+        self._datalake_root = Path(root_dir).parent
+
+    def _get_parquet_path(self, time_key: str) -> Path:
+        return komachi_data_path(
+            self._datalake_root, self.market.id, self.dataset, time_key
+        )
+
+    def read_a_day(self, date_str) -> pd.DataFrame:
+        try:
+            parquet_path = komachi_bronze.file(
+                self.market.id, self.dataset, str(date_str), root=self._datalake_root
+            )
+        except komachi_bronze.MissingData:
+            LOG.info(f"No bronze {self.dataset} for {self.market.id} on {date_str}")
+            return pd.DataFrame()
+        LOG.info(f"Reading from {parquet_path}")
+        try:
+            return pd.read_parquet(parquet_path)
+        except Exception as e:
+            LOG.warning(f"Failed to read {parquet_path}: {e}")
+            return pd.DataFrame()
+
+    def add(self, ts: float, data: dict) -> None:
+        raise TypeError("Bronze is written by Kitakamakura, not Makalu")
+
+
+class TradeStore(BronzeStore):
     def __init__(self, root_dir: str, market: Market):
         super().__init__(root_dir, "Trade", market)
 
@@ -309,16 +361,6 @@ class TradeStore(SingleMarketStore):
             trades.append(self.convert_to_trade(row))
         return trades
 
-    def add_trade(self, trade: Trade):
-        self.add(
-            trade.get_ts(),
-            {
-                "side": 0 if trade.side == Side.BUY else 1,
-                "price": trade.price,
-                "size": trade.size,
-            },
-        )
-
     def load(self, date_str: str):  # MarketDataLoader interface
         results = []
         df = self.read_a_day(date_str)
@@ -327,16 +369,10 @@ class TradeStore(SingleMarketStore):
         return results
 
 
-class OrderBookStore(SingleMarketStore):
+class OrderBookStore(BronzeStore):
     def __init__(self, root_dir: str, market: Market, depth: int = 20):
         super().__init__(root_dir, "OrderBook", market)
         self._depth = depth
-        cols = ["ts"]
-        for i in range(depth):
-            cols += [f"bid{i}_price", f"bid{i}_qty"]
-        for i in range(depth):
-            cols += [f"ask{i}_price", f"ask{i}_qty"]
-        self._cols = cols
 
     def convert_to_order_book(self, row) -> OrderBook:
         depth = self._depth
@@ -368,22 +404,13 @@ class OrderBookStore(SingleMarketStore):
             order_books.append(self.convert_to_order_book(row))
         return order_books
 
-    def add_order_book(self, order_book: OrderBook):
-        depth = self._depth
-        fields = {}
-        for i, level in enumerate(order_book.bids[:depth]):
-            fields[f"bid{i}_price"] = level.price
-            fields[f"bid{i}_qty"] = level.amount
-        for i, level in enumerate(order_book.asks[:depth]):
-            fields[f"ask{i}_price"] = level.price
-            fields[f"ask{i}_qty"] = level.amount
-        self.add(order_book.get_ts(), fields)
-
     def load(self, date_str: str):  # MarketDataLoader interface
         results = []
         df = self.read_a_day(date_str)
         for row in df.itertuples(index=False):
-            results.append((EventType.MARKET_ORDER_BOOK, self.convert_to_order_book(row)))
+            results.append(
+                (EventType.MARKET_ORDER_BOOK, self.convert_to_order_book(row))
+            )
         return results
 
 
@@ -398,7 +425,10 @@ class ExecutionPriceStore(SingleMarketStore):
         self.execution_size_str = execution_size_str
 
     def get_partition_keys(self) -> dict[str, str]:
-        return {**super().get_partition_keys(), "execution_size": self.execution_size_str}
+        return {
+            **super().get_partition_keys(),
+            "execution_size": self.execution_size_str,
+        }
 
 
 class LabelStore(SingleMarketStore):
@@ -425,7 +455,14 @@ class ChartStore(SingleMarketStore):
 
 
 class CrossMarketStore(TimeSeriesStore):
-    def __init__(self, root_dir: str, dataset: str, market_a: Market, market_b: Market, param_id: str | None = None):
+    def __init__(
+        self,
+        root_dir: str,
+        dataset: str,
+        market_a: Market,
+        market_b: Market,
+        param_id: str | None = None,
+    ):
         super().__init__(root_dir, dataset)
         self.market_a = market_a
         self.market_b = market_b
@@ -446,7 +483,9 @@ class LeadLagStore(CrossMarketStore):
     /root_dir/dataset=LeadLag/market_a=BINANCE:BTC_USDT/market_b=GMO:BTC_JPY/param_id=$param_id/date=20990101/data.parquet
     """
 
-    def __init__(self, root_dir: str, market_lead: Market, market_lag: Market, param_id: str):
+    def __init__(
+        self, root_dir: str, market_lead: Market, market_lag: Market, param_id: str
+    ):
         super().__init__(root_dir, "LeadLag", market_lead, market_lag)
         self.param_id = param_id
 
@@ -455,7 +494,9 @@ class LeadLagStore(CrossMarketStore):
 
 
 class VolSpreadStore(SingleMarketStore):
-    def __init__(self, root_dir: str, market: Market, execution_size_str: str, param_id: str):
+    def __init__(
+        self, root_dir: str, market: Market, execution_size_str: str, param_id: str
+    ):
         super().__init__(root_dir, "VolSpread", market)
         self.execution_size_str = execution_size_str
         self.param_id = param_id
@@ -532,38 +573,93 @@ class ParquetStore:
         return self._m(OrderBookStore(self.layer_dir[Layer.BRONZE], market))
 
     # SILVER
-    def create_single_market(self, dataset: str, market: Market, layer: Layer = Layer.SILVER, param_id: str | None = None):
-        return self._m(SingleMarketStore(self.layer_dir[layer], dataset, market, param_id))
+    def create_single_market(
+        self,
+        dataset: str,
+        market: Market,
+        layer: Layer = Layer.SILVER,
+        param_id: str | None = None,
+    ):
+        return self._m(
+            SingleMarketStore(self.layer_dir[layer], dataset, market, param_id)
+        )
 
-    def create_cross_market(self, dataset: str, market_a: Market, market_b: Market, layer: Layer = Layer.GOLD, param_id: str | None = None):
-        return self._m(CrossMarketStore(self.layer_dir[layer], dataset, market_a, market_b, param_id))
+    def create_cross_market(
+        self,
+        dataset: str,
+        market_a: Market,
+        market_b: Market,
+        layer: Layer = Layer.GOLD,
+        param_id: str | None = None,
+    ):
+        return self._m(
+            CrossMarketStore(
+                self.layer_dir[layer], dataset, market_a, market_b, param_id
+            )
+        )
 
     def create_execution_price(self, market: Market, execution_size_str: str):
-        return self._m(ExecutionPriceStore(self.layer_dir[Layer.SILVER], market, execution_size_str))
+        return self._m(
+            ExecutionPriceStore(
+                self.layer_dir[Layer.SILVER], market, execution_size_str
+            )
+        )
 
     # GOLD
     def create_chart(self, bar_type: str, market: Market, param_id: str):
-        return self._m(ChartStore(self.layer_dir[Layer.GOLD], bar_type, market, param_id))
+        return self._m(
+            ChartStore(self.layer_dir[Layer.GOLD], bar_type, market, param_id)
+        )
 
     def create_lead_lag(self, market_lead: Market, market_lag: Market, param_id: str):
-        return self._m(LeadLagStore(self.layer_dir[Layer.GOLD], market_lead, market_lag, param_id))
+        return self._m(
+            LeadLagStore(self.layer_dir[Layer.GOLD], market_lead, market_lag, param_id)
+        )
 
     def create_vol_spread(self, market: Market, execution_size_str: str, param_id: str):
-        return self._m(VolSpreadStore(self.layer_dir[Layer.GOLD], market, execution_size_str, param_id))
+        return self._m(
+            VolSpreadStore(
+                self.layer_dir[Layer.GOLD], market, execution_size_str, param_id
+            )
+        )
 
     def create_feature(self, market: Market, target: str):
-        return self._m(SingleMarketStore(self.layer_dir[Layer.FEATURE], f"Feature_{target}", market))
+        return self._m(
+            SingleMarketStore(
+                self.layer_dir[Layer.FEATURE], f"Feature_{target}", market
+            )
+        )
 
     # Ephemeral
     def create_label(self, label_name: str, market: Market, param_id: str):
-        return self._m(LabelStore(self.layer_dir[Layer.RESAERCH], label_name, market, param_id))
-
-    def create_pnl(self, market: Market, strategy_name: str, param_id: str, prefix: str = "Backtest"):
         return self._m(
-            SingleMarketStrategyStore(self.layer_dir[Layer.RESAERCH], f"{prefix}_Pnl", market, strategy_name, param_id)
+            LabelStore(self.layer_dir[Layer.RESAERCH], label_name, market, param_id)
+        )
+
+    def create_pnl(
+        self,
+        market: Market,
+        strategy_name: str,
+        param_id: str,
+        prefix: str = "Backtest",
+    ):
+        return self._m(
+            SingleMarketStrategyStore(
+                self.layer_dir[Layer.RESAERCH],
+                f"{prefix}_Pnl",
+                market,
+                strategy_name,
+                param_id,
+            )
         )
 
     def create_backtest_bar(self, market: Market, strategy_name: str, param_id: str):
         return self._m(
-            SingleMarketStrategyStore(self.layer_dir[Layer.RESAERCH], "Backtest_Bar", market, strategy_name, param_id)
+            SingleMarketStrategyStore(
+                self.layer_dir[Layer.RESAERCH],
+                "Backtest_Bar",
+                market,
+                strategy_name,
+                param_id,
+            )
         )

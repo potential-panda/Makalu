@@ -1,5 +1,4 @@
 import logging
-from typing import Dict, List
 
 import pandas as pd
 
@@ -9,7 +8,7 @@ LOG = logging.getLogger(__name__)
 
 
 def build_execution_price_features(
-    source_df: pd.DataFrame, features: Dict[str, pd.Series], rolling_windows: List[str]
+    source_df: pd.DataFrame, features: dict[str, pd.Series], rolling_windows: list[str]
 ):
     """Build all execution price features (Section 4)."""
     LOG.info("Building execution price features...")
@@ -31,10 +30,16 @@ def build_execution_price_features(
 
     for roll_window in rolling_windows:
         roll_suffix = f"_{roll_window}"
-        features[f"ep_slippage_zscore{roll_suffix}"] = compute_zscore(slippage_total_bps, roll_window)
-        features[f"ep_slippage_pct{roll_suffix}"] = compute_percentile(slippage_total_bps, roll_window)
+        features[f"ep_slippage_zscore{roll_suffix}"] = compute_zscore(
+            slippage_total_bps, roll_window
+        )
+        features[f"ep_slippage_pct{roll_suffix}"] = compute_percentile(
+            slippage_total_bps, roll_window
+        )
 
-    features["ep_slippage_asymmetry"] = (slippage_ask_bps - slippage_bid_bps) / (slippage_total_bps + EPS)
+    features["ep_slippage_asymmetry"] = (slippage_ask_bps - slippage_bid_bps) / (
+        slippage_total_bps + EPS
+    )
     features["ep_depth_quality"] = 1 / (slippage_total_bps + 1)
 
     exec_spread_bps = (exec_ask - exec_bid) / (mid + EPS) * 10000

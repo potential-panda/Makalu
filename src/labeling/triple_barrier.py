@@ -15,7 +15,6 @@ Reference: "Advances in Financial Machine Learning" by Marcos López de Prado
 
 import logging
 from dataclasses import dataclass
-from typing import Tuple
 
 import numpy as np
 import pandas as pd
@@ -112,7 +111,7 @@ def _compute_labels_numba(
     pt_pct: np.ndarray,
     sl_pct: np.ndarray,
     timeout_ns: int,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Numba-optimized inner loop for tick-level triple-barrier label computation with PnL.
 
@@ -249,17 +248,21 @@ def ts_index(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def calculate_volatility_and_spread(df: pd.DataFrame, config: TripleBarrierConfig) -> pd.DataFrame:
+def calculate_volatility_and_spread(
+    df: pd.DataFrame, config: TripleBarrierConfig
+) -> pd.DataFrame:
     df = df.sort_index()
 
     # Calculate time-based parameters
     dt = pd.Timedelta(config.vol_resample_interval).total_seconds()
-    shift_periods = int(round(config.return_shift_sec / dt))
-    lookback_periods = int(round(config.volatility_lookback_sec / dt))
+    shift_periods = round(config.return_shift_sec / dt)
+    lookback_periods = round(config.volatility_lookback_sec / dt)
 
     # Resample to fixed interval
     mid_resampled = df["mid"].resample(config.vol_resample_interval).last().ffill()
-    spread_resampled = df["spread"].resample(config.vol_resample_interval).last().ffill()
+    spread_resampled = (
+        df["spread"].resample(config.vol_resample_interval).last().ffill()
+    )
 
     # Calculate returns and volatility
     returns = mid_resampled.pct_change(periods=shift_periods)
@@ -287,7 +290,9 @@ def calculate_volatility_and_spread(df: pd.DataFrame, config: TripleBarrierConfi
     return df
 
 
-def generate_labels(df: pd.DataFrame, config: TripleBarrierConfig, exclude_edge: bool = True) -> LabelingResult:
+def generate_labels(
+    df: pd.DataFrame, config: TripleBarrierConfig, exclude_edge: bool = True
+) -> LabelingResult:
     df = ts_index(df)
 
     # Calculate volatility and barrier levels
@@ -299,7 +304,9 @@ def generate_labels(df: pd.DataFrame, config: TripleBarrierConfig, exclude_edge:
 
     # Exclude edge effect (last timeout_sec of data)
     if exclude_edge and not result.labels_df.empty:
-        cutoff_time = result.labels_df.index.max() - pd.Timedelta(seconds=config.timeout_sec)
+        cutoff_time = result.labels_df.index.max() - pd.Timedelta(
+            seconds=config.timeout_sec
+        )
         result.labels_df = result.labels_df.loc[result.labels_df.index <= cutoff_time]
 
         # Recalculate statistics
@@ -324,7 +331,9 @@ def generate_labels(df: pd.DataFrame, config: TripleBarrierConfig, exclude_edge:
     return result
 
 
-def filter_by_vol_spread_ratio(df: pd.DataFrame, min_vol_spread_ratio: float) -> pd.DataFrame:
+def filter_by_vol_spread_ratio(
+    df: pd.DataFrame, min_vol_spread_ratio: float
+) -> pd.DataFrame:
     """
     Filter DataFrame to keep only rows where volatility exceeds spread by the configured ratio.
 

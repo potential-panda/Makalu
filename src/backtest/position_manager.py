@@ -6,7 +6,6 @@ Manages positions and handles trade entry/exit based on triple barrier logic.
 
 import logging
 from dataclasses import dataclass
-from typing import Optional, Tuple
 
 LOG = logging.getLogger(__name__)
 
@@ -43,7 +42,7 @@ class PositionManager:
 
     def __init__(self, config: PositionConfig):
         self.config = config
-        self._position: Optional[Position] = None
+        self._position: Position | None = None
 
     @property
     def has_position(self) -> bool:
@@ -51,7 +50,7 @@ class PositionManager:
         return self._position is not None
 
     @property
-    def position(self) -> Optional[Position]:
+    def position(self) -> Position | None:
         """Get the current position."""
         return self._position
 
@@ -107,7 +106,7 @@ class PositionManager:
         ts: float,
         bid: float,
         ask: float,
-    ) -> Tuple[bool, Optional[float], Optional[str]]:
+    ) -> tuple[bool, float | None, str | None]:
         """
         Check if the current position should be exited.
 
@@ -176,7 +175,7 @@ class PositionManager:
 
         return False, None, None
 
-    def force_exit(self, ts: float, bid: float, ask: float) -> Tuple[float, str]:
+    def force_exit(self, ts: float, bid: float, ask: float) -> tuple[float, str]:
         """
         Force exit the current position (e.g., at end of simulation).
 

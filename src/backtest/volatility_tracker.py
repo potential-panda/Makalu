@@ -7,7 +7,6 @@ Tracks volatility and spread in real-time for trade entry filtering.
 import logging
 from collections import deque
 from dataclasses import dataclass
-from typing import Optional
 
 import numpy as np
 from qate.core.model import OrderBook
@@ -41,13 +40,17 @@ class VolatilityTracker:
 
         # Calculate number of samples needed
         self._shift_samples = int(config.return_shift_sec / config.sample_interval_sec)
-        self._lookback_samples = int(config.volatility_lookback_sec / config.sample_interval_sec)
+        self._lookback_samples = int(
+            config.volatility_lookback_sec / config.sample_interval_sec
+        )
 
         # EMA decay factor
         self._ema_alpha = 2.0 / (config.ema_span_sec / config.sample_interval_sec + 1)
 
         # Price history for return calculation (stores mid prices)
-        self._price_history: deque[float] = deque(maxlen=self._lookback_samples + self._shift_samples)
+        self._price_history: deque[float] = deque(
+            maxlen=self._lookback_samples + self._shift_samples
+        )
 
         # Return history for volatility calculation
         self._return_history: deque[float] = deque(maxlen=self._lookback_samples)
@@ -56,12 +59,12 @@ class VolatilityTracker:
         self._spread_pct_history: deque[float] = deque(maxlen=self._lookback_samples)
 
         # EMA values
-        self._volatility_ema: Optional[float] = None
-        self._spread_pct_ema: Optional[float] = None
+        self._volatility_ema: float | None = None
+        self._spread_pct_ema: float | None = None
 
         # Sampling state
-        self._last_sample_ts: Optional[float] = None
-        self._last_orderbook: Optional[OrderBook] = None
+        self._last_sample_ts: float | None = None
+        self._last_orderbook: OrderBook | None = None
 
     def on_orderbook(self, orderbook: OrderBook) -> None:
         """Process an order book update."""
@@ -104,7 +107,10 @@ class VolatilityTracker:
             if self._volatility_ema is None:
                 self._volatility_ema = volatility
             else:
-                self._volatility_ema = self._ema_alpha * volatility + (1 - self._ema_alpha) * self._volatility_ema
+                self._volatility_ema = (
+                    self._ema_alpha * volatility
+                    + (1 - self._ema_alpha) * self._volatility_ema
+                )
 
         # Update spread EMA
         if len(self._spread_pct_history) >= 1:
@@ -113,14 +119,15 @@ class VolatilityTracker:
                 self._spread_pct_ema = current_spread_pct
             else:
                 self._spread_pct_ema = (
-                    self._ema_alpha * current_spread_pct + (1 - self._ema_alpha) * self._spread_pct_ema
+                    self._ema_alpha * current_spread_pct
+                    + (1 - self._ema_alpha) * self._spread_pct_ema
                 )
 
-    def get_volatility_ema(self) -> Optional[float]:
+    def get_volatility_ema(self) -> float | None:
         """Get the current EMA-smoothed volatility."""
         return self._volatility_ema
 
-    def get_spread_pct_ema(self) -> Optional[float]:
+    def get_spread_pct_ema(self) -> float | None:
         """Get the current EMA-smoothed spread percentage."""
         return self._spread_pct_ema
 
@@ -136,9 +143,12 @@ class VolatilityTracker:
         if self._spread_pct_ema <= 0:
             return False
 
-        return self._volatility_ema > self._spread_pct_ema * self.config.min_vol_spread_ratio
+        return (
+            self._volatility_ema
+            > self._spread_pct_ema * self.config.min_vol_spread_ratio
+        )
 
-    def get_barrier_pct(self, multiplier: float) -> Optional[float]:
+    def get_barrier_pct(self, multiplier: float) -> float | None:
         """
         Get the barrier percentage based on current volatility.
 
@@ -152,7 +162,7 @@ class VolatilityTracker:
             return None
         return self._volatility_ema * multiplier
 
-    def get_last_orderbook(self) -> Optional[OrderBook]:
+    def get_last_orderbook(self) -> OrderBook | None:
         """Get the last processed order book."""
         return self._last_orderbook
 
