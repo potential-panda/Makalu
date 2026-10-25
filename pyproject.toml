@@ -57,7 +57,7 @@ py-modules = ["cli"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["makalu*", "pipeline*", "backtest*", "active_score*", "feature_engineering*", "labeling*", "lead_lag*", "simulation*", "training*"]
+include = ["makalu*", "pipeline*", "active_score*", "feature_engineering*", "labeling*", "lead_lag*", "simulation*", "training*"]
 
 # [tool.black]
 # line-length = 120
