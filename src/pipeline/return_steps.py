@@ -31,7 +31,7 @@ LOG = logging.getLogger(__name__)
 class ReturnConfig:
     """horizons_sec: the forward horizons to compute, e.g. [30, 120, 300].
     resample_interval: mid price is resampled to a regular grid first
-    (same convention as VolSpreadStep), e.g. '1s'."""
+    (the convention VolSpread used), e.g. '1s'."""
 
     horizons_sec: tuple[int, ...]
     execution_size_str: str
@@ -71,7 +71,7 @@ class ReturnStep(Step):
             # contract -- see pipeline/stages.py's ReturnDerivedStage).
             return_resampled = mid_resampled.shift(-shift_periods) / mid_resampled - 1.0
             # reindex back onto df's original tick-level index (mirrors
-            # VolSpreadStep's pattern exactly) -- a plain .join() on the
+            # the labellers' pattern exactly) -- a plain .join() on the
             # mismatched resampled-vs-tick indices left ~99.9% of rows null,
             # confirmed against real data before this fix.
             df[f"return_{horizon_sec}s"] = return_resampled.reindex(

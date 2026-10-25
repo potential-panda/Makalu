@@ -68,11 +68,11 @@ python /home/lulurun/workspace/Makalu/src/cli.py data-check \
 **2 — Populate missing silver/gold** (see `doc/data_pipeline.md` for smart populate pattern)
 
 Bronze is produced by Kitakamakura and read through Komachi; Makalu cannot download or populate it.
-Silver MarketPrice is derived by Hase, not Makalu.
+Silver MarketPrice and gold VolSpread are derived by Hase, not Makalu.
 ```bash
 hase derive MarketPrice --market GMO:BTC_JPY --execution-size 0.002 --start 2026-03-13 --end 2026-03-17
-python /home/lulurun/workspace/Makalu/src/cli.py populate VolSpread \
-  --exchange GMO --symbol BTC_JPY --start 2026-03-13 --end 2026-03-17 --execution-size 0.002
+hase derive VolSpread --market GMO:BTC_JPY --execution-size 0.002 --start 2026-03-13 --end 2026-03-17 \
+  --params 60:300:120 --params 60:900:300 --params 180:900:300 --params 300:900:300
 python /home/lulurun/workspace/Makalu/src/cli.py scan
 ```
 

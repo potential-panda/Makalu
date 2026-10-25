@@ -79,7 +79,7 @@ SELECT ts, mid, volatility_ema, spread_pct_ema
 FROM volspread
 WHERE exchange='GMO' AND symbol='BTC_JPY'
   AND execution_size='0.002'
-  AND param_id='vs_60_300_300_1s'
+  AND param_id='vs_60_300_120_1s'
   AND date >= '2026-03-01' AND date <= '2026-03-07'
 ORDER BY ts
 LIMIT 200

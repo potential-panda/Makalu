@@ -25,6 +25,17 @@ The working assumptions behind this dataset are:
 
 The goal of `VolSpread` is therefore not only to observe current conditions, but also to support learning a daily or weekly tradability pattern.
 
+## Where it is computed
+
+Hase computes `VolSpread`, and every spread and volatility figure on a grid goes through one
+function, `hase.derive.vol_spread.measure` -- the labellers in `src/labeling/` call it too.
+Makalu keeps the design (this page) and the windows it reads (`src/makalu/vol_spread.py`):
+
+```bash
+hase derive VolSpread --market GMO:BTC_JPY --execution-size 0.002 --start 2026-06-01 --end 2026-06-30 \
+  --params 60:300:120 --params 60:900:300 --params 180:900:300 --params 300:900:300
+```
+
 ## Source Data
 
 `VolSpread` uses silver `MarketPrice` as its source.

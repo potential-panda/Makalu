@@ -50,7 +50,7 @@ def execute_list_volspread(args) -> None:
                     "needs_populate": True,
                     "message": (
                         f"No VolSpread data found for {args.exchange} {args.symbol}. "
-                        "Run data-check then populate VolSpread (requires MarketPrice first)."
+                        "Derive it with hase: hase derive VolSpread --execution-size ... (needs MarketPrice)."
                     ),
                 }
             )

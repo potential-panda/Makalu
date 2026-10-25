@@ -24,7 +24,7 @@ passes it to all its Steps via a `StageContext`.
 |-------------|-------------|------------------------|
 | Bronze OrderBook (parquet) | `OrderBookDerivedStage` | `stage_context.order_books` — `list[OrderBook]` |
 | Bronze Trade (parquet) | `TradeDerivedStage` | `stage_context.trades` — `list[Trade]` |
-| Silver MarketPrice (parquet) | `ExecutionPriceDerivedStage` | `stage_context.df` — pandas DataFrame indexed by ts |
+| Silver MarketPrice (parquet) | `ReturnDerivedStage` | `stage_context.price_df` — pandas DataFrame indexed by ts |
 
 All Stage classes are in `src/pipeline/stages.py`.
 

@@ -19,6 +19,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
+from hase.derive.vol_spread import measure
 from numba import jit
 
 from .triple_barrier import ts_index
@@ -201,20 +202,21 @@ def calculate_spread_and_barriers(
     df = df.sort_index()
 
     dt = pd.Timedelta(config.vol_resample_interval).total_seconds()
-    shift_periods = round(config.return_shift_sec / dt)
-    lookback_periods = round(config.volatility_lookback_sec / dt)
-
     mid_resampled = df["mid"].resample(config.vol_resample_interval).last().ffill()
     spread_resampled = (
         df["spread"].resample(config.vol_resample_interval).last().ffill()
     )
-
-    returns = mid_resampled.pct_change(periods=shift_periods)
-    volatility = returns.rolling(window=lookback_periods, min_periods=1).std()
-    spread_pct = spread_resampled / mid_resampled
-
-    volatility_ema = volatility.ewm(span=config.ema_span_sec, adjust=False).mean()
-    spread_pct_ema = spread_pct.ewm(span=config.ema_span_sec, adjust=False).mean()
+    figures = measure(
+        mid_resampled,
+        spread_resampled,
+        step=dt,
+        horizon=config.return_shift_sec,
+        lookback=config.volatility_lookback_sec,
+        smooth=config.ema_span_sec,
+        spread_smooth=config.ema_span_sec,
+    )
+    volatility_ema = pd.Series(figures["volatility_ema"], index=mid_resampled.index)
+    spread_pct_ema = pd.Series(figures["spread_pct_ema"], index=mid_resampled.index)
 
     df["volatility_ema"] = volatility_ema.reindex(df.index, method="ffill")
     df["spread_pct_ema"] = spread_pct_ema.reindex(df.index, method="ffill")

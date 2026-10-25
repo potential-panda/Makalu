@@ -8,7 +8,6 @@ from qate.util.dt_range import DtRange
 from labeling.triple_barrier import ts_index
 from lead_lag.lead_lag import prepare_returns
 
-from .execution_price_derived_steps import Context as ExecutionPriceDerivedContext
 from .framework import NoDataForChunk, PipelineContext, Stage, StageContext
 from .lead_lag_steps import Context as LeadLagContext
 from .order_book_derived_steps import Context as OrderBookDerivedContext
@@ -177,37 +176,9 @@ class LeadLagStage(Stage):
         )
 
 
-class ExecutionPriceDerivedStage(Stage):
-    def __init__(self, market: Market, execution_size_str: str):
-        super().__init__()
-        self.market = market
-        self.execution_size_str = execution_size_str
-
-    def before(
-        self, dt_range: DtRange, pipeline_context: PipelineContext
-    ) -> StageContext:
-        parquet_store = pipeline_context.parquet_store.create_execution_price(
-            self.market,
-            self.execution_size_str,
-        )
-        read_range = DtRange(dt_range.start_dt - timedelta(hours=8), dt_range.end_dt)
-        df = _safe_read(
-            parquet_store.read, read_range, label=f"ExecutionPrice {self.market.id}"
-        )
-        df = df.sort_index()
-        df = ts_index(df)
-
-        return ExecutionPriceDerivedContext(
-            dt_range,
-            self.market,
-            self.execution_size_str,
-            df,
-        )
-
-
 class ReturnDerivedStage(Stage):
     """Forward returns need FUTURE data beyond dt_range.end -- unlike the
-    backward-only pad ExecutionPriceDerivedStage uses for VolSpread, this
+    backward-only pad VolSpread is read with (Hase reads the 8 hours before), this
     pads the read range forward by max_horizon_sec too. Without this, the
     last max_horizon_sec of every populate call would have a permanently
     missing return: ReturnStep's "idempotent, later dates do not affect

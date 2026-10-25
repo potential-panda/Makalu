@@ -200,9 +200,12 @@ Column naming pattern: `ll_{metric}_{window}s_{span}s`
 
 ### dataset=VolSpread
 
-Source: MarketPrice
-Grain: resampled to 1s intervals
-Partitioned by: `exchange`, `symbol`, `execution_size`, `param_id`
+Written by Hase: `hase derive VolSpread --execution-size ... --params H:L:S` (formula:
+`hase.derive.vol_spread.measure`). Makalu only reads it; the windows it reads are
+`src/makalu/vol_spread.py`.
+Source: MarketPrice at `execution_size` (Hase also writes `execution_size=touch`, the top of the book)
+Grain: resampled to 1s intervals; each day read with the 8 hours before it
+Partitioned by: `exchange`, `symbol`, `execution_size`, `param_id` (`vs_<horizon>_<lookback>_<smooth>_<step>s`)
 
 **SQL note:** always include `param_id` in the WHERE clause — without it the query scans every
 param combination and returns mixed results. Discover available values first:
@@ -221,6 +224,8 @@ param combination and returns mixed results. Discover available values first:
 | `volatility_ema` | `EMA(volatility_raw, span=smooth_sec)` |
 | `spread_pct_ema` | `EMA(spread_pct, span=lookback_sec)` |
 | `vol_spread_ratio` | `volatility_ema / spread_pct_ema` |
+| `sec` | Seconds since 00:00 JST of the partition date (Hase-written files) |
+| `rv_bps` | Realized volatility over `lookback_sec`: `sqrt(sum(log-return^2)) * 1e4` (Hase-written files) |
 
 ---
 

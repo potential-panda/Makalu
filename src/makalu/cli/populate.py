@@ -93,48 +93,14 @@ def execute_single_market(args):
     LOG.info("Done.")
 
 
-def _volspread_configs():
-    # Single source of truth for both execute_volspread (what's actually
-    # populated) and execute_activity_curve (what gets read back to build
-    # the curve) -- kept in sync with src/silver.py's own VolSpreadStep list.
-    from feature_engineering.volatility import VolSpreadConfig
-
-    return [
-        VolSpreadConfig(60, 300, 120),
-        VolSpreadConfig(60, 900, 300),
-        VolSpreadConfig(180, 900, 300),
-        VolSpreadConfig(300, 900, 300),
-    ]
-
-
-def execute_volspread(args):
-    from pipeline.execution_price_derived_steps import VolSpreadStep
-    from pipeline.framework import Pipeline
-    from pipeline.stages import ExecutionPriceDerivedStage
-
-    market = Market.from_str(f"{args.exchange}:{args.symbol}")
-    dt_range = DtRange.from_strings(args.start, args.end)
-
-    pipeline = Pipeline(_create_parquet_store(args))
-    stage = ExecutionPriceDerivedStage(market, args.execution_size)
-    for config in _volspread_configs():
-        stage = stage.step(VolSpreadStep(config))
-    pipeline.stage(stage)
-
-    LOG.info(
-        f"Populating VolSpread: {market.id} (execution_size={args.execution_size}) {args.start} → {args.end}"
-    )
-    pipeline.process(dt_range)
-    LOG.info("Done.")
-
-
 def execute_activity_curve(args):
     from makalu.storage.parquet_store import Layer
     from pipeline.curve_steps import build_activity_curve_rows
 
     market = Market.from_str(f"{args.exchange}:{args.symbol}")
     dt_range = DtRange.from_strings(args.start, args.end)
-    param_ids = [c.param_id for c in _volspread_configs()]
+    from makalu.vol_spread import VOLSPREAD_PARAM_IDS as param_ids
+
     parquet_store = _create_parquet_store(args)
 
     LOG.info(
@@ -334,17 +300,6 @@ _DATASET_META = {
         "example": "python cli.py populate BookChange --exchange GMO --symbol BTC_JPY --start 2026-01-01 "
         "--end 2026-01-07",
     },
-    "VolSpread": {
-        "help": "Populate volatility and spread EMA metrics derived from MarketPrice (gold layer)",
-        "description": (
-            "Computes EMA of realized volatility and spread percentage from execution prices.\n"
-            "Produces 4 param_id configs: (shift=60,lookback=300,ema=120), (60,900,300),\n"
-            "                             (180,900,300), (300,900,300).\n\n"
-            "Prerequisite: MarketPrice must be populated for the same market and execution_size."
-        ),
-        "example": "python cli.py populate VolSpread --exchange GMO --symbol BTC_JPY --start 2026-01-01 "
-        "--end 2026-01-07 --execution-size 0.002",
-    },
     "Return": {
         "help": "Populate forward mid-price returns at fixed horizons from MarketPrice (research layer)",
         "description": (
@@ -432,17 +387,6 @@ def _register_dataset_single_market(
         "--recreate",
         action="store_true",
         help="Overwrite existing target data.parquet files instead of skipping them.",
-    )
-    return p
-
-
-def _register_volspread(sub: argparse.ArgumentParser) -> argparse.ArgumentParser:
-    p = _register_dataset_single_market(sub, "VolSpread")
-    p.add_argument(
-        "--execution-size",
-        required=True,
-        dest="execution_size",
-        help="Execution size matching the MarketPrice partition to read from, e.g. 0.002.",
     )
     return p
 
@@ -587,14 +531,16 @@ def register_cli(parser: argparse.ArgumentParser):
         description=(
             "Derive silver/gold parquet datasets from bronze. Bronze (Trade, OrderBook)\n"
             "is produced by Kitakamakura and read through Komachi; Makalu never writes it.\n"
-            "Silver MarketPrice is derived by Hase, not here:\n"
-            "  hase derive MarketPrice --market GMO:BTC_JPY --execution-size 0.002 --start ... --end ...\n\n"
+            "Silver MarketPrice and gold VolSpread are derived by Hase, not here:\n"
+            "  hase derive MarketPrice --market GMO:BTC_JPY --execution-size 0.002 --start ... --end ...\n"
+            "  hase derive VolSpread --market GMO:BTC_JPY --execution-size 0.002 --start ... --end ... \\\n"
+            "      --params 60:300:120 --params 60:900:300 --params 180:900:300 --params 300:900:300\n\n"
             "All commands are idempotent: if a target data.parquet already exists, that write is skipped.\n"
             "Use --recreate to overwrite existing target files.\n"
             "Later dates do not affect earlier ones.\n"
             "Run 'python cli.py scan' after populating to update the manifest.\n\n"
             "Data flow:\n"
-            "  bronze → MarketPrice (hase) → VolSpread → ActivityCurve\n"
+            "  bronze → MarketPrice (hase) → VolSpread (hase) → ActivityCurve\n"
             "  bronze → MarketPrice (hase) → Return\n"
             "  bronze → BookState / BookChange / TradeAggression\n"
             "  bronze (Trade) → Chart_RANGE / Chart_CANDLE / Chart_HEIKIN_ASHI\n"
@@ -613,7 +559,6 @@ def register_cli(parser: argparse.ArgumentParser):
     _register_dataset_single_market(sub, "TradeAggression").set_defaults(
         func=execute_single_market
     )
-    _register_volspread(sub).set_defaults(func=execute_volspread)
     _register_return(sub).set_defaults(func=execute_return)
     _register_leadlag(sub).set_defaults(func=execute_leadlag)
     _register_chart_range(sub).set_defaults(func=execute_chart_range)

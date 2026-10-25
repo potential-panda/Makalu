@@ -48,21 +48,12 @@ from active_score.curve_diagnostics import (
     run_stability_check,
 )
 from active_score.weekly_curve import aggregate_weekly, load_volspread_series
-from feature_engineering.volatility import VolSpreadConfig
 from makalu import settings as sys_env
 from makalu.storage.parquet_store import ParquetStore
+from makalu.vol_spread import VOLSPREAD_PARAM_IDS
 
 LOG = logging.getLogger(__name__)
 ENV_NAME = EnvName("MARIO_MARIO")
-
-# Kept in sync with populate.py's _volspread_configs() / silver.py's own
-# VolSpreadStep list -- the 4 configs actually populated for VolSpread.
-VOL_CONFIGS = [
-    VolSpreadConfig(60, 300, 120),
-    VolSpreadConfig(60, 900, 300),
-    VolSpreadConfig(180, 900, 300),
-    VolSpreadConfig(300, 900, 300),
-]
 
 
 def main(
@@ -74,7 +65,7 @@ def main(
     skip_stability_check: bool = False,
 ) -> None:
     parquet_store = ParquetStore(sys_env.get_parquet_root_dir())
-    param_ids = [c.param_id for c in VOL_CONFIGS]
+    param_ids = VOLSPREAD_PARAM_IDS
 
     LOG.info(
         f"Recomputing ActivityCurve from VolSpread for {market} / execution_size={execution_size}"

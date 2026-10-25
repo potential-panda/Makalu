@@ -6,7 +6,6 @@ from qate.util.dt_range import DtRange
 from qate_env.env import Env
 from qate_env.env_name import EnvName
 
-from feature_engineering.volatility import VolSpreadConfig
 from labeling.triple_barrier import TripleBarrierConfig
 from lead_lag.lead_lag import (
     LEAD_LAG_CONFIG_FAR,
@@ -15,7 +14,6 @@ from lead_lag.lead_lag import (
 )
 from makalu import settings as sys_env
 from makalu.storage.parquet_store import ParquetStore
-from pipeline.execution_price_derived_steps import VolSpreadStep
 from pipeline.features import (
     BookChangeFeatureStep,
     CrossInteractionsFeatureStep,
@@ -37,7 +35,6 @@ from pipeline.order_book_derived_steps import (
     PopulateBookStateStep,
 )
 from pipeline.stages import (
-    ExecutionPriceDerivedStage,
     LabelingStage,
     LeadLagStage,
     OrderBookDerivedStage,
@@ -78,29 +75,6 @@ def create_pipeline(pair_key: str, run_stages: list[str]) -> Pipeline:
             .step(
                 PopulateRangeBarStep(box_size_rate=0.001)
             )  # 0.1% range bars (example)
-        )
-
-    if "ExectuionPriceDerived" in run_stages:
-        # Param policy:
-        # - Keep return_horizon_sec responsive for frequent trading.
-        # - Require lookback_sec >= return_horizon_sec so volatility is estimated on a sensible horizon.
-        # - Keep smooth_sec shorter than lookback_sec so volatility smoothing does not become too sluggish.
-
-        # pipeline.stage(
-        #     ExecutionPriceDerivedStage(market_lead, EXECUTION_SIZE.get(market_lead.symbol))
-        #     .step(VolSpreadStep(VolSpreadConfig(60, 300, 120)))
-        #     .step(VolSpreadStep(VolSpreadConfig(60, 900, 300)))
-        #     .step(VolSpreadStep(VolSpreadConfig(180, 900, 300)))
-        #     .step(VolSpreadStep(VolSpreadConfig(300, 900, 300)))
-        # )
-        pipeline.stage(
-            ExecutionPriceDerivedStage(
-                market_lag, EXECUTION_SIZE.get(market_lag.symbol)
-            )
-            .step(VolSpreadStep(VolSpreadConfig(60, 300, 120)))
-            .step(VolSpreadStep(VolSpreadConfig(60, 900, 300)))
-            .step(VolSpreadStep(VolSpreadConfig(180, 900, 300)))
-            .step(VolSpreadStep(VolSpreadConfig(300, 900, 300)))
         )
 
     if "OrderBookDerived" in run_stages:

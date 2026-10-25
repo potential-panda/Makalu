@@ -141,7 +141,9 @@ datasets:
     description: >
       EMA-smoothed realized volatility and spread metrics resampled to 1s.
       Used as conditioning variables in feature generation and labelling.
-      param_id encodes EWM span and volatility window configuration.
+      Written by Hase (hase derive VolSpread --execution-size X --params H:L:S);
+      param_id is vs_<horizon>_<lookback>_<smooth>_<step>s. execution_size=touch
+      holds the top-of-book variant.
     grain: 1 second
     primary_timestamp: ts
     partition_columns: [exchange, symbol, execution_size, param_id]

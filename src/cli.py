@@ -15,7 +15,7 @@ DATA FLOW (must be populated in this order)
       ▼  populate BookChange / BookState / TradeAggression / MarketPrice
   silver/  derived per-tick metrics    ← requires bronze to exist first
       │
-      ▼  populate VolSpread / LeadLag / Chart_RANGE / ...
+      ▼  hase derive VolSpread; populate LeadLag / Chart_RANGE / ...
   gold/    VolSpread, LeadLag, Charts  ← requires silver/MarketPrice to exist first
 
 Makalu does not download, merge, or write bronze.
@@ -46,8 +46,8 @@ TYPICAL WORKFLOW
 
   2. Derive silver MarketPrice with Hase, then populate what depends on it:
        hase derive MarketPrice --market GMO:BTC_JPY --execution-size 0.002 --start 2026-01-01 --end 2026-01-07
-       python cli.py populate VolSpread --exchange GMO --symbol BTC_JPY --start 2026-01-01 --end 2026-01-07 \
-          --execution-size 0.002
+       hase derive VolSpread --market GMO:BTC_JPY --execution-size 0.002 --start 2026-01-01 --end 2026-01-07 \
+          --params 60:300:120 --params 60:900:300 --params 180:900:300 --params 300:900:300
 
   3. Update manifest after populating:
        python cli.py scan

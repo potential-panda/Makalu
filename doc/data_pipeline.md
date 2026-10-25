@@ -104,15 +104,14 @@ python src/cli.py populate BookChange \
 python src/cli.py populate TradeAggression \
   --exchange GMO --symbol BTC_JPY --start 2026-03-13 --end 2026-03-17
 
-# Gold
-python src/cli.py populate VolSpread \
-  --exchange GMO --symbol BTC_JPY --start 2026-03-13 --end 2026-03-17 \
-  --execution-size 0.002
+# Gold VolSpread is Hase's: one --params per window set Makalu reads
+# (src/makalu/vol_spread.py), all derived from one read of each day
+hase derive VolSpread --market GMO:BTC_JPY --execution-size 0.002 --start 2026-03-13 --end 2026-03-17 \
+  --params 60:300:120 --params 60:900:300 --params 180:900:300 --params 300:900:300
 
 # Overwrite existing target data.parquet files only when explicitly requested
-python src/cli.py populate VolSpread \
-  --exchange GMO --symbol BTC_JPY --start 2026-03-13 --end 2026-03-17 \
-  --execution-size 0.002 --recreate
+hase derive VolSpread --market GMO:BTC_JPY --execution-size 0.002 --start 2026-03-13 --end 2026-03-17 \
+  --params 60:300:120 --params 60:900:300 --params 180:900:300 --params 300:900:300 --recreate
 ```
 
 Exec timeout: 7200 s (populate can be slow for large date ranges).
