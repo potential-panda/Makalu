@@ -19,7 +19,10 @@ def plot_labels(labels: pd.Series, config: TripleBarrierConfig) -> None:
     print(f"Label Distribution Summary (excluding last {config.timeout_sec}s of data):")
     print(f"Total samples analyzed: {len(labels):,}")
     summary_df = pd.DataFrame(
-        {"count": label_counts, "percentage": (label_counts / label_counts.sum() * 100).round(2)}
+        {
+            "count": label_counts,
+            "percentage": (label_counts / label_counts.sum() * 100).round(2),
+        }
     )
     print(summary_df)
 

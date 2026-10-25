@@ -24,7 +24,11 @@ def execute(args):
     )
     known = {r["path"] for r in manifest.get_all()}
     # Bronze belongs to Kitakamakura and is never evicted, so it is never tracked.
-    files = sorted(f for f in ROOT.rglob("data.parquet") if f.relative_to(ROOT).parts[0] != "bronze")
+    files = sorted(
+        f
+        for f in ROOT.rglob("data.parquet")
+        if f.relative_to(ROOT).parts[0] != "bronze"
+    )
     new_count = 0
 
     for f in files:
@@ -49,7 +53,9 @@ def execute(args):
 
     manifest._conn.commit()
     manifest.close()
-    LOG.info(f"Scan complete. Registered {new_count} new file(s) ({len(known)} already known).")
+    LOG.info(
+        f"Scan complete. Registered {new_count} new file(s) ({len(known)} already known)."
+    )
 
 
 def register_cli(sub):

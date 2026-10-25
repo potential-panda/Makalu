@@ -3,8 +3,6 @@ from logging import getLogger
 from influxdb_client import InfluxDBClient, Point, WritePrecision
 from influxdb_client.client.write_api import WriteOptions, WriteType
 from influxdb_client.domain import BucketRetentionRules
-
-from qate.util.buffer import BufferedWriter
 from qate.core.model import (
     DataType,
     ExchangeName,
@@ -16,6 +14,7 @@ from qate.core.model import (
 )
 from qate.core.order import OrderType
 from qate.core.symbol import Symbol
+from qate.util.buffer import BufferedWriter
 
 BUCKET = "panda"
 ORG = "panda-org"
@@ -26,7 +25,9 @@ TEMP_BACKTEST_RETENTION_SECONDS = 30 * 24 * 60 * 60  # 30 days
 
 
 def create_client(url, token):
-    return InfluxDBClient(url, token, org=ORG, timeout=120_000)  # 120s for large batch writes
+    return InfluxDBClient(
+        url, token, org=ORG, timeout=120_000
+    )  # 120s for large batch writes
 
 
 def normalize_points_timestamp_us(points):
@@ -59,7 +60,15 @@ def normalize_points_timestamp_us(points):
 
 
 class InfluxdbWriter(BufferedWriter):
-    def __init__(self, url: str, token: str, bucket_name: str, buffer_size: int = 2048, retention_seconds: int | None = None, param_set_id: str | None = None):
+    def __init__(
+        self,
+        url: str,
+        token: str,
+        bucket_name: str,
+        buffer_size: int = 2048,
+        retention_seconds: int | None = None,
+        param_set_id: str | None = None,
+    ):
         super(InfluxdbWriter, self).__init__(buffer_size)
         self.client = create_client(url, token)
         self.bucket_name = bucket_name
@@ -81,7 +90,9 @@ class InfluxdbWriter(BufferedWriter):
             if self.retention_seconds is None:
                 b.create_bucket(bucket_name=self.bucket_name)
             else:
-                rules = BucketRetentionRules(type="expire", every_seconds=self.retention_seconds)
+                rules = BucketRetentionRules(
+                    type="expire", every_seconds=self.retention_seconds
+                )
                 b.create_bucket(bucket_name=self.bucket_name, retention_rules=rules)
 
     def write(self, points: list[Point]):
@@ -143,8 +154,21 @@ class InfluxdbStore:
         self._write_url = write_url
         self._read_url = read_url
 
-    def create_writer(self, bucket_name: str, buffer_size=2048, retention_seconds: int | None = None, param_set_id: str | None = None):
-        return InfluxdbWriter(self._write_url, self._token, bucket_name, buffer_size, retention_seconds, param_set_id)
+    def create_writer(
+        self,
+        bucket_name: str,
+        buffer_size=2048,
+        retention_seconds: int | None = None,
+        param_set_id: str | None = None,
+    ):
+        return InfluxdbWriter(
+            self._write_url,
+            self._token,
+            bucket_name,
+            buffer_size,
+            retention_seconds,
+            param_set_id,
+        )
 
     def delete_bucket(self, bucket_name: str) -> None:
         """Drop an entire InfluxDB bucket (all data, all time)."""
@@ -167,7 +191,7 @@ class InfluxdbStore:
             client.delete_api().delete(
                 start=start,
                 stop=stop,
-                predicate='',
+                predicate="",
                 bucket=bucket_name,
                 org=ORG,
             )

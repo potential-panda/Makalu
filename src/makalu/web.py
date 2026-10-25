@@ -38,7 +38,9 @@ class SiteHandler(SimpleHTTPRequestHandler):
         return None
 
     def log_message(self, fmt, *args):
-        LOG.info("%s %s", self.headers.get("X-Real-IP") or self.client_address[0], fmt % args)
+        LOG.info(
+            "%s %s", self.headers.get("X-Real-IP") or self.client_address[0], fmt % args
+        )
 
 
 def serve(site: Path, host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> None:

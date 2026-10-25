@@ -24,9 +24,8 @@ from sklearn.metrics import (
     roc_curve,
 )
 
-from .model import LGBMTrainer
-
 from .metrics import calculate_trading_metrics
+from .model import LGBMTrainer
 
 LOG = logging.getLogger(__name__)
 
@@ -113,10 +112,10 @@ class Evaluator:
         # Get predictions
         y_prob = self.model.predict_proba(X)
         y_true = np.array(y)
-        
+
         # Check if multi-class (y_prob is 2D with > 1 column)
         is_multiclass = len(y_prob.shape) > 1 and y_prob.shape[1] > 1
-        
+
         if is_multiclass:
             y_pred = np.argmax(y_prob, axis=1)
             # For multi-class, precision/recall/f1 need 'macro', 'micro' or 'weighted'
@@ -128,8 +127,12 @@ class Evaluator:
         # Calculate standard metrics
         metrics = {
             "accuracy": accuracy_score(y_true, y_pred),
-            "precision": float(precision_score(y_true, y_pred, average=average, zero_division=0)),
-            "recall": float(recall_score(y_true, y_pred, average=average, zero_division=0)),
+            "precision": float(
+                precision_score(y_true, y_pred, average=average, zero_division=0)
+            ),
+            "recall": float(
+                recall_score(y_true, y_pred, average=average, zero_division=0)
+            ),
             "f1": float(f1_score(y_true, y_pred, average=average, zero_division=0)),
             "log_loss": float(log_loss(y_true, y_prob)),
         }
@@ -143,7 +146,9 @@ class Evaluator:
         if is_multiclass:
             # Multi-class ROC AUC
             try:
-                metrics["roc_auc"] = float(roc_auc_score(y_true, y_prob, multi_class="ovr", average="macro"))
+                metrics["roc_auc"] = float(
+                    roc_auc_score(y_true, y_prob, multi_class="ovr", average="macro")
+                )
             except ValueError:
                 metrics["roc_auc"] = np.nan
         else:
@@ -213,7 +218,9 @@ class Evaluator:
         # Mean Absolute Percentage Error (avoiding division by zero)
         mask = y_true != 0
         if mask.sum() > 0:
-            metrics["mape"] = np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100
+            metrics["mape"] = (
+                np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100
+            )
         else:
             metrics["mape"] = np.nan
 
@@ -223,7 +230,8 @@ class Evaluator:
             result.predictions = y_pred
 
         LOG.info(
-            f"Regression evaluation: rmse={metrics['rmse']:.4f}, " f"mae={metrics['mae']:.4f}, r2={metrics['r2']:.4f}"
+            f"Regression evaluation: rmse={metrics['rmse']:.4f}, "
+            f"mae={metrics['mae']:.4f}, r2={metrics['r2']:.4f}"
         )
 
         return result
@@ -340,7 +348,8 @@ class Evaluator:
         best_threshold = results_df.loc[best_idx, "threshold"]
 
         LOG.info(
-            f"Best threshold for {metric}: {best_threshold:.2f} " f"({metric}={results_df.loc[best_idx, metric]:.4f})"
+            f"Best threshold for {metric}: {best_threshold:.2f} "
+            f"({metric}={results_df.loc[best_idx, metric]:.4f})"
         )
 
         return {
@@ -380,9 +389,15 @@ class Evaluator:
 
             # Add prediction category
             analysis["category"] = "TN"
-            analysis.loc[(analysis["y_true"] == 1) & (analysis["y_pred"] == 1), "category"] = "TP"
-            analysis.loc[(analysis["y_true"] == 0) & (analysis["y_pred"] == 1), "category"] = "FP"
-            analysis.loc[(analysis["y_true"] == 1) & (analysis["y_pred"] == 0), "category"] = "FN"
+            analysis.loc[
+                (analysis["y_true"] == 1) & (analysis["y_pred"] == 1), "category"
+            ] = "TP"
+            analysis.loc[
+                (analysis["y_true"] == 0) & (analysis["y_pred"] == 1), "category"
+            ] = "FP"
+            analysis.loc[
+                (analysis["y_true"] == 1) & (analysis["y_pred"] == 0), "category"
+            ] = "FN"
 
         else:
             y_pred = self.model.predict(X)
@@ -394,7 +409,9 @@ class Evaluator:
                     "y_pred": y_pred,
                     "error": y_pred - y_true,
                     "abs_error": np.abs(y_pred - y_true),
-                    "pct_error": np.where(y_true != 0, (y_pred - y_true) / y_true * 100, np.nan),
+                    "pct_error": np.where(
+                        y_true != 0, (y_pred - y_true) / y_true * 100, np.nan
+                    ),
                 }
             )
 

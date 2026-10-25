@@ -96,7 +96,12 @@ def _extract_top_k_depths(
 
 
 class BookChangeBuilder:
-    def __init__(self, depths: list[int], max_delta_sec: float = 10.0, price_multiplier: float = 1000.0):
+    def __init__(
+        self,
+        depths: list[int],
+        max_delta_sec: float = 10.0,
+        price_multiplier: float = 1000.0,
+    ):
         self._depths = sorted(depths)
         self._max_delta_sec = max_delta_sec
         self._price_multiplier = price_multiplier
@@ -145,7 +150,9 @@ class BookChangeBuilder:
 
         return results
 
-    def _build(self, prev: _Leg, curr: _Leg, delta_sec: float, depth: int) -> BookChange:
+    def _build(
+        self, prev: _Leg, curr: _Leg, delta_sec: float, depth: int
+    ) -> BookChange:
         # Aggregate deltas directly without allocating per-price delta maps.
         delta_depth_bid = curr.bid_depths[depth] - prev.bid_depths[depth]
         delta_depth_ask = curr.ask_depths[depth] - prev.ask_depths[depth]

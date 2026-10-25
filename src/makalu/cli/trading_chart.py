@@ -10,8 +10,8 @@ from pathlib import Path
 
 import requests
 
-from makalu.trading.data import load_orders, load_pnl
 from makalu.trading.chart import plot_trading_metrics
+from makalu.trading.data import load_orders, load_pnl
 
 _DISCORD_KEYS = Path.home() / "secret" / "discord.keys"
 
@@ -28,7 +28,9 @@ def _read_webhook(key: str) -> str | None:
         return None
     cfg = configparser.ConfigParser()
     cfg.read(_DISCORD_KEYS)
-    return cfg.get(key, "WEBHOOK", fallback=None) or cfg.get(key, "TOKEN", fallback=None)
+    return cfg.get(key, "WEBHOOK", fallback=None) or cfg.get(
+        key, "TOKEN", fallback=None
+    )
 
 
 def _post_to_discord(webhook_url: str, path: str, content: str):

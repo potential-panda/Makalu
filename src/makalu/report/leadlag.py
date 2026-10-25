@@ -37,8 +37,8 @@ from logging import getLogger
 import numpy as np
 import pandas as pd
 from komachi import bronze
-from threadpoolctl import threadpool_limits
 from qate.core.model import Market
+from threadpoolctl import threadpool_limits
 
 from makalu import settings as sys_env
 from makalu.storage.parquet_store import ParquetStore
@@ -46,11 +46,13 @@ from makalu.storage.parquet_store import ParquetStore
 LOG = getLogger(__name__)
 
 FINE_STEP_SEC = 0.1
-FINE_LAGS = np.arange(-10, 31)                   # -1.0s .. +3.0s in 100ms steps
-CURVE_LAGS_MS = range(-500, 2001, 100)           # what the report stores and draws
+FINE_LAGS = np.arange(-10, 31)  # -1.0s .. +3.0s in 100ms steps
+CURVE_LAGS_MS = range(-500, 2001, 100)  # what the report stores and draws
 BETA_HORIZONS_SEC = (0.2, 0.5, 1.0, 2.0, 3.0)
 JST_OFFSET_SEC = 9 * 3600
-HOUR_MIN_COVERAGE = 0.9                          # share of an hour's minutes that must hold a quote on both sides
+HOUR_MIN_COVERAGE = (
+    0.9  # share of an hour's minutes that must hold a quote on both sides
+)
 # GMO keeps publishing snapshots through its weekly maintenance (Sat ~9:00-11:00 JST) with the price frozen, so
 # quote coverage alone lets those hours in. The lag market's mid must also change in this share of minutes; normal
 # GMO hours move in 59-60 minutes of 60. Not applied to the lead: BINANCE BTC has genuinely quiet minutes.
@@ -72,9 +74,13 @@ def curve_column(lag_ms: int) -> str:
     return f"rho_lag_m{-lag_ms}" if lag_ms < 0 else f"rho_lag_{lag_ms}"
 
 
-def _read_day(market: Market, execution_size: str, day: str) -> tuple[pd.DataFrame, int]:
+def _read_day(
+    market: Market, execution_size: str, day: str
+) -> tuple[pd.DataFrame, int]:
     """The day's MarketPrice, and how many snapshots Hase left out deriving it."""
-    store = ParquetStore(sys_env.get_parquet_root_dir()).create_execution_price(market, execution_size)
+    store = ParquetStore(sys_env.get_parquet_root_dir()).create_execution_price(
+        market, execution_size
+    )
     df = store.read_a_day(day)
     if df.empty:
         return df, 0
@@ -92,7 +98,9 @@ def _grid(df: pd.DataFrame, t0: float, n: int, step: float) -> np.ndarray:
     return pd.Series(out).ffill().to_numpy()
 
 
-def _returns(lead_df: pd.DataFrame, lag_df: pd.DataFrame, step: float) -> tuple[np.ndarray, np.ndarray]:
+def _returns(
+    lead_df: pd.DataFrame, lag_df: pd.DataFrame, step: float
+) -> tuple[np.ndarray, np.ndarray]:
     t0 = np.floor(lead_df["ts"].iloc[0])
     n = int(np.ceil((lead_df["ts"].iloc[-1] - t0) / step)) + 1
     a, b = _grid(lead_df, t0, n, step), _grid(lag_df, t0, n, step)
@@ -118,10 +126,14 @@ def _tick(market: Market, day: str) -> float:
     not on the tick grid; the order book's top level is.
     """
     try:
-        path = bronze.file(market.id, "OrderBook", day, root=sys_env.get_parquet_root_dir())
+        path = bronze.file(
+            market.id, "OrderBook", day, root=sys_env.get_parquet_root_dir()
+        )
     except bronze.MissingData:
         return np.nan
-    bids = pd.read_parquet(path, columns=["bid0_price"])["bid0_price"].dropna().to_numpy()
+    bids = (
+        pd.read_parquet(path, columns=["bid0_price"])["bid0_price"].dropna().to_numpy()
+    )
     steps = np.abs(np.diff(bids))
     steps = steps[steps > 1e-12]
     return float(np.round(steps.min(), 10)) if len(steps) else np.nan
@@ -140,17 +152,22 @@ def compute_day(pair: Pair, day: str) -> dict | None:
     cc = _cross_cov(ra, rb, FINE_LAGS)
     rho = cc / np.sqrt(va * vb)
     peak = int(np.argmax(rho))
-    beta = {h: cc[(FINE_LAGS >= 0) & (FINE_LAGS <= round(h / FINE_STEP_SEC))].sum() / va for h in BETA_HORIZONS_SEC}
-    row.update({
-        "peak_lag_ms": int(FINE_LAGS[peak] * 100),
-        "peak_rho": rho[peak],
-        "rho0": rho[FINE_LAGS == 0][0],
-        "rho_sum_0_3s": rho[FINE_LAGS >= 0].sum(),
-        "rho_sum_neg": rho[FINE_LAGS < 0].sum(),
-        **{f"beta_{str(h).replace('.', '_')}s": v for h, v in beta.items()},
-        "vol_lead_bps_d": np.sqrt(va) * 1e4,
-        "vol_lag_bps_d": np.sqrt(vb) * 1e4,
-    })
+    beta = {
+        h: cc[(FINE_LAGS >= 0) & (FINE_LAGS <= round(h / FINE_STEP_SEC))].sum() / va
+        for h in BETA_HORIZONS_SEC
+    }
+    row.update(
+        {
+            "peak_lag_ms": int(FINE_LAGS[peak] * 100),
+            "peak_rho": rho[peak],
+            "rho0": rho[FINE_LAGS == 0][0],
+            "rho_sum_0_3s": rho[FINE_LAGS >= 0].sum(),
+            "rho_sum_neg": rho[FINE_LAGS < 0].sum(),
+            **{f"beta_{str(h).replace('.', '_')}s": v for h, v in beta.items()},
+            "vol_lead_bps_d": np.sqrt(va) * 1e4,
+            "vol_lag_bps_d": np.sqrt(vb) * 1e4,
+        }
+    )
     for lag_ms in CURVE_LAGS_MS:
         row[curve_column(lag_ms)] = rho[FINE_LAGS == lag_ms // 100][0]
 
@@ -164,21 +181,25 @@ def compute_day(pair: Pair, day: str) -> dict | None:
         row[f"beta_{s}s_cum"] = cc[:beta_buckets].sum() / va
 
     lead_tick = _tick(pair.lead, day)
-    row.update({
-        "lead_px": float(lead_df["mid"].median()),
-        "lead_tick": lead_tick,
-        "lead_tick_bps": lead_tick / float(lead_df["mid"].median()) * 1e4,
-        "lead_updates": int((np.diff(lead_df["mid"].to_numpy()) != 0).sum()),
-        "lag_updates": int((np.diff(lag_df["mid"].to_numpy()) != 0).sum()),
-        "lead_spread_bps": float(lead_df["spread_bps"].median()),
-        "lag_spread_bps": float(lag_df["spread_bps"].median()),
-        "lead_dropped_rows": lead_dropped,
-        "lag_dropped_rows": lag_dropped,
-    })
+    row.update(
+        {
+            "lead_px": float(lead_df["mid"].median()),
+            "lead_tick": lead_tick,
+            "lead_tick_bps": lead_tick / float(lead_df["mid"].median()) * 1e4,
+            "lead_updates": int((np.diff(lead_df["mid"].to_numpy()) != 0).sum()),
+            "lag_updates": int((np.diff(lag_df["mid"].to_numpy()) != 0).sum()),
+            "lead_spread_bps": float(lead_df["spread_bps"].median()),
+            "lag_spread_bps": float(lag_df["spread_bps"].median()),
+            "lead_dropped_rows": lead_dropped,
+            "lag_dropped_rows": lag_dropped,
+        }
+    )
     return row
 
 
-def _hour_stats(ra: np.ndarray, rb: np.ndarray, lags) -> tuple[np.ndarray, float, float] | None:
+def _hour_stats(
+    ra: np.ndarray, rb: np.ndarray, lags
+) -> tuple[np.ndarray, float, float] | None:
     """Cross-covariance and variances of one hour's de-meaned returns, or None when either side never moved."""
     ra, rb = ra - ra.mean(), rb - rb.mean()
     va, vb = ra @ ra, rb @ rb
@@ -198,19 +219,30 @@ def compute_day_hours(pair: Pair, day: str) -> list[dict]:
     lag_df, _ = _read_day(pair.lag, pair.execution_size, day)
     if lead_df.empty or lag_df.empty:
         return []
-    t0 = np.floor((lead_df["ts"].iloc[0] + JST_OFFSET_SEC) / 86400) * 86400 - JST_OFFSET_SEC
+    t0 = (
+        np.floor((lead_df["ts"].iloc[0] + JST_OFFSET_SEC) / 86400) * 86400
+        - JST_OFFSET_SEC
+    )
     mids = {}
     for step in (FINE_STEP_SEC, 1.0):
         n = int(round(86400 / step)) + 1
         # the day's first bucket opens a few ms before its first quote: fill it from the next one
-        mids[step] = tuple(pd.Series(_grid(df, t0, n, step)).bfill(limit=50).to_numpy() for df in (lead_df, lag_df))
+        mids[step] = tuple(
+            pd.Series(_grid(df, t0, n, step)).bfill(limit=50).to_numpy()
+            for df in (lead_df, lag_df)
+        )
 
     ta, tb = lead_df["ts"].to_numpy(), lag_df["ts"].to_numpy()
     rows = []
     for hour in range(24):
         lo, hi = t0 + hour * 3600, t0 + (hour + 1) * 3600
         qa, qb = (ta >= lo) & (ta < hi), (tb >= lo) & (tb < hi)
-        coverage = min(len(np.unique((ta[qa] - lo) // 60)), len(np.unique((tb[qb] - lo) // 60))) / 60
+        coverage = (
+            min(
+                len(np.unique((ta[qa] - lo) // 60)), len(np.unique((tb[qb] - lo) // 60))
+            )
+            / 60
+        )
         lag_ts, lag_mid = tb[qb], lag_df["mid"].to_numpy()[qb]
         lag_active = len(np.unique((lag_ts[1:][np.diff(lag_mid) != 0] - lo) // 60)) / 60
         if coverage < HOUR_MIN_COVERAGE or lag_active < HOUR_MIN_LAG_ACTIVE:
@@ -218,7 +250,7 @@ def compute_day_hours(pair: Pair, day: str) -> list[dict]:
         stats = {}
         for step, lags in ((FINE_STEP_SEC, FINE_LAGS), (1.0, range(0, 3))):
             per = int(round(3600 / step))
-            a, b = (m[hour * per: (hour + 1) * per + 1] for m in mids[step])
+            a, b = (m[hour * per : (hour + 1) * per + 1] for m in mids[step])
             if np.isnan(a).any() or np.isnan(b).any():
                 break
             got = _hour_stats(np.diff(np.log(a)), np.diff(np.log(b)), lags)
@@ -230,7 +262,10 @@ def compute_day_hours(pair: Pair, day: str) -> list[dict]:
             rho = cc / np.sqrt(va * vb)
             peak = int(np.argmax(rho))
             cc1, va1, vb1 = stats[1.0]
-            lead_mid, lag_mid = lead_df["mid"].to_numpy()[qa], lag_df["mid"].to_numpy()[qb]
+            lead_mid, lag_mid = (
+                lead_df["mid"].to_numpy()[qa],
+                lag_df["mid"].to_numpy()[qb],
+            )
             row = {
                 "date": day,
                 "hour": hour,
@@ -244,7 +279,9 @@ def compute_day_hours(pair: Pair, day: str) -> list[dict]:
                 "vol_lag_bps_h": np.sqrt(vb) * 1e4,
                 "lead_updates": int((np.diff(lead_mid) != 0).sum()),
                 "lag_updates": int((np.diff(lag_mid) != 0).sum()),
-                "lead_spread_bps": float(np.median(lead_df["spread_bps"].to_numpy()[qa])),
+                "lead_spread_bps": float(
+                    np.median(lead_df["spread_bps"].to_numpy()[qa])
+                ),
                 "lag_spread_bps": float(np.median(lag_df["spread_bps"].to_numpy()[qb])),
                 "lead_px": float(np.median(lead_mid)),
             }
@@ -259,8 +296,16 @@ def available_days(pair: Pair) -> list[str]:
     root = ParquetStore(sys_env.get_parquet_root_dir())
     held = []
     for market in (pair.lead, pair.lag):
-        base = root.create_execution_price(market, pair.execution_size)._get_data_dir("x").parent
-        held.append({d.name[5:] for d in base.glob("date=*") if (d / "data.parquet").exists()} if base.exists() else set())
+        base = (
+            root.create_execution_price(market, pair.execution_size)
+            ._get_data_dir("x")
+            .parent
+        )
+        held.append(
+            {d.name[5:] for d in base.glob("date=*") if (d / "data.parquet").exists()}
+            if base.exists()
+            else set()
+        )
     return sorted(held[0] & held[1])
 
 
@@ -281,7 +326,9 @@ def compute_days(pair: Pair, days: list[str], workers: int = 16) -> pd.DataFrame
     """Rows for every day both markets have MarketPrice; missing days are left out."""
     if not days:
         return pd.DataFrame()
-    with ProcessPoolExecutor(max(1, min(workers, len(days))), initializer=_one_blas_thread) as ex:
+    with ProcessPoolExecutor(
+        max(1, min(workers, len(days))), initializer=_one_blas_thread
+    ) as ex:
         rows = [r for r in ex.map(_compute_day_args, [(pair, d) for d in days]) if r]
     LOG.info(f"Lead-lag {pair.key}: computed {len(rows)} of {len(days)} day(s)")
     return pd.DataFrame(rows)
@@ -295,7 +342,15 @@ def compute_hours(pair: Pair, days: list[str], workers: int = 16) -> pd.DataFram
     """Hourly rows for the given days; hours without enough quotes on both sides are left out."""
     if not days:
         return pd.DataFrame()
-    with ProcessPoolExecutor(max(1, min(workers, len(days))), initializer=_one_blas_thread) as ex:
-        rows = [r for rs in ex.map(_compute_day_hours_args, [(pair, d) for d in days]) for r in rs]
-    LOG.info(f"Lead-lag {pair.key}: computed {len(rows)} hour(s) over {len(days)} day(s)")
+    with ProcessPoolExecutor(
+        max(1, min(workers, len(days))), initializer=_one_blas_thread
+    ) as ex:
+        rows = [
+            r
+            for rs in ex.map(_compute_day_hours_args, [(pair, d) for d in days])
+            for r in rs
+        ]
+    LOG.info(
+        f"Lead-lag {pair.key}: computed {len(rows)} hour(s) over {len(days)} day(s)"
+    )
     return pd.DataFrame(rows)

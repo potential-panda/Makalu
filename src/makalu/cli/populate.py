@@ -2,10 +2,11 @@ import argparse
 import sys
 from logging import getLogger
 
-import makalu.settings as sys_env
 from qate.core.model import Market
-from makalu.storage.parquet_store import ParquetStore
 from qate.util.dt_range import DtRange
+
+import makalu.settings as sys_env
+from makalu.storage.parquet_store import ParquetStore
 
 LOG = getLogger(__name__)
 
@@ -61,7 +62,11 @@ def execute_single_market(args):
 
     dataset = args.dataset
     if dataset == "TradeAggression":
-        pipeline.stage(TradeDerivedStage(market).step(PopulateAggressionStep(windows_sec=[1, 3, 5, 10, 30, 60])))
+        pipeline.stage(
+            TradeDerivedStage(market).step(
+                PopulateAggressionStep(windows_sec=[1, 3, 5, 10, 30, 60])
+            )
+        )
     elif dataset == "BookState":
         pipeline.stage(
             OrderBookDerivedStage(market).step(
@@ -74,7 +79,11 @@ def execute_single_market(args):
             )
         )
     elif dataset == "BookChange":
-        pipeline.stage(OrderBookDerivedStage(market).step(PopulateBookChangeStep(k_levels=[1, 3, 5, 10])))
+        pipeline.stage(
+            OrderBookDerivedStage(market).step(
+                PopulateBookChangeStep(k_levels=[1, 3, 5, 10])
+            )
+        )
     else:
         LOG.error(f"Unknown dataset for populate: {dataset}")
         sys.exit(1)
@@ -112,14 +121,15 @@ def execute_volspread(args):
         stage = stage.step(VolSpreadStep(config))
     pipeline.stage(stage)
 
-    LOG.info(f"Populating VolSpread: {market.id} (execution_size={args.execution_size}) {args.start} → {args.end}")
+    LOG.info(
+        f"Populating VolSpread: {market.id} (execution_size={args.execution_size}) {args.start} → {args.end}"
+    )
     pipeline.process(dt_range)
     LOG.info("Done.")
 
 
 def execute_activity_curve(args):
     from makalu.storage.parquet_store import Layer
-
     from pipeline.curve_steps import build_activity_curve_rows
 
     market = Market.from_str(f"{args.exchange}:{args.symbol}")
@@ -127,12 +137,18 @@ def execute_activity_curve(args):
     param_ids = [c.param_id for c in _volspread_configs()]
     parquet_store = _create_parquet_store(args)
 
-    LOG.info(f"Building ActivityCurve: {market.id} (execution_size={args.execution_size}) trained on {args.start} → {args.end}")
-    rows = build_activity_curve_rows(parquet_store, market, args.execution_size, param_ids, dt_range, args.bin_size)
+    LOG.info(
+        f"Building ActivityCurve: {market.id} (execution_size={args.execution_size}) trained on {args.start} → {args.end}"
+    )
+    rows = build_activity_curve_rows(
+        parquet_store, market, args.execution_size, param_ids, dt_range, args.bin_size
+    )
 
     n_days = len(dt_range.days)
     param_id = f"bin{args.bin_size}s_z{n_days}d_es{args.execution_size}"
-    store = parquet_store.create_single_market("ActivityCurve", market, layer=Layer.GOLD, param_id=param_id)
+    store = parquet_store.create_single_market(
+        "ActivityCurve", market, layer=Layer.GOLD, param_id=param_id
+    )
     # Partitioned by the as-of date the window itself describes (dt_range's
     # end), not by whenever this command happens to run -- otherwise
     # backfilling many historical windows in one sitting (exactly what
@@ -153,14 +169,20 @@ def execute_return(args):
     market = Market.from_str(f"{args.exchange}:{args.symbol}")
     dt_range = DtRange.from_strings(args.start, args.end)
     horizons_sec = tuple(int(h) for h in args.horizons.split(","))
-    config = ReturnConfig(horizons_sec=horizons_sec, execution_size_str=args.execution_size)
+    config = ReturnConfig(
+        horizons_sec=horizons_sec, execution_size_str=args.execution_size
+    )
 
     pipeline = Pipeline(_create_parquet_store(args))
     pipeline.stage(
-        ReturnDerivedStage(market, args.execution_size, max_horizon_sec=max(horizons_sec)).step(ReturnStep(config))
+        ReturnDerivedStage(
+            market, args.execution_size, max_horizon_sec=max(horizons_sec)
+        ).step(ReturnStep(config))
     )
 
-    LOG.info(f"Populating Return: {market.id} (execution_size={args.execution_size}, horizons={horizons_sec}) {args.start} → {args.end}")
+    LOG.info(
+        f"Populating Return: {market.id} (execution_size={args.execution_size}, horizons={horizons_sec}) {args.start} → {args.end}"
+    )
     pipeline.process(dt_range)
     LOG.info("Done.")
 
@@ -214,9 +236,15 @@ def execute_chart_range(args):
     dt_range = DtRange.from_strings(args.start, args.end)
 
     pipeline = Pipeline(_create_parquet_store(args))
-    pipeline.stage(TradeDerivedStage(market).step(PopulateRangeBarStep(box_size_rate=args.box_size_rate)))
+    pipeline.stage(
+        TradeDerivedStage(market).step(
+            PopulateRangeBarStep(box_size_rate=args.box_size_rate)
+        )
+    )
 
-    LOG.info(f"Populating Chart_RANGE: {market.id} (box_size_rate={args.box_size_rate}) {args.start} → {args.end}")
+    LOG.info(
+        f"Populating Chart_RANGE: {market.id} (box_size_rate={args.box_size_rate}) {args.start} → {args.end}"
+    )
     pipeline.process(dt_range)
     LOG.info("Done.")
 
@@ -237,7 +265,9 @@ def execute_leadlag(args):
         .step(LeadLagStep(config=LEAD_LAG_CONFIG_MID))
     )
 
-    LOG.info(f"Populating LeadLag: {market_lead.id} → {market_lag.id} {args.start} → {args.end}")
+    LOG.info(
+        f"Populating LeadLag: {market_lead.id} → {market_lag.id} {args.start} → {args.end}"
+    )
     pipeline.process(dt_range)
     LOG.info("Done.")
 
@@ -245,7 +275,6 @@ def execute_leadlag(args):
 def execute_leadlag_curve(args):
     from lead_lag.lead_lag import LEAD_LAG_CONFIG_MID, LEAD_LAG_CONFIG_NEARHFT
     from makalu.storage.parquet_store import Layer
-
     from pipeline.curve_steps import build_leadlag_curve_rows
 
     market_lead, market_lag, _execution_size = _resolve_leadlag_markets(args)
@@ -253,12 +282,18 @@ def execute_leadlag_curve(args):
     param_ids = [LEAD_LAG_CONFIG_NEARHFT.param_id(), LEAD_LAG_CONFIG_MID.param_id()]
     parquet_store = _create_parquet_store(args)
 
-    LOG.info(f"Building LeadLagCurve: {market_lead.id} → {market_lag.id} trained on {args.start} → {args.end}")
-    rows = build_leadlag_curve_rows(parquet_store, market_lead, market_lag, param_ids, dt_range, args.bin_size)
+    LOG.info(
+        f"Building LeadLagCurve: {market_lead.id} → {market_lag.id} trained on {args.start} → {args.end}"
+    )
+    rows = build_leadlag_curve_rows(
+        parquet_store, market_lead, market_lag, param_ids, dt_range, args.bin_size
+    )
 
     n_days = len(dt_range.days)
     param_id = f"bin{args.bin_size}s_z{n_days}d"
-    store = parquet_store.create_cross_market("LeadLagCurve", market_lead, market_lag, layer=Layer.GOLD, param_id=param_id)
+    store = parquet_store.create_cross_market(
+        "LeadLagCurve", market_lead, market_lag, layer=Layer.GOLD, param_id=param_id
+    )
     # See execute_activity_curve's comment -- same as-of-date partitioning
     # reasoning applies here.
     as_of_ts = dt_range.end_ts
@@ -376,7 +411,9 @@ _DATASET_META = {
 }
 
 
-def _register_dataset_single_market(sub: argparse.ArgumentParser, dataset: str) -> argparse.ArgumentParser:
+def _register_dataset_single_market(
+    sub: argparse.ArgumentParser, dataset: str
+) -> argparse.ArgumentParser:
     meta = _DATASET_META[dataset]
     p = sub.add_parser(
         dataset,
@@ -386,7 +423,9 @@ def _register_dataset_single_market(sub: argparse.ArgumentParser, dataset: str) 
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     p.add_argument("--exchange", required=True, help="Exchange name, e.g. GMO, BINANCE")
-    p.add_argument("--symbol", required=True, help="Symbol name, e.g. BTC_JPY, BTC_USDT")
+    p.add_argument(
+        "--symbol", required=True, help="Symbol name, e.g. BTC_JPY, BTC_USDT"
+    )
     p.add_argument("--start", required=True, help="Start date YYYY-MM-DD")
     p.add_argument("--end", help="End date YYYY-MM-DD (defaults to --start if omitted)")
     p.add_argument(
@@ -433,10 +472,27 @@ def _register_leadlag(sub: argparse.ArgumentParser) -> argparse.ArgumentParser:
         epilog=f"Example:\n  {meta['example']}",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("--pair", default=None, help="Asset pair key: btc, eth, xrp, sol (mutually exclusive with --lead-market/--lag-market)")
-    p.add_argument("--lead-market", default=None, help="Explicit lead market as EXCHANGE:SYMBOL, e.g. BINANCE:BTC_USDT -- for any pair --pair doesn't cover")
-    p.add_argument("--lag-market", default=None, help="Explicit lag market as EXCHANGE:SYMBOL, e.g. GMO:BTC_SPOT")
-    p.add_argument("--execution-size", dest="execution_size", default=None, help="Overrides pipeline.market_pair.EXECUTION_SIZE's lookup for the lag market, if needed")
+    p.add_argument(
+        "--pair",
+        default=None,
+        help="Asset pair key: btc, eth, xrp, sol (mutually exclusive with --lead-market/--lag-market)",
+    )
+    p.add_argument(
+        "--lead-market",
+        default=None,
+        help="Explicit lead market as EXCHANGE:SYMBOL, e.g. BINANCE:BTC_USDT -- for any pair --pair doesn't cover",
+    )
+    p.add_argument(
+        "--lag-market",
+        default=None,
+        help="Explicit lag market as EXCHANGE:SYMBOL, e.g. GMO:BTC_SPOT",
+    )
+    p.add_argument(
+        "--execution-size",
+        dest="execution_size",
+        default=None,
+        help="Overrides pipeline.market_pair.EXECUTION_SIZE's lookup for the lag market, if needed",
+    )
     p.add_argument("--start", required=True, help="Start date YYYY-MM-DD")
     p.add_argument("--end", help="End date YYYY-MM-DD (defaults to --start if omitted)")
     p.add_argument(
@@ -486,10 +542,27 @@ def _register_leadlag_curve(sub: argparse.ArgumentParser) -> argparse.ArgumentPa
         epilog=f"Example:\n  {meta['example']}",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("--pair", default=None, help="Asset pair key: btc, eth, xrp, sol (mutually exclusive with --lead-market/--lag-market)")
-    p.add_argument("--lead-market", default=None, help="Explicit lead market as EXCHANGE:SYMBOL, e.g. BINANCE:BTC_USDT")
-    p.add_argument("--lag-market", default=None, help="Explicit lag market as EXCHANGE:SYMBOL, e.g. GMO:BTC_SPOT")
-    p.add_argument("--execution-size", dest="execution_size", default=None, help="Overrides pipeline.market_pair.EXECUTION_SIZE's lookup for the lag market, if needed")
+    p.add_argument(
+        "--pair",
+        default=None,
+        help="Asset pair key: btc, eth, xrp, sol (mutually exclusive with --lead-market/--lag-market)",
+    )
+    p.add_argument(
+        "--lead-market",
+        default=None,
+        help="Explicit lead market as EXCHANGE:SYMBOL, e.g. BINANCE:BTC_USDT",
+    )
+    p.add_argument(
+        "--lag-market",
+        default=None,
+        help="Explicit lag market as EXCHANGE:SYMBOL, e.g. GMO:BTC_SPOT",
+    )
+    p.add_argument(
+        "--execution-size",
+        dest="execution_size",
+        default=None,
+        help="Overrides pipeline.market_pair.EXECUTION_SIZE's lookup for the lag market, if needed",
+    )
     p.add_argument("--start", required=True, help="Start date YYYY-MM-DD")
     p.add_argument("--end", help="End date YYYY-MM-DD (defaults to --start if omitted)")
     p.add_argument(
@@ -531,9 +604,15 @@ def register_cli(parser: argparse.ArgumentParser):
     )
 
     sub = p.add_subparsers(dest="dataset", required=True)
-    _register_dataset_single_market(sub, "BookChange").set_defaults(func=execute_single_market)
-    _register_dataset_single_market(sub, "BookState").set_defaults(func=execute_single_market)
-    _register_dataset_single_market(sub, "TradeAggression").set_defaults(func=execute_single_market)
+    _register_dataset_single_market(sub, "BookChange").set_defaults(
+        func=execute_single_market
+    )
+    _register_dataset_single_market(sub, "BookState").set_defaults(
+        func=execute_single_market
+    )
+    _register_dataset_single_market(sub, "TradeAggression").set_defaults(
+        func=execute_single_market
+    )
     _register_volspread(sub).set_defaults(func=execute_volspread)
     _register_return(sub).set_defaults(func=execute_return)
     _register_leadlag(sub).set_defaults(func=execute_leadlag)

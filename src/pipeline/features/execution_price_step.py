@@ -15,5 +15,7 @@ class ExecutionPriceFeatureStep(Step):
 
     def populate(self, pipeline_context: PipelineContext, stage_context: Context):
         before = len(stage_context.features)
-        build_execution_price_features(stage_context.source_df, stage_context.features, self.rolling_windows)
+        build_execution_price_features(
+            stage_context.source_df, stage_context.features, self.rolling_windows
+        )
         LOG.info(f"  Execution Price: +{len(stage_context.features) - before} features")

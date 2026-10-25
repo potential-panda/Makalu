@@ -17,6 +17,11 @@ class OrderBookStateFeatureStep(Step):
     def populate(self, pipeline_context: PipelineContext, stage_context: Context):
         before = len(stage_context.features)
         build_order_book_state_features(
-            stage_context.source_df, stage_context.features, self.depth_levels, self.windows
+            stage_context.source_df,
+            stage_context.features,
+            self.depth_levels,
+            self.windows,
         )
-        LOG.info(f"  Order Book State: +{len(stage_context.features) - before} features")
+        LOG.info(
+            f"  Order Book State: +{len(stage_context.features) - before} features"
+        )

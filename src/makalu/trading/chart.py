@@ -6,7 +6,6 @@ import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import pandas as pd
 
-
 _SIDE_COLORS = {"BUY": "#4c9be8", "SELL": "#e87b4c"}
 
 
@@ -41,9 +40,12 @@ def plot_trading_metrics(
     if not taker.empty:
         for side, grp in taker.groupby("side"):
             ax.scatter(
-                grp["ts"], grp["slippage"],
-                label=side, color=_SIDE_COLORS.get(side, "gray"),
-                s=20, alpha=0.7,
+                grp["ts"],
+                grp["slippage"],
+                label=side,
+                color=_SIDE_COLORS.get(side, "gray"),
+                s=20,
+                alpha=0.7,
             )
         ax.axhline(0, color="black", linewidth=0.8, linestyle="--")
         ax.legend(fontsize=8, loc="upper right")
@@ -57,9 +59,12 @@ def plot_trading_metrics(
         valid = taker[taker["time_to_fill"] > 0]
         for side, grp in valid.groupby("side"):
             ax.scatter(
-                grp["ts"], grp["time_to_fill"],
-                label=side, color=_SIDE_COLORS.get(side, "gray"),
-                s=20, alpha=0.7,
+                grp["ts"],
+                grp["time_to_fill"],
+                label=side,
+                color=_SIDE_COLORS.get(side, "gray"),
+                s=20,
+                alpha=0.7,
             )
         ax.legend(fontsize=8, loc="upper right")
     else:
@@ -69,15 +74,30 @@ def plot_trading_metrics(
     # --- Panel 3: Cumulative PnL ---
     ax = axes[2]
     if not pnl_df.empty:
-        ax.step(pnl_df["ts"], pnl_df["cumulative_pnl"], where="post",
-                label="gross PnL", color="#4c9be8", linewidth=1.2)
-        ax.step(pnl_df["ts"], pnl_df["cumulative_net"], where="post",
-                label="net (after fees)", color="#e87b4c", linewidth=1.2, linestyle="--")
+        ax.step(
+            pnl_df["ts"],
+            pnl_df["cumulative_pnl"],
+            where="post",
+            label="gross PnL",
+            color="#4c9be8",
+            linewidth=1.2,
+        )
+        ax.step(
+            pnl_df["ts"],
+            pnl_df["cumulative_net"],
+            where="post",
+            label="net (after fees)",
+            color="#e87b4c",
+            linewidth=1.2,
+            linestyle="--",
+        )
         ax.axhline(0, color="black", linewidth=0.8, linestyle="--")
         ax.legend(fontsize=8, loc="upper left")
         total_net = pnl_df["cumulative_net"].iloc[-1]
         n_trades = len(pnl_df)
-        ax.set_title(f"Net: ¥{total_net:.2f}  ({n_trades} round-trips)", fontsize=8, loc="right")
+        ax.set_title(
+            f"Net: ¥{total_net:.2f}  ({n_trades} round-trips)", fontsize=8, loc="right"
+        )
     else:
         ax.text(0.5, 0.5, "No PnL data", transform=ax.transAxes, ha="center")
     _fmt_axes(ax, "Cumulative PnL (JPY)")

@@ -29,9 +29,9 @@ Usage:
 """
 
 from .dataset import Dataset
-from .model import LGBMTrainer
 from .evaluator import Evaluator
-from .metrics import trading_precision_fpr_metric, soft_trading_precision_fpr_metric
+from .metrics import soft_trading_precision_fpr_metric, trading_precision_fpr_metric
+from .model import LGBMTrainer
 
 __all__ = [
     "Dataset",

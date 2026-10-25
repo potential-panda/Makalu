@@ -15,7 +15,6 @@ depends on which LeadLagConfig was populated).
 import logging
 
 from qate.core.model import Market
-from makalu.storage.parquet_store import ParquetStore
 from qate.util.dt_range import DtRange
 
 from active_score.weekly_curve import (
@@ -23,6 +22,7 @@ from active_score.weekly_curve import (
     load_leadlag_series,
     load_volspread_series,
 )
+from makalu.storage.parquet_store import ParquetStore
 
 LOG = logging.getLogger(__name__)
 

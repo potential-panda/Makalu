@@ -17,6 +17,11 @@ class TradeAggressionFeatureStep(Step):
     def populate(self, pipeline_context: PipelineContext, stage_context: Context):
         before = len(stage_context.features)
         build_trade_aggression_features(
-            stage_context.source_df, stage_context.features, self.windows, self.rolling_windows
+            stage_context.source_df,
+            stage_context.features,
+            self.windows,
+            self.rolling_windows,
         )
-        LOG.info(f"  Trade Aggression: +{len(stage_context.features) - before} features")
+        LOG.info(
+            f"  Trade Aggression: +{len(stage_context.features) - before} features"
+        )

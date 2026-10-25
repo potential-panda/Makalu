@@ -30,10 +30,22 @@ EXECUTION_SIZE = {
 }
 
 LEAD_LAG_PAIRS = {
-    "btc": (Market(ExchangeName.BINANCE, Symbol.BTC_USDT), Market(ExchangeName.GMO, Symbol.BTC_JPY)),
-    "eth": (Market(ExchangeName.BINANCE, Symbol.ETH_USDT), Market(ExchangeName.GMO, Symbol.ETH_JPY)),
-    "xrp": (Market(ExchangeName.BINANCE, Symbol.XRP_USDT), Market(ExchangeName.GMO, Symbol.XRP_JPY)),
-    "sol": (Market(ExchangeName.BINANCE, Symbol.SOL_USDT), Market(ExchangeName.GMO, Symbol.SOL_JPY)),
+    "btc": (
+        Market(ExchangeName.BINANCE, Symbol.BTC_USDT),
+        Market(ExchangeName.GMO, Symbol.BTC_JPY),
+    ),
+    "eth": (
+        Market(ExchangeName.BINANCE, Symbol.ETH_USDT),
+        Market(ExchangeName.GMO, Symbol.ETH_JPY),
+    ),
+    "xrp": (
+        Market(ExchangeName.BINANCE, Symbol.XRP_USDT),
+        Market(ExchangeName.GMO, Symbol.XRP_JPY),
+    ),
+    "sol": (
+        Market(ExchangeName.BINANCE, Symbol.SOL_USDT),
+        Market(ExchangeName.GMO, Symbol.SOL_JPY),
+    ),
 }
 
 

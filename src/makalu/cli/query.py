@@ -6,10 +6,14 @@ from makalu.engine import Engine
 
 
 def register_cli(subparsers) -> None:
-    p = subparsers.add_parser("query", help="Query the Makalu data warehouse via DuckDB")
+    p = subparsers.add_parser(
+        "query", help="Query the Makalu data warehouse via DuckDB"
+    )
     group = p.add_mutually_exclusive_group(required=True)
     group.add_argument("--sql", help="SQL SELECT query to execute")
-    group.add_argument("--list", action="store_true", help="List all registered datasets")
+    group.add_argument(
+        "--list", action="store_true", help="List all registered datasets"
+    )
     p.add_argument("--format", choices=["json", "table"], default="json")
     p.set_defaults(func=run)
 
@@ -42,5 +46,7 @@ def run(args) -> None:
         result = {"row_count": len(df), "columns": list(df.columns), "rows": rows}
         if len(df) > 200:
             result["truncated"] = True
-            result["note"] = f"Showing first 200 of {len(df)} rows. Add LIMIT to your query."
+            result["note"] = (
+                f"Showing first 200 of {len(df)} rows. Add LIMIT to your query."
+            )
         print(json.dumps(result, default=str))

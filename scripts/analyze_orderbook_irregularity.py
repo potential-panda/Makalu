@@ -15,7 +15,6 @@ from pathlib import Path
 
 import pandas as pd
 
-
 ROOT = Path("/panda/makalu-data/bronze/dataset=OrderBook")
 
 
@@ -77,17 +76,16 @@ def analyze_file(path: Path, symbol: str, day: str, min_valid_levels: int) -> Da
 
     bid_depth = _valid_depth(df, "bid", 20)
     ask_depth = _valid_depth(df, "ask", 20)
-    partial_depth = top_valid & ((bid_depth < min_valid_levels) | (ask_depth < min_valid_levels))
+    partial_depth = top_valid & (
+        (bid_depth < min_valid_levels) | (ask_depth < min_valid_levels)
+    )
 
     spread_gt_1bp = spread_bps > 1.0
     spread_gt_10bp = spread_bps > 10.0
     spread_gt_100bp = spread_bps > 100.0
 
     irregular_mask = (
-        null_top
-        | crossed_or_locked
-        | spread_gt_10bp.fillna(False)
-        | partial_depth
+        null_top | crossed_or_locked | spread_gt_10bp.fillna(False) | partial_depth
     )
 
     dt = pd.to_numeric(df["ts"], errors="coerce").diff()
@@ -141,18 +139,28 @@ def summarize(stats: list[DayStats]) -> pd.DataFrame:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--exchange", default="BINANCE")
-    parser.add_argument("--symbols", nargs="+", default=["BTC_USDT", "ETH_USDT", "XRP_USDT"])
+    parser.add_argument(
+        "--symbols", nargs="+", default=["BTC_USDT", "ETH_USDT", "XRP_USDT"]
+    )
     parser.add_argument("--start", required=True)
     parser.add_argument("--end", required=True)
     parser.add_argument("--min-valid-levels", type=int, default=3)
-    parser.add_argument("--csv", default=None, help="Optional path to write per-day CSV")
+    parser.add_argument(
+        "--csv", default=None, help="Optional path to write per-day CSV"
+    )
     args = parser.parse_args()
 
     stats: list[DayStats] = []
     missing: list[str] = []
     for symbol in args.symbols:
         for day in _daterange(args.start, args.end):
-            path = ROOT / f"exchange={args.exchange}" / f"symbol={symbol}" / f"date={day}" / "data.parquet"
+            path = (
+                ROOT
+                / f"exchange={args.exchange}"
+                / f"symbol={symbol}"
+                / f"date={day}"
+                / "data.parquet"
+            )
             if not path.exists():
                 missing.append(f"{symbol}:{day}")
                 continue
@@ -189,7 +197,9 @@ def main() -> None:
         "max_spread_bps",
     ]
     print("Per-day stats:")
-    print(per_day[display_cols].to_string(index=False, float_format=lambda x: f"{x:.6f}"))
+    print(
+        per_day[display_cols].to_string(index=False, float_format=lambda x: f"{x:.6f}")
+    )
     print()
     print("Summary:")
     print(summary.to_string(index=False, float_format=lambda x: f"{x:.6f}"))

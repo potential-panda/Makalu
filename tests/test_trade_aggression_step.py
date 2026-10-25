@@ -14,24 +14,35 @@ from qate.util.dt_range import DtRange  # noqa: E402
 
 from pipeline.trade_derived_steps import Context, PopulateAggressionStep  # noqa: E402
 
-
 # A real 2026 second boundary (unix seconds), so DtRange.is_within passes.
 BASE = 1780000000.0  # int == the second bucket
 
 
 def _trade(ts: float, side: Side = Side.BUY) -> Trade:
-    return Trade(trade_id="t", side=side, price=100.0, size=1.0,
-                 symbol=None, exchange_name=None, exchange_ts=ts, received_ts=ts)
+    return Trade(
+        trade_id="t",
+        side=side,
+        price=100.0,
+        size=1.0,
+        symbol=None,
+        exchange_name=None,
+        exchange_ts=ts,
+        received_ts=ts,
+    )
 
 
 def _wide_range() -> DtRange:
-    return DtRange(datetime(2020, 1, 1, tzinfo=timezone.utc),
-                   datetime(2030, 1, 1, tzinfo=timezone.utc))
+    return DtRange(
+        datetime(2020, 1, 1, tzinfo=timezone.utc),
+        datetime(2030, 1, 1, tzinfo=timezone.utc),
+    )
 
 
 def test_one_record_per_second_at_last_trade():
     trades = [
-        _trade(BASE + 0.1, Side.BUY), _trade(BASE + 0.5, Side.BUY), _trade(BASE + 0.9, Side.SELL),
+        _trade(BASE + 0.1, Side.BUY),
+        _trade(BASE + 0.5, Side.BUY),
+        _trade(BASE + 0.9, Side.SELL),
         _trade(BASE + 1.2, Side.BUY),
         _trade(BASE + 3.0, Side.SELL),  # gap at second BASE+2 -> no row
     ]
@@ -55,8 +66,10 @@ def test_out_of_range_seconds_not_emitted():
     # populate range covers only [BASE+1, BASE+2): the BASE+0 and BASE+3 rows
     # must not be emitted, but their trades still feed the rolling window.
     trades = [_trade(BASE + 0.5), _trade(BASE + 1.5), _trade(BASE + 3.5)]
-    rng = DtRange(datetime.fromtimestamp(BASE + 1, tz=timezone.utc),
-                  datetime.fromtimestamp(BASE + 2, tz=timezone.utc))
+    rng = DtRange(
+        datetime.fromtimestamp(BASE + 1, tz=timezone.utc),
+        datetime.fromtimestamp(BASE + 2, tz=timezone.utc),
+    )
     ctx = Context(populate_dt_range=rng, market=None, trades=trades)
     step = PopulateAggressionStep(windows_sec=[1])
     out = list(step._populate(None, ctx))
@@ -67,4 +80,5 @@ def test_out_of_range_seconds_not_emitted():
 
 if __name__ == "__main__":
     import pytest
+
     sys.exit(pytest.main([__file__, "-v"]))

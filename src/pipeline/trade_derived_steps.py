@@ -4,13 +4,14 @@ from dataclasses import dataclass
 from typing import List
 
 from qate.core.model import Market, Trade
-from makalu.microstructure.aggression import TradeAggressionBuilder
 from qate.trading.chart import (
     BaseBarBuilder,
     CandleBarBuilder,
     HeikinAshiBarBuilder,
     RangeBarBuilder,
 )
+
+from makalu.microstructure.aggression import TradeAggressionBuilder
 
 from .framework import PipelineContext, StageContext, Step, StepProgressLogger
 
@@ -85,7 +86,9 @@ class PopulateAggressionStep(Step):
         # trade in that second. The sole consumer (Kilimanjaro feature_frame)
         # buckets to 1s with last(col ORDER BY ts) GROUP BY floor(ts), so this is
         # byte-identical to per-trade output while writing ~15x fewer rows.
-        progress = StepProgressLogger(self.__class__.__name__, len(stage_context.trades))
+        progress = StepProgressLogger(
+            self.__class__.__name__, len(stage_context.trades)
+        )
         builder = TradeAggressionBuilder(windows_sec=self.windows_sec)
 
         prev_ts = None
@@ -98,7 +101,10 @@ class PopulateAggressionStep(Step):
             # second — emit its aggression (state is as-of that trade, since the
             # current trade is not yet applied).
             if prev_sec is not None and sec != prev_sec and prev_in_range:
-                yield (prev_ts, self._write_fields(builder.get_trade_aggression(prev_ts)))
+                yield (
+                    prev_ts,
+                    self._write_fields(builder.get_trade_aggression(prev_ts)),
+                )
                 progress.update()
 
             builder.on_trade(trade)
@@ -139,7 +145,9 @@ class AbstractPopulateChartStep(Step):
 
     def _populate(self, pipeline_context: PipelineContext, stage_context: Context):
         """Generator that yields (ts, fields) tuples."""
-        progress = StepProgressLogger(self.__class__.__name__, len(stage_context.trades))
+        progress = StepProgressLogger(
+            self.__class__.__name__, len(stage_context.trades)
+        )
         builder = self.create_bar_builder()
         for trade in stage_context.trades:
             bar = builder.on_update(trade)

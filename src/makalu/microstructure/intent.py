@@ -83,8 +83,16 @@ def compute_depth_imbalance(order_book: OrderBook, distance_rate: float = 0.1) -
     mid_price = (order_book.best_bid + order_book.best_ask) / 2.0
     price_distance = mid_price * distance_rate
 
-    bid_volume = sum(level.amount for level in order_book.bids if mid_price - level.price <= price_distance)
-    ask_volume = sum(level.amount for level in order_book.asks if level.price - mid_price <= price_distance)
+    bid_volume = sum(
+        level.amount
+        for level in order_book.bids
+        if mid_price - level.price <= price_distance
+    )
+    ask_volume = sum(
+        level.amount
+        for level in order_book.asks
+        if level.price - mid_price <= price_distance
+    )
 
     total_volume = bid_volume + ask_volume
     if total_volume == 0:
@@ -164,7 +172,9 @@ class OrderBookMetricsCache:
             self._bid_vol_prefix[i + 1] = self._bid_vol_prefix[i] + level.amount
             distance = abs(mid_price - level.price)
             weight = 1.0 / (1.0 + distance) if distance > 0 else 1.0
-            self._weighted_bid_prefix[i + 1] = self._weighted_bid_prefix[i] + level.amount * weight
+            self._weighted_bid_prefix[i + 1] = (
+                self._weighted_bid_prefix[i] + level.amount * weight
+            )
         # Fill remaining with the last value (if fewer levels than max_k)
         for i in range(n_bids + 1, max_k + 1):
             self._bid_vol_prefix[i] = self._bid_vol_prefix[n_bids]
@@ -179,7 +189,9 @@ class OrderBookMetricsCache:
             self._ask_vol_prefix[i + 1] = self._ask_vol_prefix[i] + level.amount
             distance = abs(level.price - mid_price)
             weight = 1.0 / (1.0 + distance) if distance > 0 else 1.0
-            self._weighted_ask_prefix[i + 1] = self._weighted_ask_prefix[i] + level.amount * weight
+            self._weighted_ask_prefix[i + 1] = (
+                self._weighted_ask_prefix[i] + level.amount * weight
+            )
         for i in range(n_asks + 1, max_k + 1):
             self._ask_vol_prefix[i] = self._ask_vol_prefix[n_asks]
             self._weighted_ask_prefix[i] = self._weighted_ask_prefix[n_asks]
@@ -211,7 +223,9 @@ class OrderBookMetricsCache:
         ask_vol = self._ask_vol_prefix[k]
         if bid_vol == 0 or ask_vol == 0:
             return None
-        return (self._best_bid * ask_vol + self._best_ask * bid_vol) / (bid_vol + ask_vol)
+        return (self._best_bid * ask_vol + self._best_ask * bid_vol) / (
+            bid_vol + ask_vol
+        )
 
     def depth_k(self, k: int) -> tuple[float, float]:
         if not self._valid:

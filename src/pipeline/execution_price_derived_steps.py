@@ -32,7 +32,9 @@ class VolSpreadStep(Step):
         if sample_sec <= 0 or emit_sec <= 0:
             raise ValueError("sample_interval and emit_interval must be positive")
 
-        horizon_periods = max(1, int(round(self.config.return_horizon_sec / sample_sec)))
+        horizon_periods = max(
+            1, int(round(self.config.return_horizon_sec / sample_sec))
+        )
         lookback_periods = max(1, int(round(self.config.lookback_sec / sample_sec)))
         smooth_periods = max(1, int(round(self.config.smooth_sec / sample_sec)))
 

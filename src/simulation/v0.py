@@ -42,7 +42,9 @@ class SimulationResult:
             "total_samples": self.total_samples,
             "trades_taken": self.trades_taken,
             "trades_skipped": self.trades_skipped,
-            "trade_rate": self.trades_taken / self.total_samples if self.total_samples > 0 else 0,
+            "trade_rate": self.trades_taken / self.total_samples
+            if self.total_samples > 0
+            else 0,
             "total_pnl": self.total_pnl,
             "avg_pnl_per_trade": self.avg_pnl_per_trade,
             "win_rate": self.win_rate,
@@ -57,9 +59,11 @@ class SimulationResult:
         print("Trading Simulation Summary")
         print("=" * 60)
         print(f"\nTotal test samples: {self.total_samples:,}")
-        print(f"Trades taken (pred != Timeout): {self.trades_taken:,} ({self.trades_taken/self.total_samples:.1%})")
         print(
-            f"Trades skipped (pred = Timeout): {self.trades_skipped:,} ({self.trades_skipped/self.total_samples:.1%})"
+            f"Trades taken (pred != Timeout): {self.trades_taken:,} ({self.trades_taken / self.total_samples:.1%})"
+        )
+        print(
+            f"Trades skipped (pred = Timeout): {self.trades_skipped:,} ({self.trades_skipped / self.total_samples:.1%})"
         )
 
         print("\nModel Strategy:")
@@ -120,8 +124,17 @@ def simulate_trading(
     test_lookup["time"] = pd.to_datetime(test_lookup["time"])
 
     # Prepare labels for merge
-    labels_lookup = labels_df[["label", "long_pnl", "short_pnl", "volatility_ema", "spread_pct_ema"]].reset_index()
-    labels_lookup.columns = ["time", "original_label", "long_pnl", "short_pnl", "volatility_ema", "spread_pct_ema"]
+    labels_lookup = labels_df[
+        ["label", "long_pnl", "short_pnl", "volatility_ema", "spread_pct_ema"]
+    ].reset_index()
+    labels_lookup.columns = [
+        "time",
+        "original_label",
+        "long_pnl",
+        "short_pnl",
+        "volatility_ema",
+        "spread_pct_ema",
+    ]
 
     # Merge to get original labels and pnl for each test sample
     merged = pd.merge_asof(
@@ -137,7 +150,9 @@ def simulate_trading(
 
     # Apply probability threshold: override low-confidence trade predictions to Timeout
     if threshold is not None and probabilities is None:
-        raise ValueError("threshold requires probabilities (e.g. probabilities=model.predict_proba(X))")
+        raise ValueError(
+            "threshold requires probabilities (e.g. probabilities=model.predict_proba(X))"
+        )
     if probabilities is not None and threshold is not None:
         pred_probs = probabilities[np.arange(len(predictions)), predictions]
         merged["pred_prob"] = pred_probs
@@ -154,7 +169,9 @@ def simulate_trading(
 
     # Calculate random strategy baseline
     np.random.seed(random_seed)
-    random_preds = np.random.choice([0, 1, 2], size=len(merged), p=[1 / 3, 1 / 3, 1 / 3])
+    random_preds = np.random.choice(
+        [0, 1, 2], size=len(merged), p=[1 / 3, 1 / 3, 1 / 3]
+    )
     merged["y_pred_random"] = random_preds
     merged["random_pnl"] = merged.apply(
         lambda row: _calculate_sim_pnl(
@@ -191,8 +208,12 @@ def simulate_trading(
         trades_taken=int(trades_taken),
         trades_skipped=int(trades_skipped),
         total_pnl=float(merged["sim_pnl"].sum()),
-        avg_pnl_per_trade=float(merged.loc[trade_mask, "sim_pnl"].mean()) if trades_taken > 0 else 0.0,
-        win_rate=float((merged.loc[trade_mask, "sim_pnl"] > 0).mean()) if trades_taken > 0 else 0.0,
+        avg_pnl_per_trade=float(merged.loc[trade_mask, "sim_pnl"].mean())
+        if trades_taken > 0
+        else 0.0,
+        win_rate=float((merged.loc[trade_mask, "sim_pnl"] > 0).mean())
+        if trades_taken > 0
+        else 0.0,
         baseline_pnl=float(merged["baseline_pnl"].sum()),
         random_pnl=float(merged["random_pnl"].sum()),
         confusion_pnl=confusion_pnl,
@@ -249,9 +270,29 @@ def plot_simulation_results(result: SimulationResult, window: int = 500) -> None
 
     # Plot 1: Cumulative PnL comparison
     ax1 = axes[0]
-    ax1.plot(merged["time"], merged["cumulative_pnl"], "b-", label="Model Strategy", linewidth=1.5)
-    ax1.plot(merged["time"], merged["cumulative_baseline"], "gray", label="Always Long", alpha=0.5, linewidth=1)
-    ax1.plot(merged["time"], merged["cumulative_random"], "orange", label="Random", alpha=0.5, linewidth=1)
+    ax1.plot(
+        merged["time"],
+        merged["cumulative_pnl"],
+        "b-",
+        label="Model Strategy",
+        linewidth=1.5,
+    )
+    ax1.plot(
+        merged["time"],
+        merged["cumulative_baseline"],
+        "gray",
+        label="Always Long",
+        alpha=0.5,
+        linewidth=1,
+    )
+    ax1.plot(
+        merged["time"],
+        merged["cumulative_random"],
+        "orange",
+        label="Random",
+        alpha=0.5,
+        linewidth=1,
+    )
     ax1.axhline(y=0, color="black", linestyle="-", alpha=0.3)
     ax1.set_ylabel("Cumulative PnL")
     ax1.set_title("Trading Simulation: Cumulative PnL Over Time")
@@ -265,14 +306,18 @@ def plot_simulation_results(result: SimulationResult, window: int = 500) -> None
     trade_pnl = merged["sim_pnl"].copy()
     trade_pnl[merged["y_pred"] == 2] = np.nan  # Mask Timeout predictions
     rolling_winrate = (trade_pnl > 0).rolling(window, min_periods=100).mean()
-    ax2.plot(merged["time"], rolling_winrate, "g-", label="Win Rate (rolling)", linewidth=1)
+    ax2.plot(
+        merged["time"], rolling_winrate, "g-", label="Win Rate (rolling)", linewidth=1
+    )
     ax2.axhline(y=0.5, color="r", linestyle="--", alpha=0.5, label="50% baseline")
 
     # Trade frequency
     trade_taken = (merged["y_pred"] != 2).astype(float)
     rolling_trade_freq = trade_taken.rolling(window, min_periods=100).mean()
     ax2_twin = ax2.twinx()
-    ax2_twin.plot(merged["time"], rolling_trade_freq, "purple", label="Trade Frequency", alpha=0.5)
+    ax2_twin.plot(
+        merged["time"], rolling_trade_freq, "purple", label="Trade Frequency", alpha=0.5
+    )
     ax2_twin.set_ylabel("Trade Frequency", color="purple")
 
     ax2.set_xlabel("Time")
@@ -291,7 +336,12 @@ def plot_simulation_results(result: SimulationResult, window: int = 500) -> None
     trade_pnl_values = merged.loc[merged["y_pred"] != 2, "sim_pnl"]
     axes[0].hist(trade_pnl_values, bins=50, edgecolor="black", alpha=0.7)
     axes[0].axvline(x=0, color="r", linestyle="--", alpha=0.5)
-    axes[0].axvline(x=trade_pnl_values.mean(), color="g", linestyle="-", label=f"Mean: {trade_pnl_values.mean():.6f}")
+    axes[0].axvline(
+        x=trade_pnl_values.mean(),
+        color="g",
+        linestyle="-",
+        label=f"Mean: {trade_pnl_values.mean():.6f}",
+    )
     axes[0].set_xlabel("PnL per Trade")
     axes[0].set_ylabel("Count")
     axes[0].set_title("PnL Distribution (Trades Only)")
@@ -300,7 +350,9 @@ def plot_simulation_results(result: SimulationResult, window: int = 500) -> None
     # PnL by prediction type
     pred_pnl = merged.groupby("y_pred")["sim_pnl"].agg(["sum", "mean", "count"])
     pred_pnl.index = ["Short", "Long", "Timeout"]
-    pred_pnl["sum"].plot(kind="bar", ax=axes[1], color=["red", "gray", "green"], edgecolor="black")
+    pred_pnl["sum"].plot(
+        kind="bar", ax=axes[1], color=["red", "gray", "green"], edgecolor="black"
+    )
     axes[1].axhline(y=0, color="black", linestyle="-", alpha=0.3)
     axes[1].set_xlabel("Prediction Type")
     axes[1].set_ylabel("Total PnL")
@@ -318,13 +370,17 @@ def plot_simulation_results(result: SimulationResult, window: int = 500) -> None
     fig, ax = plt.subplots(figsize=(8, 6))
     pnl_data = result.confusion_pnl.values
 
-    count_data = merged.pivot_table(
-        values="sim_pnl",
-        index="original_label",
-        columns="y_pred",
-        aggfunc="count",
-        fill_value=0,
-    ).reindex(index=[0, 1, 2], columns=[0, 1, 2], fill_value=0).values.astype(int)
+    count_data = (
+        merged.pivot_table(
+            values="sim_pnl",
+            index="original_label",
+            columns="y_pred",
+            aggfunc="count",
+            fill_value=0,
+        )
+        .reindex(index=[0, 1, 2], columns=[0, 1, 2], fill_value=0)
+        .values.astype(int)
+    )
 
     vmax = max(abs(pnl_data.min()), abs(pnl_data.max())) or 1e-9
     im = ax.imshow(pnl_data, cmap="RdYlGn", vmin=-vmax, vmax=vmax, aspect="auto")

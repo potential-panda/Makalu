@@ -103,7 +103,9 @@ class LGBMTrainer:
         else:
             self.feature_names = [f"feature_{i}" for i in range(X_train.shape[1])]
 
-        LOG.info(f"Training LightGBM {self.task} model with {len(self.feature_names)} features")
+        LOG.info(
+            f"Training LightGBM {self.task} model with {len(self.feature_names)} features"
+        )
 
         # Handle class weights if provided in params
         sample_weight = None
@@ -115,14 +117,18 @@ class LGBMTrainer:
                 weight_dict = {}
                 n_samples = len(y_train)
                 for cls in classes:
-                    weight_dict[cls] = n_samples / (len(classes) * np.sum(y_train == cls))
+                    weight_dict[cls] = n_samples / (
+                        len(classes) * np.sum(y_train == cls)
+                    )
                 print(f"Calculated balanced class weights: {weight_dict}")
                 LOG.info(f"Calculated balanced class weights: {weight_dict}")
             elif isinstance(class_weight, dict):
                 weight_dict = class_weight
                 LOG.info(f"Using manual class weights: {weight_dict}")
             else:
-                raise ValueError("class_weight must be 'balanced' or a dictionary {class_label: weight}")
+                raise ValueError(
+                    "class_weight must be 'balanced' or a dictionary {class_label: weight}"
+                )
 
             # Map class weights to every sample
             sample_weight = pd.Series(y_train).map(weight_dict).values
@@ -153,7 +159,9 @@ class LGBMTrainer:
         # Training callbacks
         callbacks = []
         if self.early_stopping_rounds and X_val is not None:
-            callbacks.append(lgb.early_stopping(stopping_rounds=self.early_stopping_rounds))
+            callbacks.append(
+                lgb.early_stopping(stopping_rounds=self.early_stopping_rounds)
+            )
         if self.verbose_eval > 0:
             callbacks.append(lgb.log_evaluation(period=self.verbose_eval))
 

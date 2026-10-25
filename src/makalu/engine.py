@@ -74,13 +74,21 @@ class Engine:
         except Exception:
             self._register_view_union(view, data_dir, partition_cols)
 
-    def _register_view_union(self, view: str, data_dir: Path, partition_cols: list[str]) -> None:
+    def _register_view_union(
+        self, view: str, data_dir: Path, partition_cols: list[str]
+    ) -> None:
         if not partition_cols or partition_cols[-1] == "date":
-            raise RuntimeError(f"Cannot build union view for {view}: unexpected partition layout")
+            raise RuntimeError(
+                f"Cannot build union view for {view}: unexpected partition layout"
+            )
 
         optional_key = partition_cols[-1]
         fixed_keys = partition_cols[:-1]
-        with_key_parts = [f"{k}=*" for k in fixed_keys] + [f"{optional_key}=*", "date=*", "*.parquet"]
+        with_key_parts = [f"{k}=*" for k in fixed_keys] + [
+            f"{optional_key}=*",
+            "date=*",
+            "*.parquet",
+        ]
         glob_with = str(data_dir.joinpath(*with_key_parts))
         without_key_parts = [f"{k}=*" for k in fixed_keys] + ["date=*", "*.parquet"]
         glob_without = str(data_dir.joinpath(*without_key_parts))
@@ -110,16 +118,22 @@ class Engine:
             }
             for e in self._datasets.values()
         ]
-        return pd.DataFrame(rows).sort_values(["layer", "dataset"]).reset_index(drop=True)
+        return (
+            pd.DataFrame(rows).sort_values(["layer", "dataset"]).reset_index(drop=True)
+        )
 
     def describe(self, dataset: str) -> dict[str, Any]:
         entry = self._datasets.get(dataset)
         if entry is None:
-            raise KeyError(f"Dataset '{dataset}' is not registered. Call list() to see what's available.")
+            raise KeyError(
+                f"Dataset '{dataset}' is not registered. Call list() to see what's available."
+            )
         return entry
 
     def schema(self, dataset: str) -> pd.DataFrame:
-        return self._conn.execute(f"DESCRIBE {_view(dataset)}").fetchdf()[["column_name", "column_type"]]
+        return self._conn.execute(f"DESCRIBE {_view(dataset)}").fetchdf()[
+            ["column_name", "column_type"]
+        ]
 
     def query(self, sql: str) -> pd.DataFrame:
         return self._conn.execute(sql).fetchdf()

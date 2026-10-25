@@ -40,18 +40,28 @@ class OrderBookDerivedStage(Stage):
         super().__init__()
         self.market = market
 
-    def before(self, dt_range: DtRange, pipeline_context: PipelineContext) -> StageContext:
+    def before(
+        self, dt_range: DtRange, pipeline_context: PipelineContext
+    ) -> StageContext:
         start_time = time.time()
-        compute_dt_range = DtRange(dt_range.start_dt - timedelta(hours=1), dt_range.end_dt)
+        compute_dt_range = DtRange(
+            dt_range.start_dt - timedelta(hours=1), dt_range.end_dt
+        )
         LOG.info(
             f"OrderBookDerivedStage: Querying data for {self.market.id}"
             f"from {compute_dt_range.start_str} to {compute_dt_range.end_str}"
         )
         store = pipeline_context.parquet_store.create_order_book(self.market)
-        order_books = _safe_read(store.read_order_books, compute_dt_range, label=f"OrderBook {self.market.id}")
+        order_books = _safe_read(
+            store.read_order_books,
+            compute_dt_range,
+            label=f"OrderBook {self.market.id}",
+        )
 
         end_time = time.time()
-        LOG.info(f"OrderBookDerivedStage: Found {len(order_books)} objects in {end_time - start_time:.2f} seconds.")
+        LOG.info(
+            f"OrderBookDerivedStage: Found {len(order_books)} objects in {end_time - start_time:.2f} seconds."
+        )
         return OrderBookDerivedContext(
             dt_range,
             self.market,
@@ -64,18 +74,26 @@ class TradeDerivedStage(Stage):
         super().__init__()
         self.market = market
 
-    def before(self, dt_range: DtRange, pipeline_context: PipelineContext) -> StageContext:
+    def before(
+        self, dt_range: DtRange, pipeline_context: PipelineContext
+    ) -> StageContext:
         start_time = time.time()
-        compute_dt_range = DtRange(dt_range.start_dt - timedelta(hours=1), dt_range.end_dt)
+        compute_dt_range = DtRange(
+            dt_range.start_dt - timedelta(hours=1), dt_range.end_dt
+        )
         LOG.info(
             f"TradeDerivedStage: Querying data for {self.market.id}"
             f"from {compute_dt_range.start_str} to {compute_dt_range.end_str}"
         )
         store = pipeline_context.parquet_store.create_trade(self.market)
-        trades = _safe_read(store.read_trades, compute_dt_range, label=f"Trade {self.market.id}")
+        trades = _safe_read(
+            store.read_trades, compute_dt_range, label=f"Trade {self.market.id}"
+        )
 
         end_time = time.time()
-        LOG.info(f"TradeDerivedStage: Found {len(trades)} objects in {end_time - start_time:.2f} seconds.")
+        LOG.info(
+            f"TradeDerivedStage: Found {len(trades)} objects in {end_time - start_time:.2f} seconds."
+        )
         return TradeDerivedContext(
             dt_range,
             self.market,
@@ -89,13 +107,19 @@ class LabelingStage(Stage):
         self.market = market
         self.execution_size_str = execution_size_str
 
-    def before(self, dt_range: DtRange, pipeline_context: PipelineContext) -> StageContext:
+    def before(
+        self, dt_range: DtRange, pipeline_context: PipelineContext
+    ) -> StageContext:
         parquet_store = pipeline_context.parquet_store.create_execution_price(
             self.market,
             self.execution_size_str,
         )
-        read_range = DtRange(dt_range.start_dt - timedelta(hours=8), dt_range.end_dt + timedelta(hours=8))
-        df = _safe_read(parquet_store.read, read_range, label=f"ExecutionPrice {self.market.id}")
+        read_range = DtRange(
+            dt_range.start_dt - timedelta(hours=8), dt_range.end_dt + timedelta(hours=8)
+        )
+        df = _safe_read(
+            parquet_store.read, read_range, label=f"ExecutionPrice {self.market.id}"
+        )
 
         return TripleBarrierContext(
             dt_range,
@@ -106,22 +130,30 @@ class LabelingStage(Stage):
 
 
 class LeadLagStage(Stage):
-    def __init__(self, market_lead: Market, market_lag: Market, execution_size_str: str):
+    def __init__(
+        self, market_lead: Market, market_lag: Market, execution_size_str: str
+    ):
         super().__init__()
         self.market_lead = market_lead
         self.market_lag = market_lag
         self.execution_size_str = execution_size_str
 
-    def before(self, dt_range: DtRange, pipeline_context: PipelineContext) -> StageContext:
+    def before(
+        self, dt_range: DtRange, pipeline_context: PipelineContext
+    ) -> StageContext:
         read_range = DtRange(dt_range.start_dt - timedelta(hours=8), dt_range.end_dt)
 
         df_lead = _safe_read(
-            pipeline_context.parquet_store.create_execution_price(self.market_lead, self.execution_size_str).read,
+            pipeline_context.parquet_store.create_execution_price(
+                self.market_lead, self.execution_size_str
+            ).read,
             read_range,
             label=f"ExecutionPrice {self.market_lead.id}",
         )
         df_lag = _safe_read(
-            pipeline_context.parquet_store.create_execution_price(self.market_lag, self.execution_size_str).read,
+            pipeline_context.parquet_store.create_execution_price(
+                self.market_lag, self.execution_size_str
+            ).read,
             read_range,
             label=f"ExecutionPrice {self.market_lag.id}",
         )
@@ -131,7 +163,9 @@ class LeadLagStage(Stage):
             f" {len(df_lag)} for {self.market_lag.id}"
         )
 
-        ret_timestamps, lead_returns, lag_returns = prepare_returns(df_lead, df_lag, resample_interval="100ms")
+        ret_timestamps, lead_returns, lag_returns = prepare_returns(
+            df_lead, df_lag, resample_interval="100ms"
+        )
 
         return LeadLagContext(
             dt_range,
@@ -149,13 +183,17 @@ class ExecutionPriceDerivedStage(Stage):
         self.market = market
         self.execution_size_str = execution_size_str
 
-    def before(self, dt_range: DtRange, pipeline_context: PipelineContext) -> StageContext:
+    def before(
+        self, dt_range: DtRange, pipeline_context: PipelineContext
+    ) -> StageContext:
         parquet_store = pipeline_context.parquet_store.create_execution_price(
             self.market,
             self.execution_size_str,
         )
         read_range = DtRange(dt_range.start_dt - timedelta(hours=8), dt_range.end_dt)
-        df = _safe_read(parquet_store.read, read_range, label=f"ExecutionPrice {self.market.id}")
+        df = _safe_read(
+            parquet_store.read, read_range, label=f"ExecutionPrice {self.market.id}"
+        )
         df = df.sort_index()
         df = ts_index(df)
 
@@ -182,7 +220,9 @@ class ReturnDerivedStage(Stage):
         self.execution_size_str = execution_size_str
         self.max_horizon_sec = max_horizon_sec
 
-    def before(self, dt_range: DtRange, pipeline_context: PipelineContext) -> StageContext:
+    def before(
+        self, dt_range: DtRange, pipeline_context: PipelineContext
+    ) -> StageContext:
         parquet_store = pipeline_context.parquet_store.create_execution_price(
             self.market,
             self.execution_size_str,
@@ -191,7 +231,9 @@ class ReturnDerivedStage(Stage):
             dt_range.start_dt - timedelta(hours=1),
             dt_range.end_dt + timedelta(seconds=self.max_horizon_sec),
         )
-        df = _safe_read(parquet_store.read, read_range, label=f"ExecutionPrice {self.market.id}")
+        df = _safe_read(
+            parquet_store.read, read_range, label=f"ExecutionPrice {self.market.id}"
+        )
         df = df.sort_index()
         df = ts_index(df)
 

@@ -20,22 +20,26 @@ class FeatureStage(Stage):
         self.execution_size_str = execution_size_str
         self.target = target
 
-    def before(self, dt_range: DtRange, pipeline_context: PipelineContext) -> StageContext:
-        compute_dt_range = DtRange(dt_range.start_dt - timedelta(hours=1), dt_range.end_dt)
+    def before(
+        self, dt_range: DtRange, pipeline_context: PipelineContext
+    ) -> StageContext:
+        compute_dt_range = DtRange(
+            dt_range.start_dt - timedelta(hours=1), dt_range.end_dt
+        )
 
         # Load all 4 data sources
         execution_price_df = pipeline_context.parquet_store.create_execution_price(
             self.market, self.execution_size_str
         ).read(compute_dt_range)
-        trade_aggression_df = pipeline_context.parquet_store.create_single_market("TradeAggression", self.market).read(
-            compute_dt_range
-        )
-        order_book_state_df = pipeline_context.parquet_store.create_single_market("BookState", self.market).read(
-            compute_dt_range
-        )
-        book_change_df = pipeline_context.parquet_store.create_single_market("BookChange", self.market).read(
-            compute_dt_range
-        )
+        trade_aggression_df = pipeline_context.parquet_store.create_single_market(
+            "TradeAggression", self.market
+        ).read(compute_dt_range)
+        order_book_state_df = pipeline_context.parquet_store.create_single_market(
+            "BookState", self.market
+        ).read(compute_dt_range)
+        book_change_df = pipeline_context.parquet_store.create_single_market(
+            "BookChange", self.market
+        ).read(compute_dt_range)
 
         # Align into a single source_df
         source_df = self._align_data_sources(
@@ -93,6 +97,8 @@ class FeatureStage(Stage):
         with pd.option_context("future.no_silent_downcasting", True):
             result = result.ffill()
         result = result.infer_objects(copy=False)
-        LOG.info(f"FeatureStage: Aligned {len(result)} rows with {len(result.columns)} columns")
+        LOG.info(
+            f"FeatureStage: Aligned {len(result)} rows with {len(result.columns)} columns"
+        )
 
         return result

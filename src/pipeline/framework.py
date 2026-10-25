@@ -4,8 +4,9 @@ from dataclasses import dataclass
 from logging import getLogger
 from typing import List
 
-from makalu.storage.parquet_store import ParquetStore
 from qate.util.dt_range import DtRange
+
+from makalu.storage.parquet_store import ParquetStore
 
 CHUNK_SIZE = 3
 LOG = getLogger(__name__)

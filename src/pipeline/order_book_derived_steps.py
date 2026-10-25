@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import List
 
 from qate.core.model import Market, OrderBook
+
 from makalu.microstructure import intent
 from makalu.microstructure.book_change import BookChangeBuilder
 
@@ -49,7 +50,9 @@ class PopulateBookStateStep(Step):
         )
 
     def populate(self, pipeline_context: PipelineContext, stage_context: Context):
-        parquet_store = pipeline_context.parquet_store.create_single_market("BookState", stage_context.market)
+        parquet_store = pipeline_context.parquet_store.create_single_market(
+            "BookState", stage_context.market
+        )
         count = 0
         for ts, fields in self._populate(pipeline_context, stage_context):
             parquet_store.add(ts, fields)
@@ -60,7 +63,9 @@ class PopulateBookStateStep(Step):
     def _populate(self, pipeline_context: PipelineContext, stage_context: Context):
         """Generator that yields (ts, fields) tuples."""
         skip_count = 0
-        progress = StepProgressLogger(self.__class__.__name__, len(stage_context.order_books))
+        progress = StepProgressLogger(
+            self.__class__.__name__, len(stage_context.order_books)
+        )
         for order_book in stage_context.order_books:
             if not stage_context.populate_dt_range.is_within(order_book.get_ts()):
                 continue
@@ -75,7 +80,10 @@ class PopulateBookStateStep(Step):
             # behind it, which the spread check above passes but the
             # imbalance and microprice fields below cannot be computed from.
             # Same threshold as PopulateOrderBookStep.MIN_VALID_LEVELS.
-            if len(order_book.bids) < self.min_valid_levels or len(order_book.asks) < self.min_valid_levels:
+            if (
+                len(order_book.bids) < self.min_valid_levels
+                or len(order_book.asks) < self.min_valid_levels
+            ):
                 skip_count += 1
                 continue
 
@@ -106,7 +114,9 @@ class PopulateBookStateStep(Step):
             yield (order_book.get_ts(), fields)
             progress.update()
 
-        LOG.info(f"PopulateBookStateStep: Processed {progress.cnt} objects and skipped {skip_count} objects")
+        LOG.info(
+            f"PopulateBookStateStep: Processed {progress.cnt} objects and skipped {skip_count} objects"
+        )
 
 
 class PopulateBookChangeStep(Step):
@@ -116,7 +126,9 @@ class PopulateBookChangeStep(Step):
         self.max_spread_bps = max_spread_bps
 
     def populate(self, pipeline_context: PipelineContext, stage_context: Context):
-        parquet_store = pipeline_context.parquet_store.create_single_market("BookChange", stage_context.market)
+        parquet_store = pipeline_context.parquet_store.create_single_market(
+            "BookChange", stage_context.market
+        )
         count = 0
         for ts, write_fields in self._populate(pipeline_context, stage_context):
             parquet_store.add(ts, write_fields)
@@ -125,7 +137,9 @@ class PopulateBookChangeStep(Step):
         LOG.info(f"PopulateBookChangeStep: Wrote {count} records to Parquet store")
 
     def _populate(self, pipeline_context: PipelineContext, stage_context: Context):
-        progress = StepProgressLogger(self.__class__.__name__, len(stage_context.order_books))
+        progress = StepProgressLogger(
+            self.__class__.__name__, len(stage_context.order_books)
+        )
         builder = BookChangeBuilder(self.k_levels)
         for order_book in stage_context.order_books:
             book_changes = builder.on_snapshot(order_book)

@@ -2,10 +2,10 @@ import logging
 
 import pandas as pd
 from qate.core.model import Market
-from makalu import settings as sys_env
-from makalu.storage.parquet_store import ParquetStore
 
 from lead_lag.lead_lag import LeadLagConfig
+from makalu import settings as sys_env
+from makalu.storage.parquet_store import ParquetStore
 from pipeline.framework import PipelineContext, Step
 
 from .context import Context
@@ -21,11 +21,15 @@ class LoadLeadLagStep(Step):
     def populate(self, pipeline_context: PipelineContext, stage_context: Context):
         store = ParquetStore(sys_env.get_parquet_root_dir())
         market_lead = stage_context.market
-        ll_store = store.create_lead_lag(market_lead, self.market_lag, self.config.param_id())
+        ll_store = store.create_lead_lag(
+            market_lead, self.market_lag, self.config.param_id()
+        )
         df = ll_store.read(stage_context.populate_dt_range)
 
         if df.empty:
-            LOG.warning(f"LoadLeadLagStep: No data found for {market_lead.id}-{self.market_lag.id}")
+            LOG.warning(
+                f"LoadLeadLagStep: No data found for {market_lead.id}-{self.market_lag.id}"
+            )
             return
 
         if "ts" in df.columns:

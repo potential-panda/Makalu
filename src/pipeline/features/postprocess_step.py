@@ -54,7 +54,9 @@ def _normalize_for_ml(feature_df: pd.DataFrame) -> pd.DataFrame:
         out[col] = np.tanh(np.sign(s) * np.log1p(np.abs(s)))
         transformed_cols += 1
 
-    LOG.info(f"PostprocessAndSaveStep: Normalized {transformed_cols} unbounded numeric features")
+    LOG.info(
+        f"PostprocessAndSaveStep: Normalized {transformed_cols} unbounded numeric features"
+    )
     return out
 
 
@@ -65,9 +67,14 @@ class PostprocessAndSaveStep(Step):
             return
 
         # Create DataFrame from features dict in one operation (avoids fragmentation)
-        feature_df = pd.DataFrame(stage_context.features, index=stage_context.source_df.index)
+        feature_df = pd.DataFrame(
+            stage_context.features, index=stage_context.source_df.index
+        )
 
-        LOG.info(f"PostprocessAndSaveStep: Built {len(feature_df.columns)} features, " f"{len(feature_df)} rows")
+        LOG.info(
+            f"PostprocessAndSaveStep: Built {len(feature_df.columns)} features, "
+            f"{len(feature_df)} rows"
+        )
 
         # Post-processing: replace inf with NaN
         feature_df = feature_df.replace([np.inf, -np.inf], np.nan)
@@ -94,13 +101,19 @@ class PostprocessAndSaveStep(Step):
         ]
 
         if feature_df.empty:
-            LOG.warning("PostprocessAndSaveStep: No data after filtering to populate range")
+            LOG.warning(
+                "PostprocessAndSaveStep: No data after filtering to populate range"
+            )
             return
 
-        LOG.info(f"PostprocessAndSaveStep: Feature columns: {sorted(feature_df.columns.tolist())}")
+        LOG.info(
+            f"PostprocessAndSaveStep: Feature columns: {sorted(feature_df.columns.tolist())}"
+        )
 
         # Save to parquet store
-        parquet_store = pipeline_context.parquet_store.create_feature(stage_context.market, stage_context.target)
+        parquet_store = pipeline_context.parquet_store.create_feature(
+            stage_context.market, stage_context.target
+        )
         parquet_store.add_dataframe(feature_df, ts_column=None)
         parquet_store.close()
         LOG.info(

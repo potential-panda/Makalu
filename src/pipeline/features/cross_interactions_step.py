@@ -10,7 +10,9 @@ LOG = logging.getLogger(__name__)
 
 
 class CrossInteractionsFeatureStep(Step):
-    def __init__(self, windows: List[str], depth_levels: List[int], base_roll_window: str):
+    def __init__(
+        self, windows: List[str], depth_levels: List[int], base_roll_window: str
+    ):
         self.windows = windows
         self.depth_levels = depth_levels
         self.base_roll_window = base_roll_window
@@ -24,4 +26,6 @@ class CrossInteractionsFeatureStep(Step):
             self.depth_levels,
             self.base_roll_window,
         )
-        LOG.info(f"  Cross-Feature Interactions: +{len(stage_context.features) - before} features")
+        LOG.info(
+            f"  Cross-Feature Interactions: +{len(stage_context.features) - before} features"
+        )

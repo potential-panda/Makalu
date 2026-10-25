@@ -1,7 +1,7 @@
 import argparse
 import json
 import os
-from datetime import datetime, timedelta
+from datetime import datetime
 from logging import getLogger
 from pathlib import Path
 from zoneinfo import ZoneInfo

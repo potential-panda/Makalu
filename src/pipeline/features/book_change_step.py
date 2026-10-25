@@ -17,6 +17,9 @@ class BookChangeFeatureStep(Step):
     def populate(self, pipeline_context: PipelineContext, stage_context: Context):
         before = len(stage_context.features)
         build_book_change_features(
-            stage_context.source_df, stage_context.features, self.depth_levels, self.rolling_windows
+            stage_context.source_df,
+            stage_context.features,
+            self.depth_levels,
+            self.rolling_windows,
         )
         LOG.info(f"  Book Change: +{len(stage_context.features) - before} features")

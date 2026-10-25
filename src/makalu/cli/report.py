@@ -10,7 +10,6 @@ from qate.core.model import Market
 LOG = getLogger(__name__)
 
 
-
 def _parse_period(text: str) -> list[str]:
     """'Q4 2025:2025-10-01:2025-12-31' -> ['Q4 2025', '2025-10-01', '2025-12-31']"""
     name, start, end = text.rsplit(":", 2)
@@ -27,7 +26,9 @@ def _comparisons(values: list[str] | None) -> list[dict] | None:
             a, b = v.split(",")
             out.append({"id": f"c{i}", "a": _parse_period(a), "b": _parse_period(b)})
         except ValueError:
-            raise SystemExit(f"--compare must look like 'NAME:FROM:TO,NAME:FROM:TO', got {v!r}")
+            raise SystemExit(
+                f"--compare must look like 'NAME:FROM:TO,NAME:FROM:TO', got {v!r}"
+            )
     return out
 
 
@@ -60,23 +61,33 @@ def execute_leadlag(args):
     if start is None:
         days = leadlag.available_days(pair)
         if not days:
-            LOG.error(f"No day has MarketPrice for both {lead.id} and {lag.id} at execution size {execution_size}.")
+            LOG.error(
+                f"No day has MarketPrice for both {lead.id} and {lag.id} at execution size {execution_size}."
+            )
             sys.exit(1)
         start = days[0]
     site_dir = Path(args.site_dir) if args.site_dir else site.default_site_dir()
     meta = site.build_leadlag(
-        pair, start, end, site_dir,
-        comparisons=_comparisons(args.compare), recompute=args.recompute,
+        pair,
+        start,
+        end,
+        site_dir,
+        comparisons=_comparisons(args.compare),
+        recompute=args.recompute,
     )
-    print(json.dumps({
-        "status": "ok",
-        "report": str(site_dir / "leadlag" / meta["key"]),
-        "path": f"leadlag/{meta['key']}/",
-        "days": meta["days"],
-        "hours": meta["hours"],
-        "first_date": meta["first_date"],
-        "last_date": meta["last_date"],
-    }))
+    print(
+        json.dumps(
+            {
+                "status": "ok",
+                "report": str(site_dir / "leadlag" / meta["key"]),
+                "path": f"leadlag/{meta['key']}/",
+                "days": meta["days"],
+                "hours": meta["hours"],
+                "first_date": meta["first_date"],
+                "last_date": meta["last_date"],
+            }
+        )
+    )
 
 
 def execute_serve(args):
@@ -118,15 +129,35 @@ def register_cli(sub):
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    ll.add_argument("--pair", help="Known pair key from pipeline.market_pair.LEAD_LAG_PAIRS: btc, eth, xrp, sol")
-    ll.add_argument("--lead-market", help="Lead market as EXCHANGE:SYMBOL, e.g. BINANCE:XRP_USDT")
-    ll.add_argument("--lag-market", help="Lag market as EXCHANGE:SYMBOL, e.g. GMO:XRP_JPY")
-    ll.add_argument("--execution-size", help="MarketPrice execution size (default: by lag symbol)")
-    ll.add_argument("--start", help="First date YYYY-MM-DD (default: first day both markets have MarketPrice)")
+    ll.add_argument(
+        "--pair",
+        help="Known pair key from pipeline.market_pair.LEAD_LAG_PAIRS: btc, eth, xrp, sol",
+    )
+    ll.add_argument(
+        "--lead-market", help="Lead market as EXCHANGE:SYMBOL, e.g. BINANCE:XRP_USDT"
+    )
+    ll.add_argument(
+        "--lag-market", help="Lag market as EXCHANGE:SYMBOL, e.g. GMO:XRP_JPY"
+    )
+    ll.add_argument(
+        "--execution-size", help="MarketPrice execution size (default: by lag symbol)"
+    )
+    ll.add_argument(
+        "--start",
+        help="First date YYYY-MM-DD (default: first day both markets have MarketPrice)",
+    )
     ll.add_argument("--end", help="Last date YYYY-MM-DD (default today - 2)")
-    ll.add_argument("--compare", action="append", metavar="'NAME:FROM:TO,NAME:FROM:TO'",
-                    help="A pair of periods to compare; repeat for more. Default: Q4 2025 vs Q2 2026, and H2 2025 vs H1 2026")
-    ll.add_argument("--recompute", action="store_true", help="Recompute every day instead of reusing daily.csv")
+    ll.add_argument(
+        "--compare",
+        action="append",
+        metavar="'NAME:FROM:TO,NAME:FROM:TO'",
+        help="A pair of periods to compare; repeat for more. Default: Q4 2025 vs Q2 2026, and H2 2025 vs H1 2026",
+    )
+    ll.add_argument(
+        "--recompute",
+        action="store_true",
+        help="Recompute every day instead of reusing daily.csv",
+    )
     ll.add_argument("--site-dir", help="Site folder (default ~/env/LUIGI_MARIO/site)")
     ll.set_defaults(func=execute_leadlag)
 

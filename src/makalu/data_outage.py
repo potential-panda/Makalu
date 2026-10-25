@@ -86,7 +86,9 @@ def install_bronze_outage_patch() -> None:
         try:
             return original_read(self, date_arg)
         except KeyError as exc:
-            days = getattr(date_arg, "days", date_arg if isinstance(date_arg, list) else None)
+            days = getattr(
+                date_arg, "days", date_arg if isinstance(date_arg, list) else None
+            )
             if (
                 days
                 and is_bronze_outage_store(self)

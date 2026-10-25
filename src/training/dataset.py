@@ -23,7 +23,9 @@ def _downcast_float64(df: pd.DataFrame) -> pd.DataFrame:
         before_mb = df.memory_usage(deep=True).sum() / 1e6
         df[f64_cols] = df[f64_cols].astype(np.float32)
         after_mb = df.memory_usage(deep=True).sum() / 1e6
-        LOG.info(f"Downcast float64->float32: {before_mb:.0f} MB -> {after_mb:.0f} MB ({len(f64_cols)} columns)")
+        LOG.info(
+            f"Downcast float64->float32: {before_mb:.0f} MB -> {after_mb:.0f} MB ({len(f64_cols)} columns)"
+        )
     return df
 
 
@@ -86,7 +88,9 @@ class Dataset:
         Returns:
             Self for method chaining
         """
-        LOG.info(f"Aligning labels to features using merge_asof (tolerance={tolerance}, direction={direction})")
+        LOG.info(
+            f"Aligning labels to features using merge_asof (tolerance={tolerance}, direction={direction})"
+        )
 
         feature_col_names = list(self.features_df.columns)
         label_col_names = list(self.labels_df.columns)
@@ -129,7 +133,9 @@ class Dataset:
 
         self._aligned_features = _downcast_float64(self._aligned_features)
 
-        LOG.info(f"Aligned data: {len(self._aligned_features)} rows (after dropping unmatched)")
+        LOG.info(
+            f"Aligned data: {len(self._aligned_features)} rows (after dropping unmatched)"
+        )
 
         return self
 
@@ -148,7 +154,10 @@ class Dataset:
         """
         before_count = len(self._aligned_features)
 
-        filter_mask = self._aligned_labels["volatility_ema"] > self._aligned_labels["spread_pct_ema"] * min_ratio
+        filter_mask = (
+            self._aligned_labels["volatility_ema"]
+            > self._aligned_labels["spread_pct_ema"] * min_ratio
+        )
         self._aligned_features = self._aligned_features.loc[filter_mask]
         self._aligned_labels = self._aligned_labels.loc[filter_mask]
 
@@ -157,7 +166,7 @@ class Dataset:
 
         LOG.info(
             f"Vol/Spread filter (ratio={min_ratio}): "
-            f"{before_count:,} -> {after_count:,} rows (removed {removed:,}, {removed/before_count*100:.1f}%)"
+            f"{before_count:,} -> {after_count:,} rows (removed {removed:,}, {removed / before_count * 100:.1f}%)"
         )
 
         return self
@@ -187,7 +196,9 @@ class Dataset:
             LOG.info(f"Dropped {dropped:,} timeout labels (label=2)")
 
         # Convert: 1 (Long) -> 1, 0 (Short) -> 0, 2 (Timeout if kept) -> 0
-        self._aligned_labels[self.target_column] = (self._aligned_labels[self.target_column] == 1).astype(int)
+        self._aligned_labels[self.target_column] = (
+            self._aligned_labels[self.target_column] == 1
+        ).astype(int)
 
         after_count = len(self._aligned_labels)
         win_count = self._aligned_labels[self.target_column].sum()
@@ -195,7 +206,7 @@ class Dataset:
 
         LOG.info(
             f"Converted to binary: {after_count:,} samples "
-            f"(Win={win_count:,}, Loss={loss_count:,}, Win rate={win_count/after_count:.2%})"
+            f"(Win={win_count:,}, Loss={loss_count:,}, Win rate={win_count / after_count:.2%})"
         )
 
         return self
@@ -260,7 +271,9 @@ class Dataset:
         self.y_train = y.iloc[:split_idx]
         self.y_test = y.iloc[split_idx:]
 
-        LOG.info(f"Train set: {len(self.X_train)} rows, Test set: {len(self.X_test)} rows")
+        LOG.info(
+            f"Train set: {len(self.X_train)} rows, Test set: {len(self.X_test)} rows"
+        )
 
         return self
 
@@ -302,11 +315,15 @@ class Dataset:
         cols_to_drop = na_fractions[na_fractions > na_threshold].index.tolist()
 
         if cols_to_drop:
-            LOG.info(f"Leak-safe drop: Removing {len(cols_to_drop)} columns based on Train stats")
+            LOG.info(
+                f"Leak-safe drop: Removing {len(cols_to_drop)} columns based on Train stats"
+            )
             self.X_train = self.X_train.drop(columns=cols_to_drop)
             self.X_test = self.X_test.drop(columns=cols_to_drop)
             if self.feature_columns:
-                self.feature_columns = [c for c in self.feature_columns if c not in cols_to_drop]
+                self.feature_columns = [
+                    c for c in self.feature_columns if c not in cols_to_drop
+                ]
 
         # 3. Fill NA independently
         def _fill(df):
@@ -333,7 +350,9 @@ class Dataset:
         self.X_test = self.X_test.loc[test_valid]
         self.y_test = self.y_test.loc[test_valid]
 
-        LOG.info(f"Preprocess complete. Train: {len(self.X_train)}, Test: {len(self.X_test)}")
+        LOG.info(
+            f"Preprocess complete. Train: {len(self.X_train)}, Test: {len(self.X_test)}"
+        )
         return self
 
     def drop_na_features(self, threshold: float = 0.5) -> "Dataset":
@@ -350,12 +369,16 @@ class Dataset:
         cols_to_drop = na_fractions[na_fractions > threshold].index.tolist()
 
         if cols_to_drop:
-            LOG.info(f"Dropping {len(cols_to_drop)} columns with >{threshold*100}% NaN values")
+            LOG.info(
+                f"Dropping {len(cols_to_drop)} columns with >{threshold * 100}% NaN values"
+            )
             self._aligned_features = self._aligned_features.drop(columns=cols_to_drop)
 
             # Update feature columns
             if self.feature_columns:
-                self.feature_columns = [c for c in self.feature_columns if c not in cols_to_drop]
+                self.feature_columns = [
+                    c for c in self.feature_columns if c not in cols_to_drop
+                ]
 
         return self
 
@@ -376,7 +399,9 @@ class Dataset:
         elif method == "zero":
             self._aligned_features = self._aligned_features.fillna(0)
         elif method == "mean":
-            self._aligned_features = self._aligned_features.fillna(self._aligned_features.mean())
+            self._aligned_features = self._aligned_features.fillna(
+                self._aligned_features.mean()
+            )
         else:
             raise ValueError(f"Unknown fill method: {method}")
 

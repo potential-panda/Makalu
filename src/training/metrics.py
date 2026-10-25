@@ -13,33 +13,35 @@ def soft_trading_precision_fpr_metric(preds, train_data):
     labels = train_data.get_label()
     num_class = 3
     num_samples = len(labels)
-    
+
     # LightGBM multiclass feval preds are (num_class, num_samples) flattened
     preds = preds.reshape(num_class, num_samples).T
-    
+
     # Long (Class 1)
     p_long = preds[:, 1]
-    is_long = (labels == 1)
-    is_not_long = (labels != 1)
-    
+    is_long = labels == 1
+    is_not_long = labels != 1
+
     soft_tp_long = np.sum(p_long * is_long)
     soft_fp_long = np.sum(p_long * is_not_long)
     soft_precision_long = soft_tp_long / (soft_tp_long + soft_fp_long + 1e-8)
     soft_fpr_long = soft_fp_long / (np.sum(is_not_long) + 1e-8)
-    
+
     # Short (Class 0)
     p_short = preds[:, 0]
-    is_short = (labels == 0)
-    is_not_short = (labels != 0)
-    
+    is_short = labels == 0
+    is_not_short = labels != 0
+
     soft_tp_short = np.sum(p_short * is_short)
     soft_fp_short = np.sum(p_short * is_not_short)
     soft_precision_short = soft_tp_short / (soft_tp_short + soft_fp_short + 1e-8)
     soft_fpr_short = soft_fp_short / (np.sum(is_not_short) + 1e-8)
-    
-    score = (soft_precision_long + soft_precision_short) / 2.0 - (soft_fpr_long + soft_fpr_short) / 2.0
-    
-    return 'soft_trading_score', score, True
+
+    score = (soft_precision_long + soft_precision_short) / 2.0 - (
+        soft_fpr_long + soft_fpr_short
+    ) / 2.0
+
+    return "soft_trading_score", score, True
 
 
 def trading_precision_fpr_metric(preds, train_data):
@@ -81,7 +83,9 @@ def trading_precision_fpr_metric(preds, train_data):
     # Short (Class 0)
     tp_short = np.sum((y_pred == 0) & (labels == 0))
     fp_short = np.sum((y_pred == 0) & (labels != 0))
-    precision_short = tp_short / (tp_short + fp_short) if (tp_short + fp_short) > 0 else 0
+    precision_short = (
+        tp_short / (tp_short + fp_short) if (tp_short + fp_short) > 0 else 0
+    )
 
     neg_short = np.sum(labels != 0)
     fpr_short = fp_short / neg_short if neg_short > 0 else 0
@@ -122,8 +126,8 @@ def calculate_trading_metrics(y_true, y_pred_prob):
         metrics[f"{cls_name}_recall"] = recall
         metrics[f"{cls_name}_fpr"] = fpr
 
-    metrics["trading_score"] = (metrics["long_precision"] + metrics["short_precision"]) / 2.0 - (
-        metrics["long_fpr"] + metrics["short_fpr"]
-    ) / 2.0
+    metrics["trading_score"] = (
+        metrics["long_precision"] + metrics["short_precision"]
+    ) / 2.0 - (metrics["long_fpr"] + metrics["short_fpr"]) / 2.0
 
     return metrics

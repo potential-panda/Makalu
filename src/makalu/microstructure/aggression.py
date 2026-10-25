@@ -10,9 +10,11 @@ from dataclasses import dataclass
 from typing import Optional
 
 import numpy as np
+
 try:
     from numba import jit
 except ImportError:
+
     def jit(*args, **kwargs):
         """Run the same calculations in Python when numba is unavailable."""
         if len(args) == 1 and callable(args[0]):
@@ -143,7 +145,9 @@ def _compute_aggregates(
 
 
 @jit(nopython=True, cache=True)
-def _find_cutoff_index(timestamps: np.ndarray, cutoff_ts: float, start_idx: int, end_idx: int) -> int:
+def _find_cutoff_index(
+    timestamps: np.ndarray, cutoff_ts: float, start_idx: int, end_idx: int
+) -> int:
     """
     Find first index where timestamp >= cutoff_ts using binary search.
 
@@ -200,7 +204,9 @@ class _WindowAggregates:
         "bucket_counts_sell",
     )
 
-    def __init__(self, window_sec: int, track_buckets: bool = False, bucket_unit: float = 0.001):
+    def __init__(
+        self, window_sec: int, track_buckets: bool = False, bucket_unit: float = 0.001
+    ):
         self.window_sec = window_sec
         self.start_idx = 0
         self.buy_qty = 0.0
@@ -288,7 +294,8 @@ class TradeAggressionBuilder:
 
         # Per-window aggregates (lightweight — no data arrays)
         self._window_aggs: dict[int, _WindowAggregates] = {
-            w: _WindowAggregates(w, track_buckets, bucket_unit) for w in self.windows_sec
+            w: _WindowAggregates(w, track_buckets, bucket_unit)
+            for w in self.windows_sec
         }
         self._max_window_sec = max(windows_sec)
 
@@ -340,7 +347,9 @@ class TradeAggressionBuilder:
         if agg.start_idx >= self._end_idx:
             return
 
-        new_start = _find_cutoff_index(self._timestamps, cutoff_ts, agg.start_idx, self._end_idx)
+        new_start = _find_cutoff_index(
+            self._timestamps, cutoff_ts, agg.start_idx, self._end_idx
+        )
 
         if new_start > agg.start_idx:
             for i in range(agg.start_idx, new_start):
@@ -436,11 +445,17 @@ class TradeAggressionBuilder:
             # Update buckets if tracking
             if agg.track_buckets:
                 bucket = int((size / agg.bucket_unit) + 0.5)
-                agg.bucket_counts_total[bucket] = agg.bucket_counts_total.get(bucket, 0) + 1
+                agg.bucket_counts_total[bucket] = (
+                    agg.bucket_counts_total.get(bucket, 0) + 1
+                )
                 if is_buy:
-                    agg.bucket_counts_buy[bucket] = agg.bucket_counts_buy.get(bucket, 0) + 1
+                    agg.bucket_counts_buy[bucket] = (
+                        agg.bucket_counts_buy.get(bucket, 0) + 1
+                    )
                 else:
-                    agg.bucket_counts_sell[bucket] = agg.bucket_counts_sell.get(bucket, 0) + 1
+                    agg.bucket_counts_sell[bucket] = (
+                        agg.bucket_counts_sell.get(bucket, 0) + 1
+                    )
 
     def get_trade_aggression(self, now_ts: float) -> list[TradeAggression]:
         """
@@ -470,7 +485,9 @@ class TradeAggressionBuilder:
                 imbalance_qty = 0.0
 
             if total_count > 0:
-                imbalance_count = (agg.buy_count - agg.sell_count) / (total_count + self.eps)
+                imbalance_count = (agg.buy_count - agg.sell_count) / (
+                    total_count + self.eps
+                )
             else:
                 imbalance_count = 0.0
 
@@ -501,9 +518,13 @@ class TradeAggressionBuilder:
             dominant_share = 0.0
 
             if self.track_buckets and agg.bucket_counts_total:
-                dominant_bucket_idx = max(agg.bucket_counts_total, key=agg.bucket_counts_total.get)
+                dominant_bucket_idx = max(
+                    agg.bucket_counts_total, key=agg.bucket_counts_total.get
+                )
                 dominant_count = agg.bucket_counts_total[dominant_bucket_idx]
-                dominant_share = dominant_count / total_count if total_count > 0 else 0.0
+                dominant_share = (
+                    dominant_count / total_count if total_count > 0 else 0.0
+                )
                 dominant_bucket = dominant_bucket_idx * self.bucket_unit
 
             # Burst detection
@@ -515,7 +536,9 @@ class TradeAggressionBuilder:
             max_size = 0.0
             if self.track_max_size:
                 if not agg.max_size_valid:
-                    agg.max_size = _find_max_size(self._sizes, agg.start_idx, self._end_idx)
+                    agg.max_size = _find_max_size(
+                        self._sizes, agg.start_idx, self._end_idx
+                    )
                     agg.max_size_valid = True
                 max_size = agg.max_size
 

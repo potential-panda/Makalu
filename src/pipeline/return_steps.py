@@ -74,7 +74,9 @@ class ReturnStep(Step):
             # VolSpreadStep's pattern exactly) -- a plain .join() on the
             # mismatched resampled-vs-tick indices left ~99.9% of rows null,
             # confirmed against real data before this fix.
-            df[f"return_{horizon_sec}s"] = return_resampled.reindex(df.index, method="ffill")
+            df[f"return_{horizon_sec}s"] = return_resampled.reindex(
+                df.index, method="ffill"
+            )
 
         return df
 
@@ -92,4 +94,6 @@ class ReturnStep(Step):
         )
         store.add_dataframe(df, ts_column=None)
         store.close()
-        LOG.info(f"ReturnStep: Wrote {len(df)} records to Parquet store (param_id={self.config.param_id})")
+        LOG.info(
+            f"ReturnStep: Wrote {len(df)} records to Parquet store (param_id={self.config.param_id})"
+        )

@@ -15,5 +15,7 @@ class TrendFeatureStep(Step):
 
     def populate(self, pipeline_context: PipelineContext, stage_context: Context):
         before = len(stage_context.features)
-        build_trend_features(stage_context.source_df, stage_context.features, self.windows)
+        build_trend_features(
+            stage_context.source_df, stage_context.features, self.windows
+        )
         LOG.info(f"  Trend: +{len(stage_context.features) - before} features")

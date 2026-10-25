@@ -37,6 +37,7 @@ Implement `Step` from `pipeline.framework`:
 ```python
 from pipeline.framework import PipelineContext, StageContext, Step, StepProgressLogger
 
+
 class PopulateMyMetricStep(Step):
     def __init__(self, my_param: float):
         super().__init__()
@@ -57,7 +58,9 @@ class PopulateMyMetricStep(Step):
 
     def _compute(self, stage_context):
         """Generator yielding (ts_float, fields_dict) per output row."""
-        progress = StepProgressLogger(self.__class__.__name__, len(stage_context.order_books))
+        progress = StepProgressLogger(
+            self.__class__.__name__, len(stage_context.order_books)
+        )
         for ob in stage_context.order_books:
             # Skip rows outside the populate date range
             if not stage_context.populate_dt_range.is_within(ob.get_ts()):
@@ -103,7 +106,9 @@ class PopulateMyMetricStep(Step):
         self.k = k
 
     def populate(self, pipeline_context: PipelineContext, stage_context: Context):
-        store = pipeline_context.parquet_store.create_single_market("MyMetric", stage_context.market)
+        store = pipeline_context.parquet_store.create_single_market(
+            "MyMetric", stage_context.market
+        )
         count = 0
         for ts, fields in self._populate(stage_context):
             store.add(ts, fields)

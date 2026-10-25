@@ -10,7 +10,9 @@ from pathlib import Path
 
 LOG = getLogger(__name__)
 
-_KNOWLEDGE_PATH = Path(__file__).parents[2] / "openclaw" / "knowledge" / "strategies.json"
+_KNOWLEDGE_PATH = (
+    Path(__file__).parents[2] / "openclaw" / "knowledge" / "strategies.json"
+)
 
 
 class BacktestRunner:
@@ -97,6 +99,8 @@ def _resolve_order_size(k: dict, asset: str) -> float:
     order_size = k.get("order_size_by_asset") or k.get("order_size")
     if isinstance(order_size, dict):
         if asset not in order_size:
-            raise ValueError(f"No order_size defined for asset '{asset}'. Known: {list(order_size)}")
+            raise ValueError(
+                f"No order_size defined for asset '{asset}'. Known: {list(order_size)}"
+            )
         return order_size[asset]
     return float(order_size)

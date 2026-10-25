@@ -78,11 +78,8 @@ Run the following Python snippet to confirm the AMD GPU is active:
 
 ```Python
 import lightgbm as lgb
-params = {
-    "device": "gpu",
-    "gpu_platform_id": 0,
-    "gpu_device_id": 0
-}
+
+params = {"device": "gpu", "gpu_platform_id": 0, "gpu_device_id": 0}
 # Look for: [LightGBM] [Info] Using GPU Device: gfx1151
 ```
 

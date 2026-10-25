@@ -55,7 +55,9 @@ class GenerateLabelsStep(Step):
         )
         parquet_store.add_dataframe(df, ts_column=None)
         parquet_store.close()
-        LOG.info(f"GenerateLabelsStep: Saved {len(df)} labels to Parquet (param_id={self.config.param_id})")
+        LOG.info(
+            f"GenerateLabelsStep: Saved {len(df)} labels to Parquet (param_id={self.config.param_id})"
+        )
 
     def _populate(self, pipeline_context: PipelineContext, stage_context: Context):
         df = stage_context.execution_price_df

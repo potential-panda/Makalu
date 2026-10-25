@@ -11,7 +11,6 @@ from pathlib import Path
 from makalu.cli.common import DATASETS, get_dataset_root
 from makalu.data_outage import filter_bronze_outage_missing_dates
 
-
 # ── Per-date scanning ─────────────────────────────────────────────────────────
 
 
@@ -30,7 +29,7 @@ def _collect_date_sizes(path: Path) -> dict[str, int]:
     sizes: dict[str, int] = {}
     for d in path.iterdir():
         if d.is_dir() and d.name.startswith(prefix):
-            date_str = d.name[len(prefix):]
+            date_str = d.name[len(prefix) :]
             total = 0
             direct = d / "data.parquet"
             if direct.exists():
@@ -120,25 +119,33 @@ def dataset_availability(
     for key in keys:
         value = provided.get(key)
         if value is None:
-            result.update({
-                "state": "needs_partition",
-                "next_key": key,
-                "available_values": _list_partition_values(path, key),
-                "path": str(path),
-                "resolved_partitions": {k: v for k, v in provided.items() if v is not None},
-            })
+            result.update(
+                {
+                    "state": "needs_partition",
+                    "next_key": key,
+                    "available_values": _list_partition_values(path, key),
+                    "path": str(path),
+                    "resolved_partitions": {
+                        k: v for k, v in provided.items() if v is not None
+                    },
+                }
+            )
             return result
 
         next_path = path / f"{key}={value}"
         if not next_path.exists():
-            result.update({
-                "state": "missing_partition",
-                "missing_key": key,
-                "missing_value": value,
-                "available_values": _list_partition_values(path, key),
-                "path": str(next_path),
-                "resolved_partitions": {k: v for k, v in provided.items() if v is not None},
-            })
+            result.update(
+                {
+                    "state": "missing_partition",
+                    "missing_key": key,
+                    "missing_value": value,
+                    "available_values": _list_partition_values(path, key),
+                    "path": str(next_path),
+                    "resolved_partitions": {
+                        k: v for k, v in provided.items() if v is not None
+                    },
+                }
+            )
             return result
         path = next_path
 
@@ -156,25 +163,27 @@ def dataset_availability(
         cur = date.fromisoformat(window_start)
         end_dt = date.fromisoformat(window_end)
         while cur <= end_dt:
-          iso = cur.isoformat()
-          date_map[iso] = {
-              "present": iso in date_sizes,
-              "size": date_sizes.get(iso, 0),
-          }
-          cur += timedelta(days=1)
-    result.update({
-        "state": "summary",
-        "path": str(path),
-        "resolved_partitions": provided,
-        "min_date": dates[0] if dates else None,
-        "max_date": dates[-1] if dates else None,
-        "total_days": len(dates),
-        "window_start": window_start,
-        "window_end": window_end,
-        "missing_days": len(missing),
-        "missing_ranges": _to_ranges(missing),
-        "has_data": bool(dates),
-        "available_dates": dates,
-        "date_map": date_map,
-    })
+            iso = cur.isoformat()
+            date_map[iso] = {
+                "present": iso in date_sizes,
+                "size": date_sizes.get(iso, 0),
+            }
+            cur += timedelta(days=1)
+    result.update(
+        {
+            "state": "summary",
+            "path": str(path),
+            "resolved_partitions": provided,
+            "min_date": dates[0] if dates else None,
+            "max_date": dates[-1] if dates else None,
+            "total_days": len(dates),
+            "window_start": window_start,
+            "window_end": window_end,
+            "missing_days": len(missing),
+            "missing_ranges": _to_ranges(missing),
+            "has_data": bool(dates),
+            "available_dates": dates,
+            "date_map": date_map,
+        }
+    )
     return result

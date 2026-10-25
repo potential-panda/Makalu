@@ -2,11 +2,9 @@ import argparse
 from logging import getLogger
 
 from qate.core.model import Market
-from makalu import settings as sys_env
+from qate.util.dt_range import DtRange
 from qate_env.env import Env
 from qate_env.env_name import EnvName
-from makalu.storage.parquet_store import ParquetStore
-from qate.util.dt_range import DtRange
 
 from feature_engineering.volatility import VolSpreadConfig
 from labeling.triple_barrier import TripleBarrierConfig
@@ -15,6 +13,8 @@ from lead_lag.lead_lag import (
     LEAD_LAG_CONFIG_MID,
     LEAD_LAG_CONFIG_NEARHFT,
 )
+from makalu import settings as sys_env
+from makalu.storage.parquet_store import ParquetStore
 from pipeline.execution_price_derived_steps import VolSpreadStep
 from pipeline.features import (
     BookChangeFeatureStep,

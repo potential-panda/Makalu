@@ -62,10 +62,10 @@ import argparse
 import logging
 import sys
 
-from makalu import settings as sys_env
 from qate_env.env import Env
 from qate_env.env_name import EnvName
 
+from makalu import settings as sys_env
 from makalu.cli import (
     arb_spot,
     backtest,

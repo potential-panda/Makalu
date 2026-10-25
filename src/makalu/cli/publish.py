@@ -2,12 +2,13 @@ import argparse
 import logging
 import os
 
-import makalu.settings as sys_env
 from influxdb_client import Point, WritePrecision
 from qate.core.model import Market
+from qate.util.dt_range import DtRange
+
+import makalu.settings as sys_env
 from makalu.storage.influx_store import InfluxdbStore, convert_to_point
 from makalu.storage.parquet_store import ParquetStore
-from qate.util.dt_range import DtRange
 
 LOG = logging.getLogger(__name__)
 
@@ -34,7 +35,9 @@ def execute_trade(args):
         if df.empty:
             continue
         for row in df.itertuples(index=False):
-            writer.add(convert_to_point(store.convert_to_trade(row).to_metric().to_list()))
+            writer.add(
+                convert_to_point(store.convert_to_trade(row).to_metric().to_list())
+            )
         total += len(df)
         LOG.info(f"Published Trade {market.id} {date_str}: {len(df)} points")
 
@@ -55,6 +58,7 @@ def execute_market_price(args):
             continue
         for row in df.itertuples(index=False):
             from qate.core.model import MarketPrice
+
             mp = MarketPrice(
                 bid=row.bid,
                 ask=row.ask,
@@ -70,17 +74,23 @@ def execute_market_price(args):
     LOG.info(f"Done. Total MarketPrice points published: {total}")
 
 
-def _discover_param_ids(parquet_root: str, exchange: str, symbol: str, execution_size: str) -> list[str]:
+def _discover_param_ids(
+    parquet_root: str, exchange: str, symbol: str, execution_size: str
+) -> list[str]:
     path = os.path.join(
         parquet_root,
-        "gold", "dataset=VolSpread",
-        f"exchange={exchange}", f"symbol={symbol}",
+        "gold",
+        "dataset=VolSpread",
+        f"exchange={exchange}",
+        f"symbol={symbol}",
         f"execution_size={execution_size}",
     )
     if not os.path.isdir(path):
         return []
     return sorted(
-        d.replace("param_id=", "") for d in os.listdir(path) if d.startswith("param_id=")
+        d.replace("param_id=", "")
+        for d in os.listdir(path)
+        if d.startswith("param_id=")
     )
 
 
@@ -89,11 +99,17 @@ def execute_vol_spread(args):
     dt_range = DtRange.from_strings(args.start, args.end)
     ps = _create_parquet_store()
 
-    param_ids = [args.param_id] if args.param_id else _discover_param_ids(
-        sys_env.PARQUET_ROOT_DIR, args.exchange, args.symbol, args.execution_size
+    param_ids = (
+        [args.param_id]
+        if args.param_id
+        else _discover_param_ids(
+            sys_env.PARQUET_ROOT_DIR, args.exchange, args.symbol, args.execution_size
+        )
     )
     if not param_ids:
-        LOG.warning(f"No param_ids found for {args.exchange} {args.symbol} es={args.execution_size}")
+        LOG.warning(
+            f"No param_ids found for {args.exchange} {args.symbol} es={args.execution_size}"
+        )
         return
 
     writer = _create_writer(args.influxdb_bucket)
@@ -121,7 +137,9 @@ def execute_vol_spread(args):
                         point.field(col, val)
                 writer.add(point)
             total += len(df)
-            LOG.info(f"Published VolSpread {market.id} {param_id} {date_str}: {len(df)} points")
+            LOG.info(
+                f"Published VolSpread {market.id} {param_id} {date_str}: {len(df)} points"
+            )
 
         LOG.info(f"VolSpread {param_id}: {total} points total")
         grand_total += total
@@ -159,11 +177,16 @@ def register_cli(parser: argparse.ArgumentParser):
     sub = p.add_subparsers(dest="dataset", required=True)
 
     _add_common_args(
-        sub.add_parser("Trade", help="Publish bronze Trade parquet → InfluxDB TRADE measurement")
+        sub.add_parser(
+            "Trade", help="Publish bronze Trade parquet → InfluxDB TRADE measurement"
+        )
     ).set_defaults(func=execute_trade)
 
     mp = _add_common_args(
-        sub.add_parser("MarketPrice", help="Publish silver MarketPrice parquet → InfluxDB MARKET_PRICE measurement")
+        sub.add_parser(
+            "MarketPrice",
+            help="Publish silver MarketPrice parquet → InfluxDB MARKET_PRICE measurement",
+        )
     )
     mp.add_argument(
         "--execution-size",
@@ -174,7 +197,10 @@ def register_cli(parser: argparse.ArgumentParser):
     mp.set_defaults(func=execute_market_price)
 
     vs = _add_common_args(
-        sub.add_parser("VolSpread", help="Publish gold VolSpread parquet → InfluxDB VolSpread measurement")
+        sub.add_parser(
+            "VolSpread",
+            help="Publish gold VolSpread parquet → InfluxDB VolSpread measurement",
+        )
     )
     vs.add_argument(
         "--execution-size",
