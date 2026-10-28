@@ -70,7 +70,6 @@ from qate_env.env_name import EnvName
 from makalu import settings as sys_env
 from makalu.cli import (
     arb_spot,
-    backtest,
     data_check,
     evict,
     grafana_export,
@@ -120,7 +119,6 @@ def main():
     evict.register_cli(sub)
     query.register_cli(sub)
     report.register_cli(sub)
-    backtest.register_cli(sub)
     trading_chart.register_cli(sub)
     infra.register_cli(sub)
 

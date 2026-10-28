@@ -6,7 +6,7 @@ Defined in `/panda-infra/Infra/docker/grafana/docker-compose.yml`.
 
 | Service  | Port | Purpose |
 |----------|------|---------|
-| InfluxDB | 8086 | Time-series DB — receives backtest metrics and trading metrics |
+| InfluxDB | 8086 | Time-series DB — receives exported datasets and trading metrics |
 | Grafana  | 3000 | Dashboard — reads from InfluxDB |
 
 ### 1.1 Check health
@@ -29,9 +29,6 @@ cd /panda-infra/Infra/docker/grafana && docker compose up -d
 
 - `grafana-export` — pushes Parquet data to InfluxDB
 - `metrics-data` — pushes prod trading metrics to InfluxDB
-- Himalaya backtest — writes backtest metrics to InfluxDB
-
-If InfluxDB is down before a backtest: warn the user, ask whether to start it or proceed anyway (backtest will run but metrics won't be saved).
 
 ### 1.4 When Grafana must be up
 
@@ -45,10 +42,7 @@ If InfluxDB is down before a backtest: warn the user, ask whether to start it or
 | Resource | Path |
 |----------|------|
 | Makalu CLI | `/home/lulurun/workspace/Makalu/src/cli.py` |
-| Himalaya runner | `/home/lulurun/workspace/Himalaya/start.sh` |
 | Parquet warehouse | `/panda/makalu-data/` |
-| Backtest env dir | `~/env/` |
 | Dataset catalog | `/home/lulurun/workspace/Makalu/doc/catalog.yaml` |
 | Dataset definitions | `/home/lulurun/workspace/Makalu/doc/dataset_definitions.md` |
-| Strategy configs | `/home/lulurun/workspace/Makalu/openclaw/knowledge/strategies.json` |
 | Docker compose | `/panda-infra/Infra/docker/grafana/` |

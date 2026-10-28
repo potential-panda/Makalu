@@ -52,7 +52,7 @@ hase derive MarketPrice --market GMO:BTC_JPY --execution-size 0.002 \
 Treat **2025-07-01** as the official start date for reliable Makalu market data.
 Data before 2025-07-01 may exist, but they may have
 collection or correctness problems. Do not assume pre-2025-07-01 data is valid
-for research, features, labels, or backtests unless the user explicitly confirms
+for research, features or labels unless the user explicitly confirms
 that older data is acceptable.
 
 Known global outage:

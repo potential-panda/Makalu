@@ -21,9 +21,6 @@ ORG = "panda-org"
 
 LOG = getLogger(__name__)
 
-TEMP_BACKTEST_RETENTION_SECONDS = 30 * 24 * 60 * 60  # 30 days
-
-
 def create_client(url, token):
     return InfluxDBClient(
         url, token, org=ORG, timeout=120_000

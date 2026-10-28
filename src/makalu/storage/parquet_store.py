@@ -658,7 +658,7 @@ class ParquetStore:
         market: Market,
         strategy_name: str,
         param_id: str,
-        prefix: str = "Backtest",
+        prefix: str,
     ):
         return self._m(
             SingleMarketStrategyStore(
@@ -670,13 +670,3 @@ class ParquetStore:
             )
         )
 
-    def create_backtest_bar(self, market: Market, strategy_name: str, param_id: str):
-        return self._m(
-            SingleMarketStrategyStore(
-                self.layer_dir[Layer.RESAERCH],
-                "Backtest_Bar",
-                market,
-                strategy_name,
-                param_id,
-            )
-        )

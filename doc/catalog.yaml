@@ -268,14 +268,3 @@ datasets:
     partition_columns: [exchange, symbol, param_id]
     source_dataset: MarketPrice
     path_template: /panda/makalu-data/research/dataset=BuyLabel_tmp/exchange={exchange}/symbol={symbol}/param_id={param_id}/date={date}/data.parquet
-
-  - dataset_name: BacktestPnL
-    layer: research
-    description: >
-      Per-fill backtest results from the Himalaya engine. One row per trade
-      fill. param_set_id groups a full parameter sweep run.
-    grain: per trade fill
-    primary_timestamp: ts
-    partition_columns: [strategy, exchange, symbol, variant, param_set_id]
-    source_dataset: null
-    path_template: /panda/makalu-data/research/dataset=BacktestPnL/strategy={strategy}/exchange={exchange}/symbol={symbol}/variant={variant}/param_set_id={param_set_id}/date={date}/data.parquet

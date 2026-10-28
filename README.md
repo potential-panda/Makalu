@@ -1,12 +1,11 @@
 # Makalu
 
-Market data pipeline and backtest orchestration for the **orion** algorithmic trading strategy. Trades BTC/ETH/XRP spot on GMO exchange using BINANCE as the signal market.
+Market datalake operator for the **orion** algorithmic trading strategy. Trades BTC/ETH/XRP spot on GMO exchange using BINANCE as the signal market.
 
 ## What it does
 
 - Reads bronze tick data (trades + order book) through Komachi; Kitakamakura produces it
 - Derives microstructure metrics (BookState, LeadLag, curves, etc.; MarketPrice, Spread and Volatility come from Hase) into silver/gold
-- Runs backtests via the Himalaya engine
 - Builds static report pages (`report`) and serves them read-only (`serve`, port 9776, public at `/makalu/`)
 
 ## Data warehouse layers
@@ -73,7 +72,6 @@ python src/cli.py query --sql "SELECT ts, price FROM trade WHERE exchange='GMO' 
 | Data pipeline operations | `doc/data_pipeline.md` |
 | Report site | `doc/report.md` |
 | SQL querying | `doc/querying.md` |
-| Backtest workflow | `doc/backtest.md` |
 | Volatility / Spread plots + Grafana export | `doc/plot.md` |
 | Local infra (Docker / InfluxDB) | `doc/local_infra.md` |
 | Implementing new metrics | `doc/implement_metric.md` |

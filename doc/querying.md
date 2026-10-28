@@ -30,7 +30,7 @@ Returns JSON: `{columns, row_count, rows}` — rows capped at 200.
 4. **View names** are lowercase dataset names: `Trade` → `trade`, `Volatility` → `volatility`.
 5. **Required partition columns** — for datasets with extra partitions, always include them or results are mixed and meaningless:
    - `execution_size` required for `marketprice`, `volspread`
-   - `param_id` required for `volspread`, `chart_*`, `backtestpnl`
+   - `param_id` required for `volspread`, `chart_*`
 6. **Discover partition values before querying** if unknown:
    ```sql
    SELECT DISTINCT execution_size FROM marketprice WHERE exchange='GMO' AND symbol='BTC_JPY' LIMIT 20

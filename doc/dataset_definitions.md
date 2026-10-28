@@ -470,21 +470,3 @@ Barriers are spread-relative:
 | `label` | `1` = profit-take hit first (buy signal valid), `0` = stop-loss or timeout |
 | `buy_pnl` | `bid_exit - ask_entry` |
 | `spread_pct_ema` | `EMA(spread / mid, span=s)` at entry time |
-
----
-
-### dataset=BacktestPnL
-
-Source: Himalaya backtest engine
-Grain: per trade fill
-Partitioned by: `strategy`, `exchange`, `symbol`, `variant`, `param_set_id`
-
-| Column | Definition |
-|--------|------------|
-| `ts` | Fill timestamp |
-| `side` | BUY or SELL |
-| `price` | Fill price |
-| `size` | Fill quantity |
-| `pnl` | Realised PnL on close |
-| `fee` | Exchange fee paid |
-| `settle_type` | OPEN or CLOSE |

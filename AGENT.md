@@ -1,6 +1,6 @@
 # Makalu — Agent Guide
 
-You manage crypto trading market data and backtests for the **orion** algorithmic trading strategy. BINANCE is the signal market; GMO is the execution market (BTC/ETH/XRP spot).
+You manage crypto trading market data for the **orion** algorithmic trading strategy. BINANCE is the signal market; GMO is the execution market (BTC/ETH/XRP spot).
 
 All operations run via shell commands using the `exec` tool.
 
@@ -26,11 +26,9 @@ All reference documentation is in `doc/`. Read the relevant file before starting
 | Query the data warehouse (SQL) | `doc/querying.md` |
 | Dataset column definitions | `doc/dataset_definitions.md` |
 | Full dataset catalog | `doc/catalog.yaml` |
-| Run a backtest | `doc/backtest.md` |
 | Volatility / Spread plots, Grafana export | `doc/plot.md` |
 | Docker / InfluxDB / Grafana infra | `doc/local_infra.md` |
 | Implement a new derived metric | `doc/implement_metric.md` |
-| Strategy configs (signal markets, order sizes) | `openclaw/knowledge/strategies.json` |
 
 ---
 
@@ -85,18 +83,7 @@ Manifest policy:
 - Makalu does not depend on OS file-read access time; external DuckDB/Python reads do not refresh eviction age.
 - Set the cap with `python /home/lulurun/workspace/Makalu/src/cli.py evict --set-max-size 500GiB`.
 
-**3 — Run backtest** (see `doc/backtest.md` for full workflow)
-```bash
-# Always: data-check → populate gaps → check docker → confirm → execute
-python /home/lulurun/workspace/Makalu/src/cli.py docker-observability --format text
-python /home/lulurun/workspace/Makalu/src/cli.py setup-backtest-env \
-  --strategy orion --trading-market GMO:BTC_JPY --from-dt 20260305 --to-dt 20260317
-/home/lulurun/workspace/Himalaya/start.sh --env BENJAMIN_TATUM \
-  --from-dt 20260305 --to-dt 20260317 --retest --optimize
-python /home/lulurun/workspace/Makalu/src/cli.py publish-results --env BENJAMIN_TATUM
-```
-
-**4 — SQL query** (see `doc/querying.md` for rules)
+**3 — SQL query** (see `doc/querying.md` for rules)
 ```bash
 python /home/lulurun/workspace/Makalu/src/cli.py query --list   # discover available datasets
 python /home/lulurun/workspace/Makalu/src/cli.py query --sql "SELECT ..."
@@ -106,12 +93,10 @@ python /home/lulurun/workspace/Makalu/src/cli.py query --sql "SELECT ..."
 
 ## Guardrails
 
-- Show ALL planned commands to the user and confirm before executing populate, backtest, or evict
+- Show ALL planned commands to the user and confirm before executing populate or evict
 - Only populate missing date ranges when planning work. `populate` also skips any existing target `data.parquet` at write time; use `--recreate` only for intentional overwrites.
-- `to_dt` for populate and backtest: at most today − 2 days
+- `to_dt` for populate: at most today − 2 days
 - `evict --apply` always requires explicit user confirmation
-- Never run multiple backtests in parallel (memory constraint)
-- Himalaya backtest must always be synchronous (exec timeout: 86400 s, never background)
 
 ---
 

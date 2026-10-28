@@ -28,7 +28,6 @@ _SUPPORTED_DATASETS = [
     "Chart_HEIKIN_ASHI",
     "Chart_RANGE",
     "LeadLag",
-    "BacktestPnL",
     "Feature_Mid",
     "Feature_NearHFT",
 ]
@@ -60,12 +59,6 @@ def _create_store(ps: ParquetStore, args) -> TimeSeriesStore:
             _market(exchange, symbol),
             str(args.execution_size),
             str(args.param_id),
-        )
-    if dataset == "BacktestPnL":
-        _require(args, "strategy", dataset)
-        _require(args, "param_id", dataset)
-        return ps.create_pnl(
-            _market(exchange, symbol), args.strategy, str(args.param_id)
         )
     if dataset.startswith("Feature_"):
         feature_name = dataset[len("Feature_") :]
@@ -168,9 +161,8 @@ def register_cli(parser: argparse.ArgumentParser) -> None:
     p.add_argument(
         "--param-id",
         dest="param_id",
-        help="Required for Spread, Volatility, Chart_*, BacktestPnL",
+        help="Required for Spread, Volatility, Chart_*",
     )
-    p.add_argument("--strategy", help="Required for BacktestPnL")
     p.add_argument(
         "--exchange-b", dest="exchange_b", help="Second exchange for LeadLag"
     )

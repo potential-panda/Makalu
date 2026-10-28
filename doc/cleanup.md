@@ -97,7 +97,7 @@ by quick reversion.
 Do not immediately mutate bronze without an explicit rewrite plan and backup.
 Bronze is useful as an audit trail for upstream data quality.
 
-For derived datasets and backtests, filter snapshots using the irregular
+For derived datasets, filter snapshots using the irregular
 definition above. If we decide to rewrite historical bronze, use the same rule
 and write the operation as an explicit cleanup command with:
 

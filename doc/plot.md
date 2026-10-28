@@ -108,6 +108,5 @@ Output: `{"bucket": "makalu_Volatility", "measurement": "Volatility", "grafana_u
 | Arg | Required for |
 |-----|-------------|
 | `--execution-size` | MarketPrice, Spread, Volatility |
-| `--param-id` | Spread, Volatility, Chart_*, BacktestPnL |
-| `--strategy` | BacktestPnL |
+| `--param-id` | Spread, Volatility, Chart_* |
 | `--exchange-b` / `--symbol-b` | LeadLag |
