@@ -453,6 +453,24 @@ Barriers are dynamic, sized as multiples of `volatility_ema`:
 
 ---
 
+### dataset=HimalayaMarketCondition
+
+Owner: Himalaya. Rebuildable research features; schema and parameters are
+versioned by `param_id` (currently `v1_3`). This is not a canonical silver/gold dataset.
+
+Source: Binance `Trade` and `OrderBook`, plus paired Binance/GMO data for the
+lead–lag family. Grain: one row per Binance market-minute, stamped at minute
+close. Calendar fields use the feature catalog's timezone definitions; source
+partitions use JST dates.
+
+Columns include source/quality indicators, calendar context, and the prior
+exploratory daily activity diagnostic. Consumers doing market-state clustering
+must explicitly exclude calendar, source-coverage, and prior cluster-label
+fields to prevent leakage. The feature contract, formulas, windows, and proxy
+limitations are documented in Himalaya's `doc/market_condition_feature_catalog.md`.
+
+---
+
 ### dataset=BuyLabel_tmp
 
 Source: MarketPrice

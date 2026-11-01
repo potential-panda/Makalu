@@ -13,25 +13,32 @@ Market datalake operator for the **orion** algorithmic trading strategy. Trades 
 ```
 bronze   Raw Trade + OrderBook tick data (Kitakamakura's, read-only here)
 silver   Derived per-tick metrics: MarketPrice, BookState, BookChange, TradeAggression
-gold     Window-based signals: Spread, Volatility (Hase), LeadLag, Chart_*
+gold     Canonical window signals: Spread, Volatility (Hase), LeadLag, Chart_*
+feature  Canonical ML feature sets maintained by Makalu
+research Owner-namespaced, rebuildable outputs published by research projects
 ```
 
-The bronze layer contains only `Trade` and `OrderBook`. All other datasets are
-derived and live in silver, gold, feature, or research layers.
+The bronze layer contains only `Trade` and `OrderBook`. Canonical point/window
+metrics live in silver, gold, or feature layers and are written by their
+designated owners. Research projects may write rebuildable, namespaced datasets
+to `research/` under the same lake root; each project owns its feature code and
+versioned dataset name. Research output does not replace canonical silver/gold.
 
 The datalake root is Komachi's `ROOT_PATH` (`~/.kamakuraquantlab.env`), which is
 `/panda/makalu-data/` on the warehouse host. Makalu never downloads, merges or
 writes bronze: Kitakamakura does, and Makalu finds a market-day's file with
 `komachi.bronze.file`.
 
-`<root>/manifest.db` tracks Makalu's parquet file metadata (every layer except
-bronze) for eviction: path, row count, file size, and write timestamp. Run
-`python src/cli.py scan` and then `python src/cli.py evict` by hand; nothing
-schedules them. Data that has not been scanned yet is
-treated as fresh/protected because `evict` only deletes files registered in the
-manifest. Makalu does not depend on OS file-read access time. The parquet disk
-cap is stored in the manifest settings table and can be set with
-`python src/cli.py evict --set-max-size 500GiB`.
+`<root>/manifest.db` tracks discovered parquet metadata (every layer except
+bronze, including research files) for eviction: path, row count, file size, and
+write timestamp. Run `python src/cli.py scan` and then `python src/cli.py evict`
+by hand; nothing schedules them. Scanned research files count toward the shared
+disk cap and may be removed after 180 days when usage is above the cap. Research
+owners should keep their outputs rebuildable and retain any artifacts that need
+longer retention elsewhere. Unscanned files are protected because `evict` only
+deletes files registered in the manifest. Makalu does not depend on OS file-read
+access time. The cap is stored in the manifest settings table and can be set
+with `python src/cli.py evict --set-max-size 500GiB`.
 
 ## Data availability
 

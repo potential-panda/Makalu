@@ -268,3 +268,18 @@ datasets:
     partition_columns: [exchange, symbol, param_id]
     source_dataset: MarketPrice
     path_template: /panda/makalu-data/research/dataset=BuyLabel_tmp/exchange={exchange}/symbol={symbol}/param_id={param_id}/date={date}/data.parquet
+
+  - dataset_name: HimalayaMarketCondition
+    layer: research
+    description: >
+      Himalaya-owned, rebuildable one-minute market-condition feature panel for
+      Binance BTC/ETH/XRP USDT markets. Contains causal price movement, trend,
+      volatility, trade flow, spread/quote, book depth/dynamics, liquidity,
+      impact, Binance-to-GMO lead-lag, quality, and calendar fields. Feature
+      schema and parameters are versioned by param_id (currently v1_3); this dataset is
+      exploratory research output, not canonical silver/gold.
+    grain: per market-minute, stamped at minute close
+    primary_timestamp: ts
+    partition_columns: [exchange, symbol, param_id]
+    source_dataset: [Trade, OrderBook]
+    path_template: /panda/makalu-data/research/dataset=HimalayaMarketCondition/exchange={exchange}/symbol={symbol}/param_id={param_id}/date={date}/data.parquet

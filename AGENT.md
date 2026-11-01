@@ -79,7 +79,8 @@ Manifest policy:
 - `<root>/manifest.db` (root = Komachi's `ROOT_PATH`) is the source of truth for eviction metadata. Bronze is never tracked.
 - Nothing schedules `scan` / `evict`; data not yet scanned is considered fresh/protected.
 - `scan` registers new parquet files with `write_ts` set to the file's last-modified time.
-- `evict` only deletes manifest-tracked files when Makalu's layers (everything except bronze) are above the configured cap. Retention is 6 months by `write_ts`. Bronze is never counted or deleted.
+- `scan` covers all non-Bronze layers, including owner-namespaced research datasets. Research owners keep their datasets rebuildable.
+- `evict` only deletes manifest-tracked files when non-Bronze usage is above the configured cap. Retention is 6 months by `write_ts`, including for research datasets. Bronze is never counted or deleted.
 - Makalu does not depend on OS file-read access time; external DuckDB/Python reads do not refresh eviction age.
 - Set the cap with `python /home/lulurun/workspace/Makalu/src/cli.py evict --set-max-size 500GiB`.
 

@@ -38,6 +38,25 @@ Hase leaves out snapshots the book cannot fill at that size and snapshots whose
 walked spread is over 100 bps (collector artefacts), and records how many it
 left out in the file's pandas metadata (`df.attrs["dropped"]`).
 
+### Research-layer datasets
+
+The `research/` layer is open to owner-namespaced, rebuildable datasets written
+by research projects using the configured lake root. Makalu remains the sole
+writer of canonical silver and gold metrics; research datasets must not
+masquerade as or overwrite them. The research project owns its computation,
+writer, schema/version, and documentation. Register a shared dataset in
+`doc/catalog.yaml` and `doc/dataset_definitions.md` when it should be
+discoverable through Makalu's query catalog. See the project-specific
+population workflow and ownership in that dataset's documentation.
+
+Makalu's `scan` registers every discovered non-Bronze Parquet file, including
+research datasets. Those files count toward the shared parquet disk cap and
+are eligible for `evict` after 180 days by write time when usage exceeds that
+cap. `evict` remains a manual, dry-run-first operation; research owners should
+keep the dataset rebuildable and retain outputs elsewhere when they need a
+longer guarantee. Makalu's catalog registration makes a dataset discoverable;
+it does not transfer ownership of its writer or schema to Makalu.
+
 ```bash
 hase derive MarketPrice --market GMO:BTC_JPY --execution-size 0.002 \
   --start 2026-03-13 --end 2026-03-17            # skips days already on disk
