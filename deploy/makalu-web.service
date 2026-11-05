@@ -10,5 +10,8 @@ ExecStart=/home/lulurun/.pyenv/versions/3.13.9/bin/python src/cli.py serve
 Restart=always
 RestartSec=5
 
+StandardOutput=append:/panda-infra/makalu/web.log
+StandardError=append:/panda-infra/makalu/web.log
+
 [Install]
 WantedBy=default.target
